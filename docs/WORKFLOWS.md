@@ -32,6 +32,35 @@ the same song reuses the cached stems and takes seconds.
 
 ---
 
+## Make many tracks at once
+
+```powershell
+.\.venv\Scripts\python.exe -m luokkaretki_generator.batch "input\*.mp4"
+.\.venv\Scripts\python.exe -m luokkaretki_generator.batch "input\*.mp4" --mimicry 0.45
+```
+
+One song failing does not end the batch. A song with no vocal is refused as
+Mode B, recorded, and the rest continue.
+
+---
+
+## Work out why something sounds wrong
+
+```powershell
+.\.venv\Scripts\python.exe -m luokkaretki_generator.doctor
+.\.venv\Scripts\python.exe -m luokkaretki_generator.doctor --song input\musicHyva.mp4
+```
+
+Prints, in one go: whether the environment is sound, what the bank contains,
+what pitches it covers, how a song's notes became slots, how many phrases are
+long enough to hold a climax, and how far this bank would have to shift to
+follow this melody.
+
+Reach for it before changing any constant. Most "it sounds wrong" questions are
+answered by the pitch-coverage histogram or the phrase-size line.
+
+---
+
 ## Add words to the bank
 
 Only a person can say what a clip contains, so this loop is built around

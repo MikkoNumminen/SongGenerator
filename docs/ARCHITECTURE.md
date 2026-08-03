@@ -75,6 +75,18 @@ These do not run during a song. They turn source videos into reviewed clips.
 | `set_aside.py` | Take syllable clips out of the bank without deleting them |
 | `build_bank.py` | Reviewed clips → `words/words.json`; filename parsing lives here |
 
+### Operating it
+
+| Module | Does |
+|---|---|
+| `batch.py` | Render many songs in one command; one failure does not end the run |
+| `doctor.py` | Read-only: bank contents, pitch coverage, a song's slots and predicted shift |
+
+Both are deliberately scripts rather than anything cleverer. Their inputs are
+enumerable and their work is deterministic, so there is no judgement to
+delegate — and the one decision that *does* need judgement, whether a result
+sounds good, cannot be made by anything without ears.
+
 ## Data on disk
 
 | Path | Written by | Contains | Regenerable? |
