@@ -8,8 +8,8 @@ looks identical to "I decided to skip that one".
 import numpy as np
 import pytest
 
-from luokkaretki import config
-from luokkaretki.build_bank import (
+from luokkaretki_generator import config
+from luokkaretki_generator.build_bank import (
     parse_name, parse_phrase, scan_folder, syllable_boundaries,
 )
 

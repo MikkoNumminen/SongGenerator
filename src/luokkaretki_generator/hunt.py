@@ -1,7 +1,7 @@
 """Hunt for a shout-then-word pattern, e.g. HEEEI PA-VI-AA-NI.
 
-    python -m luokkaretki.hunt
-    python -m luokkaretki.hunt --syllables 4 --top 60
+    python -m luokkaretki_generator.hunt
+    python -m luokkaretki_generator.hunt --syllables 4 --top 60
 
 Classifying eight hundred clips one at a time is slow and, on sung shouting,
 not very accurate. Searching for one specific shape is neither.
@@ -116,7 +116,7 @@ def looks_like_target(heard: str, word: str) -> bool:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="luokkaretki.hunt",
+        prog="luokkaretki_generator.hunt",
         description="Find shout-then-word clips, e.g. HEEEI PA-VI-AA-NI.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )

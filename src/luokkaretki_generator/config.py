@@ -92,7 +92,7 @@ DETECT_HOP_S = 0.02
 # ---------------------------------------------------------------------------
 # WORD BANK EXTRACTION -- cutting clips out of a source scene
 # ---------------------------------------------------------------------------
-# Used by `python -m luokkaretki.extract_words`, not by the main pipeline.
+# Used by `python -m luokkaretki_generator.extract_words`, not by the main pipeline.
 
 # A region counts as sung while its envelope stays within this many dB of the
 # loudest point in the scene. Lower (more negative) catches quiet tails and

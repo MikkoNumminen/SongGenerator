@@ -1,6 +1,6 @@
 """Collapse the mined candidate tree into one flat folder for reviewing.
 
-    python -m luokkaretki.flatten
+    python -m luokkaretki_generator.flatten
 
 Mining writes one subfolder per source, which is fine for the machine and
 useless for a person: reviewing means opening fifty folders. This puts every
@@ -75,7 +75,7 @@ def flat_name(path: Path, source: str) -> str:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="luokkaretki.flatten",
+        prog="luokkaretki_generator.flatten",
         description="Collapse mined candidate subfolders into one reviewable folder.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )

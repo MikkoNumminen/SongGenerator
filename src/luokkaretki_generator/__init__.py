@@ -1,4 +1,4 @@
-"""luokkaretki -- replace a song's vocals with sung Finnish word samples."""
+"""LuokkaretkiGenerator -- replace a song's vocals with sung Finnish word samples."""
 
 import os
 

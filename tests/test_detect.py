@@ -10,8 +10,8 @@ instrumental's "vocal" stem actually contains.
 import numpy as np
 import pytest
 
-from luokkaretki import audio_io, config
-from luokkaretki.detect import detect_vocal, integrated_lufs
+from luokkaretki_generator import audio_io, config
+from luokkaretki_generator.detect import detect_vocal, integrated_lufs
 
 SR = config.SAMPLE_RATE
 

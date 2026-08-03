@@ -1,6 +1,6 @@
 """Mine many source clips at once for bank material.
 
-    python -m luokkaretki.mine_words "D:/kuvat/kuvat/pilluvittu*.mp4"
+    python -m luokkaretki_generator.mine_words "D:/kuvat/kuvat/pilluvittu*.mp4"
 
 For each source it separates the vocal, cuts candidate regions, and where the
 recogniser is confident renames them to a bank name. Each source gets its own
@@ -88,7 +88,7 @@ def mine_one(path: Path, out_root: Path, device: str, thresholds: Thresholds,
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="luokkaretki.mine_words",
+        prog="luokkaretki_generator.mine_words",
         description="Mine many sources for word-bank candidates.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
@@ -166,7 +166,7 @@ def main(argv: list[str] | None = None) -> int:
     print("  the keepers after what you hear:")
     print("      paska1.wav   persepillu2.wav   eee1.wav   huuto3.wav")
     print("      eeepaviaani1.wav      (multi-word names are read as sequences)")
-    print("\n  Then:  python -m luokkaretki.build_bank")
+    print("\n  Then:  python -m luokkaretki_generator.build_bank")
     return 0 if summary.ok else 1
 
 

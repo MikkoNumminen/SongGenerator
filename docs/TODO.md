@@ -102,7 +102,7 @@ never see. Resolve it on a real vocal.
   the words: a clip of `pas` fills a slot as neatly as one of `paska` and says
   nothing, and a track full of them stops being about paska, perse, pillu,
   pornolehti and eee paviaani. They are currently set aside rather than deleted
-  (`SYL_` prefix, `python -m luokkaretki.set_aside --restore` puts them back).
+  (`SYL_` prefix, `python -m luokkaretki_generator.set_aside --restore` puts them back).
   If they stay unhelpful, drop `WORD_SPELLING`, `compose_words` and
   `PLACE_BARE_SYLLABLES` entirely rather than leaving dead machinery around.
   Shouts are exempt: `eee` is a real utterance and the only odd-length unit,

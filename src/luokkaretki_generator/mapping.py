@@ -174,9 +174,9 @@ def load_bank(words_dir: Path = Path("words")) -> list[Unit]:
     if not index.is_file():
         raise BankError(
             f"{index} not found. Build the bank first:\n"
-            "    python -m luokkaretki.extract_words <scene>\n"
+            "    python -m luokkaretki_generator.extract_words <scene>\n"
             "    (rename the clips)\n"
-            "    python -m luokkaretki.build_bank"
+            "    python -m luokkaretki_generator.build_bank"
         )
 
     entries = json.loads(index.read_text(encoding="utf-8"))

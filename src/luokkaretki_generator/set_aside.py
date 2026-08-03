@@ -1,7 +1,7 @@
 """Set bare-syllable clips aside: keep them, stop using them.
 
-    python -m luokkaretki.set_aside
-    python -m luokkaretki.set_aside --restore
+    python -m luokkaretki_generator.set_aside
+    python -m luokkaretki_generator.set_aside --restore
 
 Syllables were worth trying -- they map onto a melody 1:1 and can spell words
 that were never recorded intact -- but in practice they crowd out the words. A
@@ -47,7 +47,7 @@ def is_bare_syllable(stem: str) -> bool:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="luokkaretki.set_aside",
+        prog="luokkaretki_generator.set_aside",
         description="Keep syllable clips but take them out of the bank.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
@@ -102,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\n  {SET_ASIDE}* are recognised and kept, just not sung.")
         print("  Put them back at any time with --restore.")
 
-    print("\n  Then:  python -m luokkaretki.build_bank")
+    print("\n  Then:  python -m luokkaretki_generator.build_bank")
     return 0
 
 

@@ -1,6 +1,6 @@
 """Cut individual sung word clips out of a source scene, ready for the bank.
 
-    python -m luokkaretki.extract_words D:\\path\\scene.mp4
+    python -m luokkaretki_generator.extract_words D:\\path\\scene.mp4
 
 Separates the vocal first (any music under the singing would otherwise ride
 along into every clip), finds the sung regions, counts each one's syllable
@@ -175,7 +175,7 @@ def cut(vocal: np.ndarray, cand: Candidate, sr: int = config.SAMPLE_RATE) -> np.
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="luokkaretki.extract_words",
+        prog="luokkaretki_generator.extract_words",
         description="Cut sung word clips out of a source scene into labelling candidates.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
@@ -198,7 +198,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 LABELS_HEADER = [
     "# Fill in the `word` column by ear, then run:",
-    "#     python -m luokkaretki.build_bank",
+    "#     python -m luokkaretki_generator.build_bank",
     "#",
     "# word     one of: " + ", ".join(config.WORD_SYLLABLES),
     "#          leave as ? to skip the row, or use - to delete it from the bank",
@@ -275,7 +275,7 @@ def main(argv: list[str] | None = None) -> int:
     print("        paska1.wav   perse2.wav   paviaani_low.wav")
     print("      (a bare word, a trailing number, or _anything all work)")
     print("    - leave anything you are unsure about alone; unnamed clips are ignored")
-    print("\n  Then:  python -m luokkaretki.build_bank")
+    print("\n  Then:  python -m luokkaretki_generator.build_bank")
     print("\n  Several takes of the same word are wanted, not a problem: the tool")
     print("  picks whichever take is nearest each target note so it shifts less.")
     print("  You do not need to name pitches -- those are measured.")

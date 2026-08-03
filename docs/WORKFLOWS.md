@@ -8,7 +8,7 @@ and the project's own venv.
 ## Make a track from a song
 
 ```powershell
-.\.venv\Scripts\luokkaretki.exe input\song.mp4
+.\.venv\Scripts\luokkaretki-generator.exe input\song.mp4
 ```
 
 Writes seven mp3s to `output/`, one per mimicry setting from 0.00 (words ignore
@@ -39,16 +39,16 @@ listening. It is the one part that cannot be automated.
 
 ```powershell
 # 1. Cut candidates out of one or many sources
-.\.venv\Scripts\python.exe -m luokkaretki.mine_words "D:\clips\*.mp4"
+.\.venv\Scripts\python.exe -m luokkaretki_generator.mine_words "D:\clips\*.mp4"
 
 # 2. Collapse into one flat folder, tagging what has not been reviewed
-.\.venv\Scripts\python.exe -m luokkaretki.flatten
+.\.venv\Scripts\python.exe -m luokkaretki_generator.flatten
 
 # 3. LISTEN. Delete junk. Rename keepers after what you hear.
 #       TODO_2syl__kirby__c07__1.42-1.98.wav   ->   paska7.wav
 
 # 4. Build
-.\.venv\Scripts\python.exe -m luokkaretki.build_bank
+.\.venv\Scripts\python.exe -m luokkaretki_generator.build_bank
 ```
 
 **Naming.** All of these parse: `paska`, `paska1`, `paska_2`, `paska_low`,
@@ -111,7 +111,7 @@ weak stem is the usual cause.
 ```powershell
 $env:PYTHONPATH='D:\koodaamista\LuokkaretkiGenerator\src'
 .\.venv\Scripts\python.exe -m pytest tests\ -q
-.\.venv\Scripts\luokkaretki.exe input\musicHyva.mp4 --rows 0
+.\.venv\Scripts\luokkaretki-generator.exe input\musicHyva.mp4 --rows 0
 ```
 
 The second matters more. Watch these numbers — they move when behaviour changes:
@@ -126,8 +126,8 @@ The second matters more. Watch these numbers — they move when behaviour change
 ## Set syllables aside, or bring them back
 
 ```powershell
-.\.venv\Scripts\python.exe -m luokkaretki.set_aside            # out of the bank
-.\.venv\Scripts\python.exe -m luokkaretki.set_aside --restore  # back in
+.\.venv\Scripts\python.exe -m luokkaretki_generator.set_aside            # out of the bank
+.\.venv\Scripts\python.exe -m luokkaretki_generator.set_aside --restore  # back in
 ```
 
 Renames between `pas.wav` and `SYL_pas.wav`. Nothing is deleted; the ear-work

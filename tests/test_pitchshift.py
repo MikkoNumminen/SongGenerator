@@ -8,8 +8,8 @@ far past anything a voice survives. These pin the bound.
 import numpy as np
 import pytest
 
-from luokkaretki import config
-from luokkaretki.pitchshift import Segment, clamp_stretch, fold_shift, render_unit
+from luokkaretki_generator import config
+from luokkaretki_generator.pitchshift import Segment, clamp_stretch, fold_shift, render_unit
 
 SR = config.SAMPLE_RATE
 

@@ -13,8 +13,8 @@ import numpy as np
 import pytest
 from scipy.signal import lfilter
 
-from luokkaretki import config
-from luokkaretki.analysis import (
+from luokkaretki_generator import config
+from luokkaretki_generator.analysis import (
     Analysis, analyse, hz_to_midi, midi_to_hz, note_name, report,
 )
 
@@ -143,7 +143,7 @@ class TestRegressionsFromTheRealScene:
 
     def test_brief_voicing_dropout_does_not_split_a_note(self):
         """A consonant or breath mid-note must not end it."""
-        from luokkaretki.analysis import bridge_voicing_gaps
+        from luokkaretki_generator.analysis import bridge_voicing_gaps
 
         hop = 0.01
         hz = np.full(200, 220.0)
@@ -157,7 +157,7 @@ class TestRegressionsFromTheRealScene:
         assert filled_hz[101] == pytest.approx(220.0, abs=1.0), "bridge did not interpolate"
 
     def test_real_silence_still_ends_a_note(self):
-        from luokkaretki.analysis import bridge_voicing_gaps
+        from luokkaretki_generator.analysis import bridge_voicing_gaps
 
         hop = 0.01
         hz = np.full(200, 220.0)
@@ -170,7 +170,7 @@ class TestRegressionsFromTheRealScene:
 
     def test_leading_silence_is_not_bridged(self):
         """Nothing precedes it, so there is no note to continue."""
-        from luokkaretki.analysis import bridge_voicing_gaps
+        from luokkaretki_generator.analysis import bridge_voicing_gaps
 
         hz = np.full(100, 220.0)
         voiced = np.ones(100, dtype=bool)
