@@ -52,6 +52,11 @@ class Unit:
         return all(w in config.SHOUT_WORDS for w in self.words)
 
     @property
+    def is_climax(self) -> bool:
+        """Reserved for the song's peaks rather than ordinary vocabulary."""
+        return any(w in config.CLIMAX_WORDS for w in self.words)
+
+    @property
     def is_word_like(self) -> bool:
         """True when every part is a real word, not a bare syllable.
 
@@ -77,6 +82,7 @@ class Slot:
     offset_s: float
     midi: float
     phrase: int
+    rms_db: float = -30.0
 
     @property
     def dur_s(self) -> float:
@@ -262,7 +268,8 @@ def clean_slots(notes: list[dict]) -> tuple[list[Slot], int, int]:
       - a slot over MAX_SYLLABLE_S is a held note, split into several syllables
         rather than having one stretched absurdly across the whole thing.
     """
-    slots = [Slot(n["onset_s"], n["offset_s"], n["midi"], n["phrase"]) for n in notes]
+    slots = [Slot(n["onset_s"], n["offset_s"], n["midi"], n["phrase"],
+                  n.get("rms_db", -30.0)) for n in notes]
     if not slots:
         return [], 0, 0
 
@@ -308,11 +315,49 @@ def group_phrases(slots: list[Slot]) -> list[list[Slot]]:
 # Planning
 # ---------------------------------------------------------------------------
 
+def find_climaxes(groups: list[list[Slot]], min_slots: int = 1) -> set[int]:
+    """Which phrases are the song's peaks.
+
+    Ranked on pitch and loudness together, since a climax is usually both
+    higher and louder than what surrounds it. Each is scored against the song's
+    own spread rather than an absolute threshold, so a quiet song has peaks too.
+
+    Only phrases long enough to hold the payoff are eligible. Ranking on
+    intensity alone picked two four-slot phrases in a song whose shortest
+    paviaani unit is five syllables, so the climax could never be placed and
+    silently never was.
+    """
+    if not groups:
+        return set()
+
+    eligible = [i for i, g in enumerate(groups) if len(g) >= min_slots]
+    if not eligible:
+        return set()
+
+    pitch = np.array([float(np.mean([s.midi for s in groups[i]])) for i in eligible])
+    loud = np.array([float(np.mean([s.rms_db for s in groups[i]])) for i in eligible])
+
+    def z(values: np.ndarray) -> np.ndarray:
+        spread = values.std()
+        return (values - values.mean()) / spread if spread > 1e-6 else np.zeros_like(values)
+
+    score = (config.CLIMAX_PITCH_WEIGHT * z(pitch)
+             + config.CLIMAX_LOUDNESS_WEIGHT * z(loud))
+
+    how_many = max(1, int(round(len(groups) * config.CLIMAX_PHRASE_SHARE)))
+    ranked = [eligible[j] for j in np.argsort(-score)]
+    return set(ranked[:how_many])
+
+
 def _choose(units: list[Unit], remaining: int, span_s: float,
             rng: random.Random, last: str | None,
-            allow_shouts: bool = True) -> Unit | None:
+            allow_shouts: bool = True, allow_climax: bool = False) -> Unit | None:
     """Pick a unit that fits the slots left, preferring a natural time fit."""
     fits = [u for u in units if u.syllables <= remaining]
+    if not allow_climax:
+        # eee and paviaani are a payoff, not vocabulary. Outside a peak the
+        # song runs on paska, perse, pillu and pornolehti.
+        fits = [u for u in fits if not u.is_climax]
     if not allow_shouts:
         fits = [u for u in fits if not u.is_bare_shout] or fits
     if not fits:
@@ -346,19 +391,37 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
     forced_queue = list(forced) if forced else []
 
     groups = group_phrases(slots)
+    smallest_climax = min((u.syllables for u in units if u.is_climax), default=1)
+    climaxes = find_climaxes(groups, min_slots=smallest_climax)
+
     # Leave some phrases instrumental. Filling every one makes the words a
     # texture rather than events, which buries them on a smooth song.
+    #
+    # Peaks are exempt: thinning at random was silently discarding the very
+    # phrases reserved for paviaani, so the payoff never arrived at all.
     fill = config.PHRASE_FILL
-    keep = {id(g) for g in groups} if fill >= 1.0 else {
-        id(g) for g in rng.sample(groups, max(1, int(round(len(groups) * fill))))
-    }
+    keep = {id(g) for i, g in enumerate(groups) if i in climaxes}
+    if fill >= 1.0:
+        keep = {id(g) for g in groups}
+    else:
+        ordinary = [g for i, g in enumerate(groups) if i not in climaxes]
+        want = max(0, int(round(len(groups) * fill)) - len(keep))
+        keep |= {id(g) for g in rng.sample(ordinary, min(want, len(ordinary)))}
+
     shout_budget = max(1, int(round(len(groups) * config.SHOUT_MAX_SHARE)))
     shouts_used = 0
 
-    for group in groups:
+    for index, group in enumerate(groups):
         if id(group) not in keep:
             plan.slots_dropped += len(group)
             continue
+
+        # A peak may take one; anywhere else it is an occasional joke, which
+        # only works while it stays unexpected.
+        at_peak = index in climaxes and rng.random() < config.CLIMAX_USE_CHANCE
+        wildcard = index not in climaxes and rng.random() < config.CLIMAX_WILDCARD_CHANCE
+        climax_left = 1 if (at_peak or wildcard) else 0
+
         i = 0
         last: str | None = None
         while i < len(group):
@@ -371,9 +434,9 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
                 # is the ONLY thing that fits, so without a budget it wins every
                 # odd phrase in the song and the shout stops being an event.
                 filler = None
-                if shouts_used < shout_budget:
+                if shouts_used < shout_budget and climax_left > 0:
                     filler = _choose([u for u in units if u.syllables == 1],
-                                     1, span_s, rng, last)
+                                     1, span_s, rng, last, allow_climax=True)
                 if filler is not None:
                     shouts_used += 1
                     covered = group[i:i + 1]
@@ -401,11 +464,23 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
                     plan.slots_dropped += 1
                 break
 
-            unit = (by_label.get(forced_queue.pop(0)) if forced_queue else None) \
-                or _choose(units, remaining, span_s, rng, last,
-                           allow_shouts=shouts_used < shout_budget)
+            unit = by_label.get(forced_queue.pop(0)) if forced_queue else None
+
+            # At a peak, take the payoff first rather than merely allowing it.
+            # Left to compete on time-fit alone it usually lost, and a climax
+            # that never arrives is worse than none at all.
+            if unit is None and climax_left > 0:
+                unit = _choose([u for u in units if u.is_climax],
+                               remaining, span_s, rng, last, allow_climax=True)
+
+            if unit is None:
+                unit = _choose(units, remaining, span_s, rng, last,
+                               allow_shouts=shouts_used < shout_budget,
+                               allow_climax=False)
             if unit is not None and unit.is_bare_shout:
                 shouts_used += 1
+            if unit is not None and unit.is_climax:
+                climax_left -= 1
             if unit is None:
                 plan.slots_dropped += remaining
                 break

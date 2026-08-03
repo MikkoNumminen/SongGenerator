@@ -171,6 +171,41 @@ PHRASE_FILL = 0.78
 # it wins constantly, being the only unit that fits a single leftover slot.
 SHOUT_MAX_SHARE = 0.12
 
+
+# ---------------------------------------------------------------------------
+# CLIMAXES -- where eee and paviaani are allowed to happen
+# ---------------------------------------------------------------------------
+# These two are not ordinary vocabulary. They belong together, and they land
+# only when they are rare: a payoff saved for the peaks of the song, while
+# paska, perse, pillu and pornolehti carry everything else. Used freely they
+# stop being a payoff and become the texture.
+
+# Words reserved for the song's peaks. A unit containing any of these is
+# refused everywhere else, whatever else it also contains -- so "eee+paviaani"
+# is climax-only while "paska+perse+pornolehti" is not.
+#
+# Only paviaani. A bare "eee" is already rationed by SHOUT_MAX_SHARE, and
+# listing it here made it compete for the same budget: being one syllable it
+# fitted anywhere, so it took the climax slot and the paviaani it was supposed
+# to introduce never arrived.
+CLIMAX_WORDS = ("paviaani",)
+
+# Fraction of phrases that count as peaks. Small on purpose: the point is
+# scarcity, and a climax that recurs every few seconds is not a climax.
+CLIMAX_PHRASE_SHARE = 0.14
+
+# Even within a peak, not every phrase takes one.
+CLIMAX_USE_CHANCE = 0.75
+
+# Chance that an ordinary phrase gets one anyway, purely as a joke. Rare on
+# purpose: an unexpected one is funny, a predictable one is a pattern.
+CLIMAX_WILDCARD_CHANCE = 0.05
+
+# How a peak is recognised. Climaxes tend to be both higher and louder than the
+# rest, so phrases are ranked on both and the top few taken.
+CLIMAX_PITCH_WEIGHT = 1.0
+CLIMAX_LOUDNESS_WEIGHT = 0.7
+
 # How strongly to prefer longer units over short ones when both fit.
 # 0 = pick purely on how naturally the clip fills the time, which favours
 # short units and makes the track busy. Higher = fewer, longer placements.
