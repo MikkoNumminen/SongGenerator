@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Cached stems and analysis -- large, and regenerable from the input.
+work/
+
+# Songs in, memes out. Neither belongs in the repo.
+input/
+output/
+
+# The word clips themselves are the one audio asset worth tracking; their
+# sidecar is generated but hand-corrected, so it is tracked too.
+!words/
+!words/*.wav
+!words/words.json

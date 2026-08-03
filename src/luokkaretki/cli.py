@@ -1,0 +1,138 @@
+"""Command line entry point."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+import time
+from pathlib import Path
+
+from . import __version__, audio_io, config
+from .detect import detect_vocal
+from .separate import SeparationError, separate
+from .util import fmt_duration, resolve_device, work_dir_for
+
+EXIT_OK = 0
+EXIT_ERROR = 2
+EXIT_MODE_B = 3
+
+MODE_B_MESSAGE = """\
+This song has no lead vocal to borrow from, so it is a MODE B song -- and Mode B
+is not supported yet.
+
+Mode A works by stealing every musical decision from the original singer: when
+each syllable starts, how long it lasts, and what note it lands on. With no
+vocal there is nothing to steal, and the tool would have to invent all three
+against the backing track. That is composition rather than signal processing,
+and doing it badly sounds obviously mechanical, so it is deliberately not
+attempted rather than attempted and botched.
+
+See docs/TODO.md for the full write-up of what Mode B would take.
+
+If you believe this song DOES have vocals, the numbers above show which test
+drew the line -- the thresholds are all in src/luokkaretki/config.py under
+"STAGE 1b".\
+"""
+
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="luokkaretki",
+        description="Replace a song's vocals with sung Finnish word samples.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    p.add_argument("input", type=Path, help="input song (mp3, or anything ffmpeg reads)")
+    p.add_argument("-o", "--output", type=Path, default=None,
+                   help="output mp3 [default: output/<input stem>.luokkaretki.mp3]")
+    p.add_argument("--separator", choices=["demucs", "roformer"], default=config.SEPARATOR,
+                   help="source separation backend")
+    p.add_argument("--device", default=None, help="torch device, e.g. cuda or cpu [default: autodetect]")
+    p.add_argument("--work-dir", type=Path, default=Path(config.WORK_DIR),
+                   help="where stems and analysis are cached")
+    p.add_argument("--force", action="store_true", help="ignore cached stems and separate again")
+    p.add_argument("--json", action="store_true", help="print the analysis report as JSON")
+    p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
+    return p
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+
+    if not args.input.is_file():
+        print(f"error: input file not found: {args.input}", file=sys.stderr)
+        return EXIT_ERROR
+
+    output = args.output or Path("output") / f"{args.input.stem}.luokkaretki.mp3"
+    work = work_dir_for(args.input, args.work_dir)
+    device = resolve_device(args.device)
+
+    try:
+        mix = audio_io.decode(args.input)
+        duration = mix.shape[1] / config.SAMPLE_RATE
+
+        if not args.json:
+            print(f"  song      {args.input.name}  ({fmt_duration(duration)})")
+            print(f"  device    {device}")
+            print(f"  separator {args.separator}", flush=True)
+
+        t0 = time.perf_counter()
+        stems = separate(args.input, work, backend=args.separator, device=device, force=args.force)
+        elapsed = time.perf_counter() - t0
+
+        if not args.json:
+            how = "cached" if stems.cached else f"{elapsed:.1f}s"
+            print(f"  stems     {how} -> {work}")
+
+        report = detect_vocal(stems.vocal, mix, config.SAMPLE_RATE, device)
+
+    except SeparationError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_ERROR
+    except audio_io.AudioError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_ERROR
+
+    payload = {
+        "input": str(args.input),
+        "duration_s": round(duration, 2),
+        "work_dir": str(work),
+        "separator": stems.backend,
+        "device": device,
+        **report.as_dict(),
+    }
+    (work / "detect.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+    if args.json:
+        print(json.dumps(payload, indent=2))
+    else:
+        print()
+        print("  vocal presence")
+        print(f"    stem loudness     {report.vocal_lufs:6.1f} LUFS")
+        print(f"    mix loudness      {report.mix_lufs:6.1f} LUFS")
+        print(f"    relative          {report.rel_lu:6.1f} LU     "
+              f"(needs >= {config.VOCAL_PRESENT_REL_LU:.1f})")
+        print(f"    voiced frames     {report.voiced_frac * 100:6.1f} %      "
+              f"(needs >= {config.VOCAL_PRESENT_VOICED_FRAC * 100:.1f}, via {report.f0_backend})")
+        print(f"    verdict           {'MODE A -- vocals present' if report.vocal_present else 'MODE B -- no vocals'}")
+        print()
+
+    if not report.vocal_present:
+        if not args.json:
+            for reason in report.reasons:
+                print(f"    - {reason}")
+            print()
+            print(MODE_B_MESSAGE)
+        return EXIT_MODE_B
+
+    audio_io.encode_mp3(output, stems.instrumental)
+    if not args.json:
+        print(f"  wrote     {output}")
+        print()
+        print("  Note: this is the instrumental bed only. Word placement arrives in")
+        print("  the next commits -- see docs/TODO.md for the build order.")
+    return EXIT_OK
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
