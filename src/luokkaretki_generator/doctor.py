@@ -78,20 +78,40 @@ def report_bank(bank_name: str) -> list | None:
     if missing:
         print(f"  MISSING: {', '.join(missing)}")
 
-    # Pitch coverage is the number that decides how much has to be folded, and
-    # therefore how closely any song can ever be mimicked.
-    pitches = np.array([u.midi for u in units if u.midi is not None])
+    # Pitch coverage decides how much has to be folded -- but only the coverage
+    # of units that actually get shifted counts. Reporting the whole bank once
+    # made this look far healthier than it was: the spread came almost entirely
+    # from shouts, which are never shifted, and from climax units usable only at
+    # peaks. The ordinary units doing most of the singing sat inside a fifth.
+    ordinary = [u for u in units if not u.is_bare_shout and not u.is_climax]
+
+    def coverage(group: list, label: str) -> None:
+        p = np.array([u.midi for u in group if u.midi is not None])
+        if not p.size:
+            print(f"  {label:<34} none")
+            return
+        print(f"  {label:<34} {len(p):>3} units  "
+              f"{note_name(int(round(p.min())))}-{note_name(int(round(p.max())))}"
+              f"  spread {p.max() - p.min():.1f} st")
+
+    print("\n  pitch coverage")
+    coverage(units, "whole bank")
+    coverage([u for u in units if u.is_bare_shout], "  bare shouts (never shifted)")
+    coverage([u for u in units if u.is_climax], "  climax-only (peaks only)")
+    coverage(ordinary, "  ORDINARY -- what usually places")
+
+    pitches = np.array([u.midi for u in ordinary if u.midi is not None])
     if pitches.size:
-        lo, hi = pitches.min(), pitches.max()
-        print(f"\n  pitch coverage {note_name(int(round(lo)))}-{note_name(int(round(hi)))} "
-              f"({hi - lo:.1f} semitones)")
+        print("\n  ordinary units by pitch:")
         hist = Counter(int(round(p)) for p in pitches)
         for midi in sorted(hist):
             print(f"    {note_name(midi):<5} {_bar(hist[midi])} {hist[midi]}")
-        if hi - lo < 12:
-            print("    narrow: everything sits within an octave, so any song ranging")
-            print("    wider will be heavily octave-folded. More takes at NEW pitches")
-            print("    raise the ceiling; more at these pitches do not.")
+        if pitches.max() - pitches.min() < 12:
+            print("\n    Narrow. These sit inside an octave, so any song ranging wider")
+            print("    is octave-folded however cleverly units are chosen -- selection")
+            print("    cannot invent a pitch the bank does not have. Only more takes")
+            print("    of WORDS at new pitches raise the ceiling. More shouts do not:")
+            print("    they are never shifted, so their spread is decorative.")
 
     smallest = min((u.syllables for u in climax), default=None)
     if smallest:

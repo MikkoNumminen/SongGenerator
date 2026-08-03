@@ -1,4 +1,4 @@
-"""Stage 3: lay the word bank onto the melody's slots, and mix.
+﻿"""Stage 3: lay the word bank onto the melody's slots, and mix.
 
 No pitch shifting here -- clips go down at their own recorded pitch. This is the
 first listenable version, and the point of it is to judge whether the timing and
@@ -364,8 +364,14 @@ def find_climaxes(groups: list[list[Slot]], min_slots: int = 1) -> set[int]:
 
 def _choose(units: list[Unit], remaining: int, span_s: float,
             rng: random.Random, last: str | None,
-            allow_shouts: bool = True, allow_climax: bool = False) -> Unit | None:
-    """Pick a unit that fits the slots left, preferring a natural time fit."""
+            allow_shouts: bool = True, allow_climax: bool = False,
+            targets: list[float] | None = None) -> Unit | None:
+    """Pick a unit that fits the slots left.
+
+    Three things compete: how naturally the clip fills the time it is given, a
+    preference for longer units, and -- when targets are supplied -- how far the
+    clip would have to be shifted to reach the notes it would cover.
+    """
     fits = [u for u in units if u.syllables <= remaining]
     if not allow_climax:
         # eee and paviaani are a payoff, not vocabulary. Outside a peak the
@@ -381,6 +387,29 @@ def _choose(units: list[Unit], remaining: int, span_s: float,
     # Rank by how little the clip would have to be rushed or dragged to fill
     # the slots it would occupy. Ties and near-ties are broken randomly so a
     # song does not come out using the same clip over and over.
+    def pitch_cost(u: Unit) -> float:
+        """How far this take would have to move, and whether it must fold.
+
+        Measured over the notes the unit would actually cover rather than the
+        whole phrase, since a two-syllable word and an eight-syllable one face
+        different stretches of melody.
+        """
+        if not (config.PREFER_NEAREST_SOURCE_PITCH and targets and u.midi is not None):
+            return 0.0
+
+        from .pitchshift import fold_shift
+
+        covered = targets[:u.syllables] or targets[:1]
+        want = float(np.mean(covered))
+        raw = want - u.midi
+
+        cost = abs(fold_shift(raw)) / 12.0
+        if abs(raw) > config.SHIFT_CAP_SEMITONES:
+            # Folding changes the register, so the melody survives only in
+            # part. That is a worse outcome than a merely large shift.
+            cost += config.FOLD_PENALTY
+        return config.PITCH_FIT_WEIGHT * cost
+
     def mismatch(u: Unit) -> float:
         allotted = span_s * (u.syllables / remaining) if remaining else span_s
         if allotted <= 0:
@@ -388,7 +417,7 @@ def _choose(units: list[Unit], remaining: int, span_s: float,
         # Longer units are preferred at equal fit: fewer, longer placements
         # read as singing, while many short ones read as chatter.
         length_bonus = config.PREFER_LONGER_UNITS * np.log(u.syllables + 1)
-        return abs(np.log(u.duration_s / allotted)) - length_bonus
+        return abs(np.log(u.duration_s / allotted)) - length_bonus + pitch_cost(u)
 
     ranked = sorted(pool, key=mismatch)
     top = [u for u in ranked if mismatch(u) <= mismatch(ranked[0]) + 0.35] or ranked[:1]
@@ -440,6 +469,7 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
         while i < len(group):
             remaining = len(group) - i
             span_s = group[-1].offset_s - group[i].onset_s
+            targets = [s.midi for s in group[i:]]
 
             if remaining == 1:
                 # A one-syllable unit -- a shouted "eee" -- fits the leftover
@@ -449,7 +479,8 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
                 filler = None
                 if shouts_used < shout_budget and climax_left > 0:
                     filler = _choose([u for u in units if u.syllables == 1],
-                                     1, span_s, rng, last, allow_climax=True)
+                                      1, span_s, rng, last, allow_climax=True,
+                                      targets=targets)
                 if filler is not None:
                     shouts_used += 1
                     covered = group[i:i + 1]
@@ -484,12 +515,13 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
             # that never arrives is worse than none at all.
             if unit is None and climax_left > 0:
                 unit = _choose([u for u in units if u.is_climax],
-                               remaining, span_s, rng, last, allow_climax=True)
+                               remaining, span_s, rng, last, allow_climax=True,
+                               targets=targets)
 
             if unit is None:
                 unit = _choose(units, remaining, span_s, rng, last,
                                allow_shouts=shouts_used < shout_budget,
-                               allow_climax=False)
+                               allow_climax=False, targets=targets)
             if unit is not None and unit.is_bare_shout:
                 shouts_used += 1
             if unit is not None and unit.is_climax:

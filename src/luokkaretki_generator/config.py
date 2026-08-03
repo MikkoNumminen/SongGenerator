@@ -1,4 +1,4 @@
-"""The tuning constants block.
+﻿"""The tuning constants block.
 
 Every tunable value in the tool lives here. Nothing that you would want to
 twiddle while listening to a result should be hardcoded anywhere else -- if you
@@ -399,10 +399,30 @@ FORMANT_SCALE = 1.0
 # which sounds far better than a 14-semitone stretch.
 SHIFT_CAP_SEMITONES = 7.0
 
-# Chooses which clip to start from when a word has several recorded pitches:
-# always the one whose original pitch is closest to the target, so the shift
-# distance is as small as possible.
+# Prefer the take whose recorded pitch is nearest the note it has to land on,
+# so it is shifted as little as possible.
+#
+# This matters more than it sounds. A word moved a couple of semitones still
+# sounds like the singer; one moved past SHIFT_CAP_SEMITONES has to be folded by
+# whole octaves and lands in the wrong register, carrying the tune only in part.
+# Choosing the nearest take avoids most of that for free, because the bank
+# usually holds the same word at several pitches.
 PREFER_NEAREST_SOURCE_PITCH = True
+
+# How strongly pitch competes with the other two selection criteria (how
+# naturally a clip fills the time, and the preference for longer units).
+#
+# Measured rather than guessed: at 0 -- which is what the code did before this
+# was wired up at all -- 43% of syllables on the test song had to be octave
+# folded, against 1% if takes were chosen by pitch alone. Too high and the
+# tightest-pitched clip wins every slot and the track loses its variety, which
+# is the same failure PREFER_LONGER_UNITS had at 1.4.
+PITCH_FIT_WEIGHT = 0.9
+
+# Extra cost for a candidate that cannot be reached without octave folding.
+# Folding is not merely a bigger shift -- it changes the register, so the
+# melody survives only in part. Worth avoiding even at some cost elsewhere.
+FOLD_PENALTY = 0.6
 
 # How much of the track sings along, from 0.0 to 1.0.
 #
