@@ -96,6 +96,12 @@ never see. Resolve it on a real vocal.
 
 ## Open items
 
+- **`paviaani` is not in the bank yet.** It does not appear anywhere in the
+  `paskaperse.mp4` scene's labelling. Mikko is supplying it from another source
+  later. Until then the bank has four of the five words, and
+  `config.WORD_SYLLABLES` still lists `paviaani` (4 syllables) so it slots in
+  with no code change the moment a clip named `paviaani*.wav` appears.
+
 - **Syllable boundaries inside the word clips.** Auto-detection from energy
   valleys is planned for commit 3, written to `words/words.json`. Hand
   correcting those few numbers is expected to beat the detector noticeably, and

@@ -91,23 +91,76 @@ def read_labels(path: Path) -> list[Row]:
 
 @dataclass
 class Named:
-    """A candidate clip you have renamed after the word you heard in it."""
+    """A candidate clip, named after the word or words heard in it."""
     path: Path
-    word: str
+    words: list[str]
     variant: str
+
+    @property
+    def syllables(self) -> int:
+        return sum(config.WORD_SYLLABLES[w] for w in self.words)
+
+    @property
+    def stem(self) -> str:
+        return "-".join(self.words)
+
+
+# Longest first, so paviaani is never mistaken for the start of something else.
+_BANK_BY_LENGTH = sorted(config.WORD_SYLLABLES, key=len, reverse=True)
+_SEPARATORS = "_- ."
+
+
+def parse_phrase(stem: str) -> tuple[list[str], str] | None:
+    """Read a clip name into the sequence of words it contains.
+
+        paska1           -> (['paska'], '1')
+        paviaani_low     -> (['paviaani'], 'low')
+        persepilluperse  -> (['perse', 'pillu', 'perse'], '')
+        perse-pillu_2    -> (['perse', 'pillu'], '2')
+
+    Multi-word names matter because a clip holding two words also holds the
+    real sung transition between them, which is worth far more than the same
+    two words cut apart and spliced back together.
+
+    Returns None when a trailing fragment is left over -- 'paskapersepor' ends
+    mid-word, and treating 'por' as a variant label would quietly admit a clip
+    that cuts off mid-syllable. A variant must therefore be purely numeric or
+    introduced by a separator; anything else is a fragment.
+    """
+    raw = stem.strip().lower()
+    words: list[str] = []
+    i = 0
+    after_separator = False
+
+    while i < len(raw):
+        if raw[i] in _SEPARATORS:
+            i += 1
+            after_separator = True
+            continue
+        for word in _BANK_BY_LENGTH:
+            if raw.startswith(word, i):
+                words.append(word)
+                i += len(word)
+                after_separator = False
+                break
+        else:
+            break
+
+    if not words:
+        return None
+
+    rest = raw[i:].strip(_SEPARATORS)
+    if rest and not rest.isdigit() and not after_separator:
+        return None
+    return words, rest
 
 
 def parse_name(stem: str) -> tuple[str, str] | None:
-    """'paska1' -> ('paska', '1'). 'paviaani_low' -> ('paviaani', 'low').
-
-    Accepts a bare word, a trailing number, or any separator-and-label. No bank
-    word is a prefix of another, so a plain prefix match is unambiguous.
-    """
-    clean = stem.strip().lower()
-    for word in config.WORD_SYLLABLES:
-        if clean.startswith(word):
-            return word, clean[len(word):].lstrip("_- .").strip() or ""
-    return None
+    """Single-word view of parse_phrase, for callers that only want one word."""
+    parsed = parse_phrase(stem)
+    if parsed is None or len(parsed[0]) != 1:
+        return None
+    return parsed[0][0], parsed[1]
 
 
 def scan_folder(folder: Path) -> tuple[list[Named], list[Path]]:
@@ -116,7 +169,7 @@ def scan_folder(folder: Path) -> tuple[list[Named], list[Path]]:
     ignored: list[Path] = []
 
     for path in sorted(folder.glob("*.wav")):
-        parsed = parse_name(path.stem)
+        parsed = parse_phrase(path.stem)
         if parsed is None:
             ignored.append(path)
             continue
@@ -237,7 +290,7 @@ def _collect(args, device) -> list[tuple[str, str, np.ndarray, dict]]:
             cand = Candidate(i=0, start_s=row.start_s, end_s=row.end_s,
                              dur_s=row.end_s - row.start_s, n_syllables=0,
                              midi=float("nan"), rms_db=0.0)
-            out.append((row.word, row.variant, cut(vocal, cand),
+            out.append(([row.word], row.variant, cut(vocal, cand),
                         {"source_start_s": round(row.start_s, 3),
                          "source_end_s": round(row.end_s, 3)}))
         return out
@@ -250,7 +303,10 @@ def _collect(args, device) -> list[tuple[str, str, np.ndarray, dict]]:
 
     named, ignored = scan_folder(args.candidates)
     print(f"  clips     {args.candidates}")
-    print(f"  named     {len(named)} renamed, {len(ignored)} left unnamed (ignored)\n")
+    print(f"  named     {len(named)} usable, {len(ignored)} ignored")
+    for path in ignored:
+        print(f"            ignored: {path.name}")
+    print()
     if not named:
         raise LabelError(
             f"nothing in {args.candidates} is named after a bank word yet.\n"
@@ -259,7 +315,7 @@ def _collect(args, device) -> list[tuple[str, str, np.ndarray, dict]]:
             f"       (any of: {', '.join(config.WORD_SYLLABLES)})"
         )
 
-    return [(n.word, n.variant, audio_io.read_wav(n.path), {"source_clip": n.path.name})
+    return [(n.words, n.variant, audio_io.read_wav(n.path), {"source_clip": n.path.name})
             for n in named]
 
 
@@ -277,14 +333,15 @@ def main(argv: list[str] | None = None) -> int:
     seen: dict[str, int] = {}
     bank: dict[str, dict] = {}
 
-    for word, variant, clip, source in items:
-        seen[word] = seen.get(word, 0) + 1
-        variant = variant or str(seen[word])
-        name = f"{word}_{variant}.wav"
+    for words, variant, clip, source in items:
+        stem = "-".join(words)
+        seen[stem] = seen.get(stem, 0) + 1
+        variant = variant or str(seen[stem])
+        name = f"{stem}_{variant}.wav"
         while name in bank:  # two files that reduce to the same variant
-            seen[word] += 1
-            variant = str(seen[word])
-            name = f"{word}_{variant}.wav"
+            seen[stem] += 1
+            variant = str(seen[stem])
+            name = f"{stem}_{variant}.wav"
 
         if clip.shape[1] < int(0.02 * config.SAMPLE_RATE):
             print(f"  skipped {name}: clip is too short to use")
@@ -292,22 +349,32 @@ def main(argv: list[str] | None = None) -> int:
 
         audio_io.write_wav(args.out / name, clip)
         midi, dur = measure(clip, config.SAMPLE_RATE, device)
-        n_syl = config.WORD_SYLLABLES[word]
+        per_word = [config.WORD_SYLLABLES[w] for w in words]
+        n_syl = sum(per_word)
         bounds = syllable_boundaries(clip, config.SAMPLE_RATE, n_syl)
 
+        # Which syllable index each word starts at, so a phrase can be laid
+        # across the melody with its word joins landing on note onsets.
+        starts, running = [], 0
+        for count in per_word:
+            starts.append(running)
+            running += count
+
         bank[name] = {
-            "word": word,
+            "words": words,
             "variant": variant,
             **source,
             "duration_s": round(dur, 4),
             "midi": round(midi, 2) if np.isfinite(midi) else None,
             "note": note_name(int(round(midi))) if np.isfinite(midi) else None,
             "syllables": n_syl,
+            "word_syllables": per_word,
+            "word_start_syllable": starts,
             "syllable_bounds_s": bounds,
         }
         note = bank[name]["note"] or "?"
-        print(f"  {name:<24} {dur * 1000:5.0f}ms  {note:<5} "
-              f"{n_syl} syl, bounds at {bounds}")
+        print(f"  {name:<28} {dur * 1000:5.0f}ms  {note:<5} {n_syl} syl "
+              f"({'+'.join(str(c) for c in per_word)})")
 
     if not bank:
         return 1
@@ -330,11 +397,20 @@ def main(argv: list[str] | None = None) -> int:
     words_json.write_text(json.dumps(bank, indent=2, ensure_ascii=False), encoding="utf-8")
 
     by_word: dict[str, int] = {}
+    by_length: dict[int, int] = {}
     for entry in bank.values():
-        by_word[entry["word"]] = by_word.get(entry["word"], 0) + 1
+        for w in entry["words"]:
+            by_word[w] = by_word.get(w, 0) + 1
+        by_length[entry["syllables"]] = by_length.get(entry["syllables"], 0) + 1
 
     print(f"\n  bank      {words_json}")
-    print("  " + ", ".join(f"{w}: {n}" for w, n in sorted(by_word.items())))
+    print(f"  {len(bank)} clips, {sum(by_word.values())} word instances")
+    print("  words:  " + ", ".join(f"{w}: {n}" for w, n in sorted(by_word.items())))
+    print("  units:  " + ", ".join(f"{s} syl: {n}" for s, n in sorted(by_length.items())))
+    odd = [s for s in by_length if s % 2]
+    if not odd:
+        print("          every unit is an even number of syllables, so a phrase of")
+        print("          slots fills exactly and at most one slot is ever left over")
     missing = [w for w in config.WORD_SYLLABLES if w not in by_word]
     if missing:
         print(f"  still missing: {', '.join(missing)}")
