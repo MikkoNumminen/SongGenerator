@@ -157,8 +157,23 @@ F0_MAX_HZ = 1100.0
 # note boundary.
 F0_MEDIAN_S = 0.08
 
+# Unvoiced stretches shorter than this INSIDE a sung region are bridged rather
+# than treated as note boundaries. Pitch trackers drop out briefly on
+# consonants, breath and rough phonation; on the source scene 64 of 96 detected
+# notes were the start of their own voiced run, i.e. sustained notes were being
+# shredded by dropouts rather than genuinely re-attacked.
+VOICED_GAP_FILL_S = 0.08
+
 # A sustained pitch move of at least this many semitones starts a new note.
+# Compared against the running median of the note so far, NOT against a
+# quantised semitone grid: the source scene sits around MIDI 53.5, exactly
+# between F3 and F#3, where any rounding scheme flips back and forth on tracker
+# noise and invents a note boundary every few frames.
 NOTE_SPLIT_SEMITONES = 0.7
+
+# How long a deviation must persist before it counts as a new note rather than
+# a blip, a scoop into pitch, or vibrato overshoot.
+NOTE_SPLIT_SUSTAIN_S = 0.05
 
 # Onset detection contributes the OTHER kind of slot boundary: a new syllable
 # sung at the same pitch, which the pitch contour alone cannot see.

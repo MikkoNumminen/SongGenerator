@@ -175,6 +175,38 @@ def _f0_pyin(mono, sr):
 # Slot boundaries
 # ---------------------------------------------------------------------------
 
+def bridge_voicing_gaps(
+    hz: np.ndarray, voiced: np.ndarray, hop_s: float
+) -> tuple[np.ndarray, np.ndarray]:
+    """Fill brief unvoiced dropouts inside a sung region.
+
+    A pitch tracker loses voicing on consonants, breaths and rough phonation.
+    Left alone, each dropout ends one note and starts another, so a single held
+    syllable comes out as a burst of 60 ms fragments. Only gaps bounded by
+    voicing on BOTH sides are bridged -- the silence before and after a phrase
+    must stay a real boundary.
+    """
+    max_gap = max(1, int(round(config.VOICED_GAP_FILL_S / hop_s)))
+    voiced = voiced.copy()
+    hz = hz.copy()
+
+    start = None
+    for i, v in enumerate(voiced):
+        if not v and start is None:
+            start = i
+        elif v and start is not None:
+            if start > 0 and (i - start) <= max_gap:
+                # Interpolate across the gap so the semitone contour stays
+                # continuous and does not read as a pitch jump.
+                lo, hi = hz[start - 1], hz[i]
+                if np.isfinite(lo) and np.isfinite(hi):
+                    hz[start:i] = np.linspace(lo, hi, i - start + 2)[1:-1]
+                    voiced[start:i] = True
+            start = None
+
+    return hz, voiced
+
+
 def _voiced_runs(voiced: np.ndarray, min_frames: int) -> list[tuple[int, int]]:
     """Contiguous [start, end) index ranges where voiced is True."""
     runs, start = [], None
@@ -200,23 +232,43 @@ def _smooth_semitones(sem: np.ndarray, hop_s: float) -> np.ndarray:
 
 
 def _pitch_split_points(sem_smooth: np.ndarray, hop_s: float) -> list[int]:
-    """Indices (relative to the run) where the sustained pitch changes."""
-    from scipy.ndimage import median_filter
+    """Indices (relative to the run) where the sustained pitch changes.
 
-    quantised = np.round(sem_smooth)
-    # A second median pass on the quantised contour kills the flicker that
-    # happens when a note sits almost exactly between two semitones.
-    width = max(1, int(round(config.F0_MEDIAN_S / hop_s)))
-    if width % 2 == 0:
-        width += 1
-    quantised = median_filter(quantised, size=width, mode="nearest")
+    Compares the contour against the running median of the current note rather
+    than against a quantised semitone grid. Rounding to the nearest semitone
+    looks reasonable until a singer sits between two of them -- the source scene
+    hovers at MIDI 53.5, where rounding flips between F3 and F#3 on tracker
+    noise alone and manufactures a boundary every few frames.
 
-    splits = []
-    current = quantised[0]
-    for i in range(1, len(quantised)):
-        if abs(quantised[i] - current) >= config.NOTE_SPLIT_SEMITONES:
-            splits.append(i)
-            current = quantised[i]
+    A deviation must also persist for NOTE_SPLIT_SUSTAIN_S before it counts,
+    so vibrato overshoot and the scoop into a note do not split it.
+    """
+    sustain = max(1, int(round(config.NOTE_SPLIT_SUSTAIN_S / hop_s)))
+    # Bound the reference window so cost stays linear on long held notes.
+    max_window = max(sustain, int(round(0.5 / hop_s)))
+
+    splits: list[int] = []
+    anchor = 0
+    deviating = 0
+
+    for i in range(1, len(sem_smooth)):
+        window = sem_smooth[max(anchor, i - max_window):i]
+        if window.size == 0:
+            continue
+        reference = float(np.median(window))
+
+        if abs(sem_smooth[i] - reference) >= config.NOTE_SPLIT_SEMITONES:
+            deviating += 1
+            if deviating >= sustain:
+                # Date the boundary from where the deviation began, not from
+                # where it was confirmed, or every onset lands late.
+                start = i - deviating + 1
+                splits.append(start)
+                anchor = start
+                deviating = 0
+        else:
+            deviating = 0
+
     return splits
 
 
@@ -243,7 +295,7 @@ def analyse(
     duration = len(mono) / sr
 
     hz, per, hop_s = extract_f0(mono, sr, device)
-    voiced = np.isfinite(hz)
+    hz, voiced = bridge_voicing_gaps(hz, np.isfinite(hz), hop_s)
     sem = hz_to_midi(np.where(voiced, hz, np.nan))
 
     rms = librosa.feature.rms(
