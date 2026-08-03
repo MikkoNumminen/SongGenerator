@@ -3,34 +3,49 @@
 Takes a song, throws away the singer, and puts a small bank of sung Finnish
 words back in their place — on the same notes, at the same moments.
 
-Runs entirely locally. No paid services, no cloud, no vocal synthesis: the
-words are real recorded sung clips, and the tool only separates, analyses,
-re-pitches, re-times and mixes them.
+Runs entirely locally on one GPU. No cloud, no paid services, no vocal
+synthesis: the words are real recordings, and the tool only separates,
+analyses, re-pitches, re-times and mixes them.
 
-## How it works (Mode A)
+```powershell
+.\.venv\Scripts\luokkaretki.exe input\song.mp4
+```
 
-The trick is to steal every musical decision from the original singer rather
-than invent any of them:
+One command writes seven versions, from words that ignore the tune completely
+to words that sing it as closely as the song allows. Pick by ear.
+
+## How it works
+
+The trick is to **steal every musical decision from the original singer** rather
+than invent any:
 
 1. **Separate** the song into vocal and instrumental (Demucs).
-2. **Analyse the original vocal before discarding it** — the melody (pitch over
-   time) and the timing (where each sung syllable starts and how long it runs).
-3. **Map the word clips onto those same slots**, and pitch-shift each to the
-   melody note it landed on, formant-corrected so it still sounds like a person.
-4. **Mix** the word track over the instrumental, level-matched, out as mp3.
+2. **Analyse the original vocal before discarding it** — the melody, and where
+   each sung syllable starts and ends.
+3. **Map word clips onto those same slots**, pitch-shifted to the notes the
+   singer hit, formant-corrected so they still sound like a person.
+4. **Mix** over the instrumental, level-matched, out as mp3.
 
-A song with no vocals is **Mode B**, which is detected and refused rather than
-botched — see [docs/TODO.md](docs/TODO.md) for why.
+A song with no vocals is **Mode B**: detected and refused rather than botched,
+because with nothing to borrow the tool would have to invent note, onset and
+duration against the backing track. That is composition, not signal processing.
+See [docs/TODO.md](docs/TODO.md).
 
-## Status
+## Documentation
 
-Commit 1 of 4. Separation, caching and mode detection work; the tool currently
-outputs the **instrumental bed**. Word placement lands in commit 3 and pitch
-shifting in commit 4. Build order and progress: [docs/TODO.md](docs/TODO.md).
+| | |
+|---|---|
+| [CLAUDE.md](CLAUDE.md) | Start here if you are an agent. What to run, what never to touch. |
+| [docs/GLOSSARY.md](docs/GLOSSARY.md) | Slot, unit, phrase, mimicry, fold. Load-bearing terms. |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The pipeline, module by module. |
+| [docs/WORKFLOWS.md](docs/WORKFLOWS.md) | Recipes: add a song, extend the bank, tune density. |
+| [docs/TODO.md](docs/TODO.md) | What is deliberately unfinished. |
+| [docs/AI-FIRST.md](docs/AI-FIRST.md) | How legible this repo is, scored against a written rubric. |
+| [src/luokkaretki/config.py](src/luokkaretki/config.py) | Every tunable, with the reasoning behind its value. |
 
 ## Install
 
-Windows, Python 3.11, an NVIDIA GPU, and `ffmpeg` on PATH.
+Windows, Python 3.11, an NVIDIA GPU, `ffmpeg` on PATH.
 
 ```powershell
 py -3.11 -m venv .venv
@@ -38,50 +53,48 @@ py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
 ```
 
-The venv is deliberately its own island — this drags in torch and a pile of
-heavy audio dependencies, and none of it should be anywhere near another
-project's environment.
+The venv is deliberately its own island — this pulls in torch, demucs and a pile
+of heavy audio dependencies, and none of it should be near another project.
 
-Optional, for the better separator:
+Optional extras: `audio-separator[gpu]` for the better separator,
+`openai-whisper` for labelling hints.
 
-```powershell
-.\.venv\Scripts\python.exe -m pip install "audio-separator[gpu]"
-```
+## The dial that matters
 
-## Usage
+**Mimicry** — how much of the original melody survives in the result, 0 to 1.
 
-```powershell
-.\.venv\Scripts\luokkaretki.exe input\song.mp3
-.\.venv\Scripts\luokkaretki.exe input\song.mp3 -o output\meme.mp3 --separator roformer
-.\.venv\Scripts\luokkaretki.exe input\song.mp3 --json
-```
+It is not the same as how many words get shifted. A word too far from its target
+is moved by whole octaves instead of stretched, so it sings the right note *name*
+in the wrong octave: recognisably the tune, still audibly wrong. Such a syllable
+counts for part of a mimicry point, not a whole one.
 
-Stems are cached under `work/<song>/`, so re-running only pays for separation
-once. `--force` separates again.
+That is why every song has a **ceiling**. One whose melody ranges far above the
+bank's own register cannot sound fully sung however hard it is pushed — and
+that ceiling is reported on every run. It is also why the same setting sounds
+different on two songs, and why the tool solves for whatever shift a particular
+song needs to reach the mimicry you asked for.
 
-Exit codes: `0` success, `2` error, `3` Mode B (no vocals, unsupported).
-
-## Tuning
-
-Every knob lives in one place: [`src/luokkaretki/config.py`](src/luokkaretki/config.py),
-grouped by pipeline stage. Shift cap, level balance, the syllable-mapping rule,
-beat subdivision, detection thresholds — all there, none of it buried in logic.
+More clips at *new pitches* raise the ceiling. More clips at pitches you already
+have do not.
 
 ## The word bank
 
 Individually recorded sung clips in `words/`, lifted from a Finnish film's
-singing scene: *paska*, *perse*, *pillu*, *pornolehti*, *paviaani*. Where the
-scene sings a word at more than one pitch, several versions are kept so the
-tool can pick the closest and shift it less.
+singing scene: *paska*, *perse*, *pillu*, *pornolehti*, *paviaani*, plus the
+shout *eee*.
 
-Usefully, every word has an **even** syllable count (2 or 4), so any phrase with
-an even number of slots is filled exactly and an odd one leaves precisely one
-slot over — which is why `ODD_SLOT_POLICY` only has one case to handle.
+Multi-word clips are worth more than their parts. A clip holding two words also
+holds the singer's own transition between them, and a transition cannot be
+rebuilt by butting two recordings together.
 
-## Separator choice
+Two words are special. **`eee`** is never pitch-shifted or stretched — a vocoder
+smooths away exactly the crack and attack that make a shout a shout.
+**`paviaani`** is refused everywhere except the song's peaks, so it stays a
+payoff instead of becoming the texture.
 
-`demucs` (htdemucs_ft) is the default. `roformer` (Mel-Band Roformer) scores
-noticeably higher on vocals and is worth A/B-ing: separation quality sets the
-ceiling for everything downstream, since the vocal stem drives melody and
-timing extraction, and any vocal residue left in the instrumental sits audibly
-under the replacement words.
+## Status
+
+All four build stages are done: separation and mode detection, melody and timing
+extraction, word mapping, and formant-corrected pitch shifting. 159 tests.
+
+Mode B remains deliberately unimplemented.

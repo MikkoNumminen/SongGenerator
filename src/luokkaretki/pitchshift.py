@@ -202,4 +202,9 @@ def render_unit(mono: np.ndarray, sr: int, segments: list[Segment],
         return render_segments(mono, sr, segments, total_out_s)
     if engine == "rubberband":
         return render_segments_rubberband(mono, sr, segments, total_out_s)
-    raise ValueError(f"unknown SHIFT_ENGINE {engine!r} (expected 'world' or 'rubberband')")
+    raise ValueError(
+        f"unknown SHIFT_ENGINE {engine!r}.\n"
+        "    Expected 'world' (default) or 'rubberband'.\n"
+        "    Set it in the STAGE 4 block of src/luokkaretki/config.py, "
+        "or pass --engine on the command line."
+    )

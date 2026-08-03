@@ -25,7 +25,9 @@ def _ffmpeg() -> str:
     exe = shutil.which("ffmpeg")
     if exe is None:
         raise AudioError(
-            "ffmpeg not found on PATH. It is required to read and write mp3."
+            "ffmpeg not found on PATH. It is required to read and write mp3.\n"
+            "    winget install Gyan.FFmpeg\n"
+            "Then open a new terminal so PATH is picked up."
         )
     return exe
 

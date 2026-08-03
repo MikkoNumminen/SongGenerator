@@ -122,8 +122,10 @@ def extract_f0(
         hz, per, hop_s = _f0_pyin(mono, sr)
     else:
         raise ValueError(
-            f"F0_METHOD={method!r} is not implemented yet "
-            "(crepe and pyin are; rmvpe and fcpe are placeholders)"
+            f"F0_METHOD={method!r} is not implemented.\n"
+            "    Working values: 'crepe' (default, GPU) or 'pyin' (CPU fallback).\n"
+            "    'rmvpe' and 'fcpe' are named in config.py as future options only.\n"
+            "    Set it in the STAGE 2 block of src/luokkaretki/config.py."
         )
 
     hz = np.where(per >= config.VOICED_PERIODICITY_MIN, hz, np.nan)
