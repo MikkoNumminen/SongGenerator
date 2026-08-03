@@ -62,8 +62,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--slim", action="store_true",
                    help="omit the raw F0 contour from analysis.json (stage 4 needs it)")
     p.add_argument("--rows", type=int, default=12, help="how many extracted notes to print")
-    p.add_argument("--words-dir", type=Path, default=Path("words"),
-                   help="the word bank built by build_bank")
+    p.add_argument("--bank", default=config.DEFAULT_BANK, choices=sorted(config.BANKS),
+                   help="which prebuilt bank to sing with")
+    p.add_argument("--words-dir", type=Path, default=None,
+                   help="a bank directory directly, overriding --bank")
     p.add_argument("--seed", type=int, default=None,
                    help="word choice seed [default: WORD_ROTATION_SEED in config.py]")
     p.add_argument("--no-words", action="store_true",
@@ -178,8 +180,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  wrote     {output}  (instrumental only, --no-words)")
         return EXIT_OK
 
+    words_dir = args.words_dir or Path(config.BANKS[args.bank])
     try:
-        units = load_bank(args.words_dir)
+        units = load_bank(words_dir)
+        if not args.json:
+            print(f"  bank      {args.bank} ({words_dir})")
     except BankError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_ERROR

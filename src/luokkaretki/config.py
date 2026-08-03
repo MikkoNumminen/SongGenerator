@@ -273,6 +273,20 @@ EDGE_FADE_S = 0.015
 WORD_ROTATION_SEED = 1987
 WORD_SEQUENCE = None
 
+# Prebuilt banks, switchable per run with --bank. Both are built ahead of time
+# and the song's stems are cached, so switching costs only a re-render.
+#
+# "curated" - clips named by ear. The words are actually words, which is the
+#             whole point, so this is the default.
+# "chaos"   - every candidate clip taken as raw material, names ignored. The
+#             mapper only needs each clip's syllable count and pitch, so this
+#             still sings; it just stops saying anything.
+BANKS = {
+    "curated": "words",
+    "chaos": "words_chaos",
+}
+DEFAULT_BANK = "curated"
+
 # Optional: snap placed word onsets to the beat grid from stage 2. Off by
 # default because in Mode A the original vocal's timing is already musical and
 # quantising it only makes the result stiffer. BEAT_SUBDIVISION is the grid

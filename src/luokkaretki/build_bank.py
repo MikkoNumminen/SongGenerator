@@ -299,7 +299,40 @@ def build_parser() -> argparse.ArgumentParser:
                    help="separated vocal wav, for --labels [default: newest under work/*/vocal.wav]")
     p.add_argument("--out", type=Path, default=Path("words"))
     p.add_argument("--device", default=None)
+    p.add_argument("--raw", action="store_true",
+                   help="ingest EVERY clip regardless of name, using its measured "
+                        "syllable count. Identity is discarded, so the words stop "
+                        "being words; useful only as a chaos experiment.")
+    p.add_argument("--raw-max-syllables", type=int, default=6,
+                   help="with --raw, skip clips longer than this many syllables")
     return p
+
+
+def _measure_syllables(clip: np.ndarray, sr: int) -> int:
+    from .extract_words import _count_syllables, _envelope_db
+
+    mono = audio_io.to_mono(clip)
+    return _count_syllables(_envelope_db(mono, sr, 256), 256 / sr)
+
+
+def collect_raw(folder: Path, max_syllables: int) -> list[tuple[list[str], str, np.ndarray, dict]]:
+    """Take every clip as raw material, whatever it is called.
+
+    Only the syllable count and the pitch matter to the mapper; what the clip
+    actually says matters only to a listener. Discarding identity therefore
+    still produces something singable -- it just stops producing words.
+    """
+    out = []
+    for i, path in enumerate(sorted(folder.rglob("*.wav")), start=1):
+        clip = audio_io.read_wav(path)
+        dur = clip.shape[1] / config.SAMPLE_RATE
+        if dur < 0.12 or dur > 4.0:
+            continue
+        n = min(max(1, _measure_syllables(clip, config.SAMPLE_RATE)), max_syllables)
+        if n > max_syllables:
+            continue
+        out.append((["raw"] * n, f"{i:04d}", clip, {"source_clip": path.name}))
+    return out
 
 
 def _find_vocal(explicit: Path | None) -> Path:
@@ -318,6 +351,16 @@ def _find_vocal(explicit: Path | None) -> Path:
 
 def _collect(args, device) -> list[tuple[str, str, np.ndarray, dict]]:
     """(word, variant, clip, source-info) for everything to put in the bank."""
+    if args.raw:
+        if not args.candidates.is_dir():
+            raise LabelError(f"{args.candidates} not found")
+        items = collect_raw(args.candidates, args.raw_max_syllables)
+        print(f"  clips     {args.candidates}")
+        print(f"  raw mode  {len(items)} clips taken as-is, names ignored\n")
+        if not items:
+            raise LabelError("no usable clips found")
+        return items
+
     if args.labels:
         rows = read_labels(args.labels)
         if not rows:
@@ -390,7 +433,7 @@ def main(argv: list[str] | None = None) -> int:
         audio_io.write_wav(args.out / name, clip)
         midi, dur = measure(clip, config.SAMPLE_RATE, device)
         per_word = [syllables_of(w) for w in words]
-        n_syl = sum(per_word)
+        n_syl = sum(per_word) or len(words)
         bounds = syllable_boundaries(clip, config.SAMPLE_RATE, n_syl)
 
         # Which syllable index each word starts at, so a phrase can be laid

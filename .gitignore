@@ -20,3 +20,6 @@ output/
 
 # Candidate cuts are pure scratch: regenerable from the scene at any time.
 words/candidates/
+
+# Raw chaos bank: 833 clips, regenerable with build_bank --raw
+words_chaos/
