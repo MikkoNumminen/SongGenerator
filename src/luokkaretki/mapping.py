@@ -70,6 +70,19 @@ class Unit:
         edges = [0.0] + list(self.bounds_s) + [self.duration_s]
         return list(zip(edges[:-1], edges[1:]))
 
+    def word_of_syllable(self, i: int) -> str | None:
+        """Which of this unit's words the given syllable belongs to."""
+        running = 0
+        for word in self.words:
+            length = config.WORD_SYLLABLES.get(word, 1)
+            if i < running + length:
+                return word
+            running += length
+        return self.words[-1] if self.words else None
+
+    def is_shout_syllable(self, i: int) -> bool:
+        return self.word_of_syllable(i) in config.SHOUT_WORDS
+
     def source_midi(self, i: int) -> float | None:
         if i < len(self.syllable_midi) and self.syllable_midi[i] is not None:
             return self.syllable_midi[i]
@@ -636,13 +649,16 @@ def build_segments(p: Placement) -> tuple[list, float]:
         if source is None:
             continue
 
-        shift = fold_shift(slot.midi - source)
+        raw = config.SHOUT_KEEP_RAW and p.unit.is_shout_syllable(i)
+        shift = 0.0 if raw else fold_shift(slot.midi - source)
         shifts.append(shift)
         segments.append(Segment(
             src_start_s=src_a,
             src_end_s=src_b,
             out_start_s=slot.onset_s - origin,
-            out_dur_s=slot.dur_s,
+            # A shout keeps its own length as well as its own pitch: stretching
+            # it to fit a slot smooths out the attack that makes it a shout.
+            out_dur_s=(src_b - src_a) if raw else slot.dur_s,
             semitones=shift,
         ))
 
@@ -666,6 +682,8 @@ def precompute_shifted(plan: Plan, sr: int = config.SAMPLE_RATE,
     for idx, p in enumerate(plan.placements):
         if not p.slots or p.unit.duration_s <= 0:
             continue
+        if config.SHOUT_KEEP_RAW and p.unit.is_bare_shout:
+            continue  # never resynthesised, so nothing to precompute
         segments, total = build_segments(p)
         if not segments:
             continue
@@ -682,7 +700,12 @@ def render(plan: Plan, n_samples: int, sr: int = config.SAMPLE_RATE,
     fade = max(1, int(config.EDGE_FADE_S * sr))
 
     for idx, p in enumerate(plan.placements):
-        if shift and p.do_shift and p.slots and p.unit.duration_s > 0:
+        # A shout on its own never goes near the vocoder. There is nothing to
+        # gain -- it has no melody to follow -- and everything to lose, since
+        # resynthesis is what turns a shout into a melted vowel.
+        raw_shout = config.SHOUT_KEEP_RAW and p.unit.is_bare_shout
+
+        if shift and p.do_shift and not raw_shout and p.slots and p.unit.duration_s > 0:
             if cache is not None and idx in cache:
                 clip = np.array(cache[idx], dtype=np.float32)
             else:

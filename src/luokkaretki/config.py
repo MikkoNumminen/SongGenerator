@@ -171,6 +171,17 @@ PHRASE_FILL = 0.78
 # it wins constantly, being the only unit that fits a single leftover slot.
 SHOUT_MAX_SHARE = 0.12
 
+# Leave shouts alone: no pitch shift, no time stretch, no resynthesis.
+#
+# A shout is not a sung note. Its character is the rawness -- the crack, the
+# strain, the hard attack -- and all of that is exactly what a vocoder smooths
+# away. Run through WORLD it comes out as a smeared, melted vowel: technically
+# on the right pitch, and no longer a shout at all.
+#
+# So a shout is dropped in as recorded. Inside a mixed unit like eee+paviaani
+# only the shout syllable is spared; the word after it still follows the melody.
+SHOUT_KEEP_RAW = True
+
 
 # ---------------------------------------------------------------------------
 # CLIMAXES -- where eee and paviaani are allowed to happen
