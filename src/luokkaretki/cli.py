@@ -13,6 +13,10 @@ import numpy as np
 from . import __version__, audio_io, config
 from .analysis import analyse, report as analysis_report
 from .detect import detect_vocal
+from .mapping import (
+    BankError, clean_slots, load_bank, plan_words, render,
+    mix as mix_buses, report as mapping_report,
+)
 from .separate import SeparationError, separate
 from .util import fmt_duration, resolve_device, work_dir_for
 
@@ -58,6 +62,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--slim", action="store_true",
                    help="omit the raw F0 contour from analysis.json (stage 4 needs it)")
     p.add_argument("--rows", type=int, default=12, help="how many extracted notes to print")
+    p.add_argument("--words-dir", type=Path, default=Path("words"),
+                   help="the word bank built by build_bank")
+    p.add_argument("--seed", type=int, default=None,
+                   help="word choice seed [default: WORD_ROTATION_SEED in config.py]")
+    p.add_argument("--no-words", action="store_true",
+                   help="stop after analysis and write only the instrumental")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return p
 
@@ -150,13 +160,34 @@ def main(argv: list[str] | None = None) -> int:
         print(analysis_report(analysis, max_rows=args.rows))
         print()
 
-    audio_io.encode_mp3(output, stems.instrumental)
+    if args.no_words:
+        audio_io.encode_mp3(output, stems.instrumental)
+        if not args.json:
+            print(f"  wrote     {output}  (instrumental only, --no-words)")
+        return EXIT_OK
+
+    try:
+        units = load_bank(args.words_dir)
+    except BankError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_ERROR
+
+    slots, merged, split = clean_slots([n.__dict__ for n in analysis.notes])
+    word_plan = plan_words(slots, units, seed=args.seed)
+    word_plan.merged, word_plan.split = merged, split
+
+    word_bus = render(word_plan, stems.instrumental.shape[1], config.SAMPLE_RATE)
+    mixed = mix_buses(word_bus, stems.instrumental, config.SAMPLE_RATE)
+    audio_io.encode_mp3(output, mixed)
+
     if not args.json:
+        print(mapping_report(word_plan, units))
+        print()
         print(f"  wrote     {output}")
         print(f"  analysis  {work / 'analysis.json'}")
         print()
-        print("  Note: this is the instrumental bed only. Word placement arrives in")
-        print("  the next commits -- see docs/TODO.md for the build order.")
+        print("  No pitch shifting yet -- clips are at their own recorded pitch.")
+        print("  Judge the timing and the word choice; pitch comes in step 4.")
     return EXIT_OK
 
 

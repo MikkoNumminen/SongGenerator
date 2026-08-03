@@ -54,9 +54,9 @@ starts, and the reason it is not being started now.
       from the original vocal, written to `analysis.json`.
       **Gate not yet cleared:** validated against synthesised singing with known
       ground truth, but not yet reported on a real song. See below.
-- [ ] **3. Word mapping, no pitch shift** — clips placed on the extracted slots
-      at their original pitch, mixed, output. First listenable version; judged
-      for funniness before shifting is added.
+- [x] **3. Word mapping, no pitch shift** — bank units placed on the extracted
+      slots at their original pitch, mixed, output. First listenable version;
+      awaiting a verdict on funniness before shifting is added.
 - [ ] **4. Pitch shift** — each clip moved to its slot's melody note,
       formant-corrected, with `SHIFT_CAP_SEMITONES` folding large jumps by
       whole octaves instead of chipmunking. Re-mixed.
