@@ -19,6 +19,22 @@ author is not.**
 - **No badges, logos or attribution lines** in the README or anywhere else.
 - The author of every commit is the person who owns the repo.
 
+### Anything written outward-facing
+
+Pull request titles and bodies, issue text, release notes, changelog entries and
+review comments are all written **in the project's own voice**. They describe
+what changed and why, and nothing else.
+
+They never mention an assistant, never mention that AI was involved, never carry
+a generation footer, and never credit a co-author. A default habit of appending
+one does not apply in this repo, and this rule outranks it.
+
+The distinction that makes this consistent with the rest of the repo: files may
+freely discuss working with agents, because someone has to open them and it is
+useful once they do. Anything presented *at* a reader — a landing page, a PR
+description, a commit subject — is the project speaking, and the project is not
+an assistant.
+
 `tests/test_docs.py` enforces the first three in any tracked file. It cannot see
 commit messages, so before a push:
 
