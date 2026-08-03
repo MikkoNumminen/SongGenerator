@@ -90,6 +90,53 @@ DETECT_HOP_S = 0.02
 
 
 # ---------------------------------------------------------------------------
+# WORD BANK EXTRACTION -- cutting clips out of a source scene
+# ---------------------------------------------------------------------------
+# Used by `python -m luokkaretki.extract_words`, not by the main pipeline.
+
+# A region counts as sung while its envelope stays within this many dB of the
+# loudest point in the scene. Lower (more negative) catches quiet tails and
+# breath; higher cuts tighter and risks clipping word endings.
+WORD_SILENCE_DB = -24.0
+
+# Silences shorter than this do not split a word. Finnish double consonants
+# (the "kk" in a sung paska, the "ll" in pillu) contain a real stop, so this
+# has to exceed a plosive gap or single words get cut in half.
+#
+# Swept against the source scene: no value cleanly separates words there,
+# because the delivery is close to legato. These defaults aim for slightly
+# finer-than-phrase regions that are easy to adjust by hand, rather than
+# pretending a threshold can find word boundaries that are not acoustically
+# present. Override per run with --silence-db / --gap / --min-dur.
+WORD_GAP_S = 0.06
+
+# Regions shorter than this are noise, not words.
+WORD_MIN_S = 0.15
+
+# Breathing room kept around each cut, plus the fade applied at the edges so
+# nothing clicks.
+WORD_PAD_S = 0.04
+WORD_FADE_S = 0.012
+
+# Syllable nuclei are counted as peaks in the smoothed envelope. Two nuclei
+# closer than this are one syllable; a peak shallower than the prominence is
+# not a nucleus at all.
+SYLLABLE_MIN_SEP_S = 0.09
+SYLLABLE_PROMINENCE_DB = 3.0
+SYLLABLE_SMOOTH_S = 0.04
+
+# The bank, and how many syllables each word has. Used to guess which word a
+# candidate might be, and by stage 3's mapping rule.
+WORD_SYLLABLES = {
+    "paska": 2,
+    "perse": 2,
+    "pillu": 2,
+    "pornolehti": 4,
+    "paviaani": 4,
+}
+
+
+# ---------------------------------------------------------------------------
 # STAGE 2 -- MELODY AND TIMING EXTRACTION      (built in commit 2)
 # ---------------------------------------------------------------------------
 

@@ -10,8 +10,13 @@ work/
 input/
 output/
 
-# The word clips themselves are the one audio asset worth tracking; their
-# sidecar is generated but hand-corrected, so it is tracked too.
+# The word clips themselves are the one audio asset worth tracking, and so is
+# labels.tsv -- it is generated, but the labelling in it is hand work that
+# cannot be regenerated. words.json likewise holds hand-corrected boundaries.
 !words/
 !words/*.wav
 !words/words.json
+!words/labels.tsv
+
+# Candidate cuts are pure scratch: regenerable from the scene at any time.
+words/candidates/
