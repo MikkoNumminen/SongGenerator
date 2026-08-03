@@ -50,15 +50,49 @@ starts, and the reason it is not being started now.
 - [x] **1. CLI skeleton** — isolated venv, mp3 in / mp3 out, Demucs separation
       wired with a Roformer alternative, instrumental saved, Mode B detection
       routing to the not-supported message.
-- [ ] **2. Analysis** — beat/tempo via librosa; melody F0 and syllable timing
-      from the original vocal. Must report what extraction actually produces on
-      a real test song before anything is built on top of it.
+- [x] **2. Analysis** — beat/tempo via librosa; melody F0 and syllable timing
+      from the original vocal, written to `analysis.json`.
+      **Gate not yet cleared:** validated against synthesised singing with known
+      ground truth, but not yet reported on a real song. See below.
 - [ ] **3. Word mapping, no pitch shift** — clips placed on the extracted slots
       at their original pitch, mixed, output. First listenable version; judged
       for funniness before shifting is added.
 - [ ] **4. Pitch shift** — each clip moved to its slot's melody note,
       formant-corrected, with `SHIFT_CAP_SEMITONES` folding large jumps by
       whole octaves instead of chipmunking. Re-mixed.
+
+## Stage 2 findings so far
+
+Measured against synthesised singing whose notes and onsets are known exactly.
+Synthetic material only — a real song has not been run yet.
+
+**Accuracy is not the problem.** Across two melodies (32 and 24 syllables):
+
+| | melody A | melody B (9 repeated notes) |
+|---|---|---|
+| syllables matched | 32/32 | 24/24 |
+| onset error | median 0 ms, p90 10 ms | median 0 ms, p90 20 ms |
+| pitch error | max 0.072 semitones | max 0.043 semitones |
+
+The two-signal boundary design is earning its place: 6 of melody B's matched
+slots were opened by onset detection alone. Those are the repeated notes, which
+produce no pitch movement whatsoever. With pitch alone they would have merged
+silently and every subsequent word would have landed wrong. `test_analysis.py`
+pins this case specifically.
+
+Beat tracking reads 99.4 BPM against a 100 BPM ground truth.
+
+**Over-segmentation is the problem.** 43 slots detected for 32 true syllables
+(~25% too many); spurious onsets fire mid-syllable, splitting one syllable into
+e.g. 170 ms + 250 ms at the same pitch. They are too long for
+`MIN_SYLLABLE_S` to merge away in stage 3, so words would land denser than the
+original singing.
+
+`ONSET_DELTA` has deliberately NOT been tuned to suppress this. The synthetic
+voice ramps vibrato in at a fixed 250 ms into every syllable, which is the most
+likely thing those false onsets are tracking, and real singing does not do that.
+Tuning the constant against that artifact would fit it to a signal the tool will
+never see. Resolve it on a real vocal.
 
 ## Open items
 

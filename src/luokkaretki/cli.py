@@ -8,7 +8,10 @@ import sys
 import time
 from pathlib import Path
 
+import numpy as np
+
 from . import __version__, audio_io, config
+from .analysis import analyse, report as analysis_report
 from .detect import detect_vocal
 from .separate import SeparationError, separate
 from .util import fmt_duration, resolve_device, work_dir_for
@@ -52,6 +55,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="where stems and analysis are cached")
     p.add_argument("--force", action="store_true", help="ignore cached stems and separate again")
     p.add_argument("--json", action="store_true", help="print the analysis report as JSON")
+    p.add_argument("--slim", action="store_true",
+                   help="omit the raw F0 contour from analysis.json (stage 4 needs it)")
+    p.add_argument("--rows", type=int, default=12, help="how many extracted notes to print")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return p
 
@@ -103,9 +109,7 @@ def main(argv: list[str] | None = None) -> int:
     }
     (work / "detect.json").write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
-    if args.json:
-        print(json.dumps(payload, indent=2))
-    else:
+    if not args.json:
         print()
         print("  vocal presence")
         print(f"    stem loudness     {report.vocal_lufs:6.1f} LUFS")
@@ -118,16 +122,38 @@ def main(argv: list[str] | None = None) -> int:
         print()
 
     if not report.vocal_present:
-        if not args.json:
+        if args.json:
+            print(json.dumps({**payload, "mode": "B"}, indent=2))
+        else:
             for reason in report.reasons:
                 print(f"    - {reason}")
             print()
             print(MODE_B_MESSAGE)
         return EXIT_MODE_B
 
+    analysis = analyse(stems.vocal, stems.instrumental, config.SAMPLE_RATE, device)
+    analysis.to_json(work / "analysis.json", include_f0=not args.slim)
+
+    if args.json:
+        durations = [n.dur_s for n in analysis.notes]
+        print(json.dumps({
+            **payload,
+            "mode": "A",
+            "tempo_bpm": round(analysis.tempo_bpm, 2),
+            "n_beats": len(analysis.beats_s),
+            "n_notes": len(analysis.notes),
+            "n_phrases": len(analysis.phrases),
+            "median_note_ms": round(float(np.median(durations)) * 1000, 1) if durations else None,
+            "analysis_json": str(work / "analysis.json"),
+        }, indent=2))
+    else:
+        print(analysis_report(analysis, max_rows=args.rows))
+        print()
+
     audio_io.encode_mp3(output, stems.instrumental)
     if not args.json:
         print(f"  wrote     {output}")
+        print(f"  analysis  {work / 'analysis.json'}")
         print()
         print("  Note: this is the instrumental bed only. Word placement arrives in")
         print("  the next commits -- see docs/TODO.md for the build order.")
