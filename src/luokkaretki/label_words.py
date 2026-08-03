@@ -32,7 +32,16 @@ from .util import resolve_device
 # Below this similarity a hit is more likely noise than a mangled target word.
 MATCH_THRESHOLD = 0.55
 
+# At or above this, a candidate clip is renamed straight to a bank name. Below
+# it, the guess is only prefixed with "maybe-", which deliberately does NOT
+# parse as a bank word -- a shaky guess from a speech model should never be able
+# to walk into the bank without someone having listened to it first.
+RENAME_CONFIDENT = 0.85
+
 WORD_RE = re.compile(r"[^a-zåäö]+")
+
+# c07__4syl__F#3__9.43-9.98.wav -- times are what let a match find its clip.
+CANDIDATE_RE = re.compile(r"__(\d+\.\d+)-(\d+\.\d+)$")
 
 
 @dataclass
@@ -81,6 +90,14 @@ def transcribe(vocal_path: Path, model_name: str, device: str, language: str) ->
         # Without this, one bad guess on sung material conditions everything
         # after it and the whole run drifts into invented text.
         condition_on_previous_text=False,
+        # Greedy, not sampled. Whisper's default is a temperature ladder
+        # (0.0, 0.2 ... 1.0) that it climbs whenever its confidence checks
+        # fail -- which singing triggers constantly. Two runs over this scene
+        # returned 25 matches and then 3. Determinism does not make the guesses
+        # correct, but it does mean a result can be checked and reproduced
+        # rather than being a fresh roll of the dice each time.
+        temperature=0.0,
+        beam_size=5,
     )
 
     matches: list[Match] = []
@@ -164,12 +181,66 @@ def merge(rows: list[LabelRow], matches: list[Match]) -> tuple[int, int]:
     return filled, added
 
 
+def candidate_span(stem: str) -> tuple[float, float] | None:
+    m = CANDIDATE_RE.search(stem)
+    return (float(m.group(1)), float(m.group(2))) if m else None
+
+
+def rename_candidates(folder: Path, matches: list[Match]) -> tuple[int, int, list[str]]:
+    """Rename candidate clips to the word the recogniser heard in them.
+
+    Confident hits get a real bank name and are usable immediately. Weaker ones
+    get a "maybe-" prefix, which does not parse as a bank word, so they stay out
+    of the bank until a human renames them properly.
+    """
+    from .build_bank import parse_name
+
+    clips = []
+    for path in sorted(folder.glob("*.wav")):
+        span = candidate_span(path.stem)
+        if span and parse_name(path.stem) is None:
+            clips.append((path, span))
+
+    confident = maybe = 0
+    notes: list[str] = []
+    used: dict[str, int] = {}
+
+    for m in sorted(matches, key=lambda x: -x.similarity):
+        best, best_ov = None, 0.0
+        for path, (start, end) in clips:
+            ov = overlap(m.start_s, m.end_s, start, end)
+            if ov > best_ov:
+                best, best_ov = path, ov
+
+        if best is None or best_ov <= 0 or not best.exists():
+            notes.append(f"no candidate clip covers {m.word} at {m.start_s:.2f}s")
+            continue
+
+        used[m.word] = used.get(m.word, 0) + 1
+        if m.similarity >= RENAME_CONFIDENT:
+            new = folder / f"{m.word}{used[m.word]}.wav"
+            confident += 1
+        else:
+            new = folder / f"maybe-{m.word}__{best.stem}.wav"
+            maybe += 1
+
+        if new.exists():
+            continue
+        best.rename(new)
+        clips = [(p, s) for p, s in clips if p != best]
+
+    return confident, maybe, notes
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="luokkaretki.label_words",
         description="Pre-fill labels.tsv using local speech recognition.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
+    p.add_argument("--rename", action="store_true",
+                   help="rename the candidate clips in place instead of writing labels.tsv")
+    p.add_argument("--candidates", type=Path, default=Path("words/candidates"))
     p.add_argument("--labels", type=Path, default=Path("words/labels.tsv"))
     p.add_argument("--vocal", type=Path, default=None,
                    help="separated vocal wav [default: newest under work/*/vocal.wav]")
@@ -184,21 +255,26 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
-    if not args.labels.is_file():
-        print(f"error: {args.labels} not found. Run extract_words first.", file=sys.stderr)
-        return 2
     try:
         vocal_path = _find_vocal(args.vocal)
     except LabelError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
-    header, rows = read_all_rows(args.labels)
-    already = [r for r in rows if r.word not in ("?", "", "-")]
-    if already and not args.force:
-        print(f"error: {args.labels} already has {len(already)} labelled rows.\n"
-              "       Re-run with --force to overwrite your labelling.", file=sys.stderr)
-        return 2
+    if args.rename:
+        if not args.candidates.is_dir():
+            print(f"error: {args.candidates} not found. Run extract_words first.", file=sys.stderr)
+            return 2
+    else:
+        if not args.labels.is_file():
+            print(f"error: {args.labels} not found. Run extract_words first.", file=sys.stderr)
+            return 2
+        header, rows = read_all_rows(args.labels)
+        already = [r for r in rows if r.word not in ("?", "", "-")]
+        if already and not args.force:
+            print(f"error: {args.labels} already has {len(already)} labelled rows.\n"
+                  "       Re-run with --force to overwrite your labelling.", file=sys.stderr)
+            return 2
 
     device = resolve_device(args.device)
     print(f"  vocal     {vocal_path}")
@@ -218,26 +294,35 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {m.start_s:6.2f} {m.end_s:6.2f}   {m.word:<12} {m.similarity:>6.2f}     "
               f"{m.heard}{flag}")
 
-    filled, added = merge(rows, matches)
-    args.labels.write_text(
-        "\n".join(header + [r.to_tsv() for r in rows]) + "\n", encoding="utf-8"
-    )
-
     counts: dict[str, int] = {}
-    for r in rows:
-        if r.word in config.WORD_SYLLABLES:
-            counts[r.word] = counts.get(r.word, 0) + 1
+    for m in matches:
+        counts[m.word] = counts.get(m.word, 0) + 1
 
-    print(f"\n  {filled} candidate regions labelled, {added} rows added from ASR timings")
+    if args.rename:
+        confident, maybe, notes = rename_candidates(args.candidates, matches)
+        for n in notes:
+            print(f"  note: {n}")
+        print(f"\n  {confident} clips renamed to a bank name, "
+              f"{maybe} marked 'maybe-' (too weak to trust)")
+        print(f"  folder    {args.candidates.resolve()}")
+        print("\n  These are guesses from a model trained on speech, not singing.")
+        print("  Play every one before building: fix any wrong name, delete the junk,")
+        print("  and rename the 'maybe-' ones properly if they are right.")
+        print("  Anything left with a 'maybe-' or generated name is ignored by the bank.")
+    else:
+        filled, added = merge(rows, matches)
+        args.labels.write_text(
+            "\n".join(header + [r.to_tsv() for r in rows]) + "\n", encoding="utf-8"
+        )
+        print(f"\n  {filled} candidate regions labelled, {added} rows added from ASR timings")
+        print(f"  labels    {args.labels}")
+        print("\n  Check it by ear before building -- anything marked 'check' above.")
+
     print("  " + (", ".join(f"{w}: {n}" for w, n in sorted(counts.items())) or "nothing matched"))
     missing = [w for w in config.WORD_SYLLABLES if w not in counts]
     if missing:
         print(f"  not found: {', '.join(missing)}")
-
-    print(f"\n  labels    {args.labels}")
-    print("\n  Check it by ear before building -- anything marked 'check' above, and")
-    print("  any row whose start/end clips a word short. Then:")
-    print("      python -m luokkaretki.build_bank")
+    print("\n  Then:  python -m luokkaretki.build_bank")
     return 0
 
 

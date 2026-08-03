@@ -10,8 +10,32 @@ word just because it is the nearest of only five options.
 import pytest
 
 from luokkaretki.label_words import (
-    MATCH_THRESHOLD, LabelRow, best_target, merge, normalise, overlap, Match,
+    MATCH_THRESHOLD, RENAME_CONFIDENT, LabelRow, best_target, candidate_span,
+    merge, normalise, overlap, Match,
 )
+
+
+def test_candidate_span_reads_times_off_a_generated_name():
+    assert candidate_span("c07__4syl__F#3__9.43-9.98") == (9.43, 9.98)
+    assert candidate_span("c01__2syl__F3__0.09-0.48") == (0.09, 0.48)
+
+
+@pytest.mark.parametrize("stem", ["paska1", "maybe-pillu__c07", "random"])
+def test_candidate_span_absent_once_renamed(stem):
+    assert candidate_span(stem) is None
+
+
+def test_weak_matches_cannot_reach_the_bank_unaided():
+    """A 'maybe-' name must not parse as a bank word.
+
+    Whisper heard one 4-syllable word as the same wrong token eleven times at
+    0.67. If that prefix parsed, a single shaky guess would populate the bank
+    with clips nobody had listened to.
+    """
+    from luokkaretki.build_bank import parse_name
+
+    assert MATCH_THRESHOLD < RENAME_CONFIDENT
+    assert parse_name("maybe-pornolehti__c04__2syl__F#3__2.75-3.11") is None
 
 
 @pytest.mark.parametrize("heard,expected", [
