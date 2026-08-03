@@ -265,12 +265,21 @@ def main(argv: list[str] | None = None) -> int:
           f"{len(candidates) - two - four} other")
 
     labels = write_labels(args.out.parent / "labels.tsv", candidates)
-    print(f"\n  labels    {labels}")
-    print("\n  Next: play the clips, fill in the `word` column in labels.tsv,")
-    print("  adjust any start/end that cut a word short, then run")
-    print("      python -m luokkaretki.build_bank")
-    print("\n  Word identity has to come from you -- these are cut on silence and")
-    print("  loudness, which locates sung regions but cannot tell them apart.")
+
+    print(f"\n  Next: open {args.out} and play through the clips.")
+    print("    - delete the ones that are junk or unusable")
+    print("    - rename the keepers after the word you hear:")
+    print("        paska1.wav   perse2.wav   paviaani_low.wav")
+    print("      (a bare word, a trailing number, or _anything all work)")
+    print("    - leave anything you are unsure about alone; unnamed clips are ignored")
+    print("\n  Then:  python -m luokkaretki.build_bank")
+    print("\n  Several takes of the same word are wanted, not a problem: the tool")
+    print("  picks whichever take is nearest each target note so it shifts less.")
+    print("  You do not need to name pitches -- those are measured.")
+    print(f"\n  ({labels} also written, if you would rather adjust cut points as")
+    print("   timestamps than re-cut by hand: build_bank --labels words/labels.tsv)")
+    print("\n  Which word is which has to come from you -- these are cut on silence")
+    print("  and loudness, which finds sung regions but cannot tell them apart.")
     return 0
 
 
