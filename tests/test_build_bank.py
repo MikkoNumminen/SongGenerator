@@ -35,17 +35,31 @@ class TestPhraseNames:
     def test_reads_the_whole_sequence(self, stem, words, variant):
         assert parse_phrase(stem) == (words, variant)
 
-    @pytest.mark.parametrize("stem", [
-        "paskapersepor",     # ends on a chopped 'pornolehti'
-        "pillupaskapor",
-        "nolehti",           # the other half of one
-        "per",
-        "persee",            # too long to be one word; ambiguous
+    @pytest.mark.parametrize("stem,words", [
+        ("per", ["per"]),
+        ("nolehti", ["no", "leh", "ti"]),
+        ("paskapersepor", ["paska", "perse", "por"]),
+        ("pillupaskapor", ["pillu", "paska", "por"]),
     ])
-    def test_rejects_names_ending_mid_word(self, stem):
+    def test_syllable_names_parse_as_syllables(self, stem, words):
+        """These read as fragments only while syllables are not first-class.
+
+        Once the bank holds syllables, 'nolehti' is precisely no + leh + ti,
+        and a clip named that way is three usable slots rather than a chopped
+        word. Naming is the user's act, so a name that spells out syllables is
+        taken at its word.
+        """
+        assert parse_phrase(stem) == (words, "")
+
+    @pytest.mark.parametrize("stem", [
+        "persee",     # perse plus a stray vowel: neither word nor syllable
+        "xyz",
+        "paskaxx",
+    ])
+    def test_still_rejects_names_that_spell_nothing(self, stem):
         assert parse_phrase(stem) is None, (
-            f"{stem!r} was accepted -- a clip that cuts off mid-syllable would "
-            "enter the bank with its fragment treated as a variant label"
+            f"{stem!r} was accepted despite ending in something that is neither "
+            "a word nor a syllable"
         )
 
     def test_longest_word_wins(self):

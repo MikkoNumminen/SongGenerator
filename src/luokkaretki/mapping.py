@@ -138,7 +138,69 @@ def load_bank(words_dir: Path = Path("words")) -> list[Unit]:
 
     if not units:
         raise BankError(f"{index} lists no clips that exist on disk.")
+
+    units.extend(compose_words(units))
     return units
+
+
+def _crossfade(a: np.ndarray, b: np.ndarray, sr: int) -> np.ndarray:
+    """Join two clips with a short overlap, so the seam does not click."""
+    n = min(int(config.COMPOSE_CROSSFADE_S * sr), a.shape[1] // 2, b.shape[1] // 2)
+    if n <= 0:
+        return np.concatenate([a, b], axis=1)
+
+    ramp = np.linspace(0.0, 1.0, n, dtype=np.float32)
+    head = a[:, :-n]
+    seam = a[:, -n:] * (1.0 - ramp) + b[:, :n] * ramp
+    tail = b[:, n:]
+    return np.concatenate([head, seam, tail], axis=1)
+
+
+def compose_words(units: list[Unit]) -> list[Unit]:
+    """Spell whole words out of single-syllable clips.
+
+    A bank of syllables reaches words that were never recorded intact --
+    paviaani from pa + vi + aa + ni. The joins are crossfades rather than the
+    singer's own transitions, so these are worth less than a real recording of
+    the same word and the mapper prefers a genuine clip wherever one exists.
+    They are what makes a handful of syllables cover a whole song.
+    """
+    import itertools
+
+    by_syllable: dict[str, list[Unit]] = {}
+    for u in units:
+        if len(u.words) == 1 and u.syllables == 1:
+            by_syllable.setdefault(u.words[0], []).append(u)
+
+    composed: list[Unit] = []
+    for word, spelling in config.WORD_SPELLING.items():
+        takes = [by_syllable.get(part, []) for part in spelling]
+        if not all(takes):
+            continue
+
+        for i, combo in enumerate(itertools.islice(itertools.product(*takes),
+                                                   config.COMPOSE_MAX_PER_WORD)):
+            audio = combo[0].audio
+            bounds, running = [], combo[0].duration_s
+            for nxt in combo[1:]:
+                bounds.append(round(running, 4))
+                audio = _crossfade(audio, nxt.audio, config.SAMPLE_RATE)
+                running += nxt.duration_s - config.COMPOSE_CROSSFADE_S
+
+            pitches = [c.midi for c in combo]
+            known = [p for p in pitches if p is not None]
+            composed.append(Unit(
+                name=f"spelled:{word}:{i + 1}",
+                words=[word],
+                syllables=len(spelling),
+                duration_s=audio.shape[1] / config.SAMPLE_RATE,
+                midi=float(np.median(known)) if known else None,
+                audio=audio,
+                bounds_s=bounds,
+                syllable_midi=list(pitches),
+            ))
+
+    return composed
 
 
 # ---------------------------------------------------------------------------

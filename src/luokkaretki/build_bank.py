@@ -98,16 +98,30 @@ class Named:
 
     @property
     def syllables(self) -> int:
-        return sum(config.WORD_SYLLABLES[w] for w in self.words)
+        return sum(syllables_of(w) for w in self.words)
 
     @property
     def stem(self) -> str:
         return "-".join(self.words)
 
 
-# Longest first, so paviaani is never mistaken for the start of something else.
-_BANK_BY_LENGTH = sorted(config.WORD_SYLLABLES, key=len, reverse=True)
-_SEPARATORS = "_- ."
+SYLLABLES = {s for parts in config.WORD_SPELLING.values() for s in parts}
+
+# Words and syllables share one namespace, matched longest first so "paska" is
+# never read as the syllable "pas" plus leftovers, and "pas" on its own is
+# still recognised as a syllable rather than rejected.
+_BANK_BY_LENGTH = sorted(set(config.WORD_SYLLABLES) | SYLLABLES, key=len, reverse=True)
+
+# Parentheses included because Windows appends " (2)" when a name collides,
+# which is exactly what happens when several takes of one syllable are named.
+_SEPARATORS = "_- .()"
+
+
+def syllables_of(token: str) -> int:
+    """How many melody slots this token occupies."""
+    if token in config.WORD_SYLLABLES:
+        return config.WORD_SYLLABLES[token]
+    return 1 if token in SYLLABLES else 0
 
 
 def parse_phrase(stem: str) -> tuple[list[str], str] | None:
@@ -375,7 +389,7 @@ def main(argv: list[str] | None = None) -> int:
 
         audio_io.write_wav(args.out / name, clip)
         midi, dur = measure(clip, config.SAMPLE_RATE, device)
-        per_word = [config.WORD_SYLLABLES[w] for w in words]
+        per_word = [syllables_of(w) for w in words]
         n_syl = sum(per_word)
         bounds = syllable_boundaries(clip, config.SAMPLE_RATE, n_syl)
 

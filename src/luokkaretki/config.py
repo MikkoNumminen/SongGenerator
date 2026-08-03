@@ -147,6 +147,33 @@ WORD_SYLLABLES = {
 # told to use them for punctuation rather than treating them as vocabulary.
 SHOUT_WORDS = ("eee", "huuto")
 
+# How each word breaks into syllables.
+#
+# A melody slot holds exactly one syllable and a syllable clip fills exactly
+# one slot, so a bank of syllables maps onto a tune 1:1 -- no counting, no
+# leftover slot to fudge. It also means any word can be spelled from parts:
+# paviaani needs no intact recording, only pa + vi + aa + ni.
+#
+# Whole-word and multi-word clips are still preferred wherever they exist,
+# because they carry the singer's own transitions between syllables, and a
+# transition cannot be rebuilt by butting two recordings together. Spelling is
+# the fallback that makes a small bank go a very long way.
+WORD_SPELLING = {
+    "paska": ("pas", "ka"),
+    "perse": ("per", "se"),
+    "pillu": ("pil", "lu"),
+    "pornolehti": ("por", "no", "leh", "ti"),
+    "paviaani": ("pa", "vi", "aa", "ni"),
+}
+
+# How many spellings to build per word when several takes of a syllable exist.
+# Every combination would be thousands of units for no musical gain.
+COMPOSE_MAX_PER_WORD = 6
+
+# Crossfade at a syllable join. Short enough not to smear the consonant,
+# long enough to avoid a click where two recordings meet.
+COMPOSE_CROSSFADE_S = 0.02
+
 # A candidate with a single syllable nucleus lasting at least this long is
 # probably a held shout rather than a clipped word, and gets flagged as such.
 SHOUT_MIN_S = 0.35
