@@ -46,6 +46,16 @@ class Unit:
     def label(self) -> str:
         return "+".join(self.words)
 
+    @property
+    def is_word_like(self) -> bool:
+        """True when every part is a real word, not a bare syllable.
+
+        A clip of "pas" fits a slot as neatly as one of "paska" and says
+        nothing, so syllables are kept for spelling words rather than sung on
+        their own.
+        """
+        return all(w in config.WORD_SYLLABLES for w in self.words)
+
     def syllable_spans(self) -> list[tuple[float, float]]:
         edges = [0.0] + list(self.bounds_s) + [self.duration_s]
         return list(zip(edges[:-1], edges[1:]))
@@ -109,6 +119,32 @@ class Plan:
 # Bank
 # ---------------------------------------------------------------------------
 
+def level_clip(audio: np.ndarray) -> np.ndarray:
+    """Bring one clip to the bank's common level.
+
+    Clips arrive from dozens of sources at wildly different levels, and
+    matching only the finished word bus leaves that unevenness intact inside
+    it -- one word blares, the next is inaudible under the band. Measured as
+    RMS over the sounding part only, so a long silent tail cannot make a clip
+    read as quiet and get boosted into distortion.
+    """
+    audio = np.asarray(audio, dtype=np.float32)
+    mono = audio.mean(axis=0) if audio.ndim > 1 else audio
+
+    loud = mono[np.abs(mono) > 10 ** (-45 / 20)]
+    if loud.size < 32:
+        loud = mono
+    rms = float(np.sqrt(np.mean(np.square(loud)))) if loud.size else 0.0
+    if rms <= 1e-6:
+        return audio
+
+    gain = 10 ** ((config.CLIP_TARGET_RMS_DB - 20 * np.log10(rms)) / 20)
+    peak = float(np.abs(audio).max()) * gain
+    if peak > config.CLIP_PEAK_CEILING:
+        gain *= config.CLIP_PEAK_CEILING / peak
+    return (audio * gain).astype(np.float32)
+
+
 def load_bank(words_dir: Path = Path("words")) -> list[Unit]:
     index = words_dir / "words.json"
     if not index.is_file():
@@ -131,7 +167,7 @@ def load_bank(words_dir: Path = Path("words")) -> list[Unit]:
             syllables=e["syllables"],
             duration_s=e["duration_s"],
             midi=e.get("midi"),
-            audio=audio_io.read_wav(path),
+            audio=level_clip(audio_io.read_wav(path)),
             bounds_s=e.get("syllable_bounds_s", []),
             syllable_midi=e.get("syllable_midi", []),
         ))
@@ -140,6 +176,11 @@ def load_bank(words_dir: Path = Path("words")) -> list[Unit]:
         raise BankError(f"{index} lists no clips that exist on disk.")
 
     units.extend(compose_words(units))
+
+    if not config.PLACE_BARE_SYLLABLES:
+        singable = [u for u in units if u.is_word_like]
+        if singable:
+            return singable
     return units
 
 

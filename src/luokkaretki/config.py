@@ -133,19 +133,27 @@ WORD_SYLLABLES = {
     "pillu": 2,
     "pornolehti": 4,
     "paviaani": 4,
-    # A sustained shouted vowel, as in the "eee" that leads into paviaani. One
-    # syllable, and the only odd-length unit in the bank -- which makes it the
-    # natural filler for the single leftover slot an odd phrase produces, where
-    # ODD_SLOT_POLICY previously had to fudge.
+    # The held shout, as in the "eee" that leads into paviaani. It is THE
+    # shout -- there is no separate generic yell. One syllable, and the only
+    # odd-length unit in the bank, which makes it the natural filler for the
+    # single leftover slot an odd phrase produces.
     "eee": 1,
-    # Any other human shout, yell or non-verbal noise worth keeping. Counted as
-    # one syllable because it occupies one slot however long it rings.
-    "huuto": 1,
 }
 
 # Units that are shouts rather than words. Kept separate so the mapper can be
 # told to use them for punctuation rather than treating them as vocabulary.
-SHOUT_WORDS = ("eee", "huuto")
+SHOUT_WORDS = ("eee",)
+
+# Whether a lone syllable may be sung on its own.
+#
+# Off. The point is to hear paska, perse, pillu, pornolehti and eee paviaani --
+# actual words. A bank full of single syllables will happily fill every slot
+# with "pas", "per", "ka", which fits the melody perfectly and says nothing.
+#
+# Syllable clips still earn their place: compose_words spells whole words out of
+# them, reaching words that were never recorded intact. They just do that job
+# instead of being sung bare.
+PLACE_BARE_SYLLABLES = False
 
 # How each word breaks into syllables.
 #
@@ -390,6 +398,18 @@ SHIFT_MIX_MODE = "furthest"
 # over a full band.
 WORD_BUS_LUFS = -14.0
 INSTRUMENTAL_LUFS = -16.0
+
+# Every bank clip is levelled to this before anything else, in dBFS RMS.
+#
+# The clips come from dozens of sources at wildly different levels: a shouted
+# eee and a muttered syllable are not remotely the same loudness, and matching
+# only the finished word bus leaves that unevenness intact inside it. RMS rather
+# than LUFS because most clips are far shorter than the 400 ms LUFS gating
+# window and would simply fail to measure.
+CLIP_TARGET_RMS_DB = -20.0
+
+# Ceiling for a levelled clip, so raising a quiet one cannot clip it.
+CLIP_PEAK_CEILING = 0.95
 
 # Final limiter ceiling in dBFS, applied to the sum.
 OUTPUT_PEAK_CEILING_DB = -1.0

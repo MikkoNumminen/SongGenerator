@@ -96,6 +96,18 @@ never see. Resolve it on a real vocal.
 
 ## Open items
 
+- **Syllables may not be worth keeping.** Clips of bare syllables (`pas`, `ka`,
+  `leh`, `ti`) map onto a melody 1:1 and can spell words that were never
+  recorded intact, which is why they were tried. In practice they crowded out
+  the words: a clip of `pas` fills a slot as neatly as one of `paska` and says
+  nothing, and a track full of them stops being about paska, perse, pillu,
+  pornolehti and eee paviaani. They are currently set aside rather than deleted
+  (`SYL_` prefix, `python -m luokkaretki.set_aside --restore` puts them back).
+  If they stay unhelpful, drop `WORD_SPELLING`, `compose_words` and
+  `PLACE_BARE_SYLLABLES` entirely rather than leaving dead machinery around.
+  Shouts are exempt: `eee` is a real utterance and the only odd-length unit,
+  so it is the only thing that fits the leftover slot of an odd phrase.
+
 - **`paviaani` is not in the bank yet.** It does not appear anywhere in the
   `paskaperse.mp4` scene's labelling. Mikko is supplying it from another source
   later. Until then the bank has four of the five words, and

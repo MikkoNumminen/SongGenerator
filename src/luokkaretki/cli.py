@@ -66,6 +66,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="which prebuilt bank to sing with")
     p.add_argument("--words-dir", type=Path, default=None,
                    help="a bank directory directly, overriding --bank")
+    p.add_argument("--bare-syllables", action="store_true",
+                   help="let lone syllables be sung on their own, not just used to "
+                        "spell words (the pre-words-only behaviour)")
     p.add_argument("--seed", type=int, default=None,
                    help="word choice seed [default: WORD_ROTATION_SEED in config.py]")
     p.add_argument("--no-words", action="store_true",
@@ -181,6 +184,8 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_OK
 
     words_dir = args.words_dir or Path(config.BANKS[args.bank])
+    if args.bare_syllables:
+        config.PLACE_BARE_SYLLABLES = True
     try:
         units = load_bank(words_dir)
         if not args.json:
