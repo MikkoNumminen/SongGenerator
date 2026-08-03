@@ -302,6 +302,29 @@ PREFER_NEAREST_SOURCE_PITCH = True
 # setting than one that ranges far above it.
 SHIFT_MIX = 0.35
 
+# How closely the words should track the original singing, 0.0 to 1.0.
+#
+# This is the dial worth reaching for, because SHIFT_MIX alone does not mean the
+# same thing from one song to the next. SHIFT_MIX counts how many units get
+# shifted; MIMICRY measures how much of the original melody actually survives in
+# the result, which is what you hear.
+#
+# The difference is octave folding. A song whose melody ranges far above the
+# bank's register has most of its syllables folded, so they land on the right
+# note NAME in the wrong octave -- recognisably the tune, still audibly wrong.
+# That song sounds unfitted even when every single unit has been shifted. A song
+# sitting near the bank's own register folds almost nothing, so the same
+# SHIFT_MIX comes out sounding properly sung.
+#
+# Set MIMICRY and the tool solves for whatever SHIFT_MIX that particular song
+# needs to get there. Set MIMICRY to None to drive SHIFT_MIX directly instead.
+MIMICRY = 0.45
+
+# What a folded syllable is worth against one that landed exactly. It carries
+# the right note name and the melody's shape, but in the wrong octave, so it
+# mimics the original in part rather than fully.
+FOLDED_FIT = 0.45
+
 # Which units keep their own pitch when SHIFT_MIX is below 1.0:
 #
 # "furthest" - the ones whose target is furthest from their recorded pitch.

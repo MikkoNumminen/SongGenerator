@@ -5,8 +5,8 @@ import pytest
 
 from luokkaretki import config
 from luokkaretki.mapping import (
-    Plan, Slot, Unit, clean_slots, decide_shifts, group_phrases, mix, plan_words,
-    render, report,
+    Plan, Slot, Unit, clean_slots, decide_by_mimicry, decide_shifts, group_phrases,
+    mimicry, mix, plan_words, render, report,
 )
 
 SR = config.SAMPLE_RATE
@@ -197,6 +197,65 @@ class TestShiftMix:
 
     def test_empty_plan_is_safe(self):
         decide_shifts(Plan(), mix=0.5)
+
+
+class TestMimicry:
+    """Mimicry is the setting that means the same thing across songs.
+
+    SHIFT_MIX counts units shifted; that is not what a listener hears. A song
+    whose melody ranges far above the bank has most syllables octave-folded, so
+    each shifted unit carries less of the original tune, and the song sounds
+    unfitted even with every unit shifted. Mimicry measures the result instead.
+    """
+
+    def _far_slots(self, n, distance):
+        return [Slot(i * 0.3, i * 0.3 + 0.25, 53.0 + distance, 0) for i in range(n)]
+
+    def test_nothing_shifted_mimics_nothing(self, bank):
+        plan = plan_words(_slots(40), bank)
+        decide_shifts(plan, mix=0.0)
+        assert mimicry(plan) == 0.0
+
+    def test_a_close_song_can_mimic_almost_exactly(self, bank):
+        plan = plan_words(self._far_slots(40, 2.0), bank)
+        decide_shifts(plan, mix=1.0)
+        assert mimicry(plan) > 0.95
+
+    def test_a_far_song_is_capped_by_folding(self, bank):
+        """Every unit shifted, yet it still cannot fully mimic the original."""
+        plan = plan_words(self._far_slots(40, 26.0), bank)
+        decide_shifts(plan, mix=1.0)
+        assert mimicry(plan) == pytest.approx(config.FOLDED_FIT, abs=0.05)
+
+    @pytest.mark.parametrize("target", [0.2, 0.4, 0.6])
+    def test_target_is_reached_on_a_close_song(self, bank, target):
+        plan = plan_words(self._far_slots(60, 2.0), bank)
+        achieved = decide_by_mimicry(plan, target)
+        assert achieved >= target - 0.02
+        assert achieved <= target + 0.15
+
+    def test_a_far_song_shifts_more_units_for_the_same_mimicry(self, bank):
+        """The compensation that makes one number work across songs."""
+        close = plan_words(self._far_slots(60, 2.0), bank)
+        far = plan_words(self._far_slots(60, 26.0), bank)
+        decide_by_mimicry(close, 0.4)
+        decide_by_mimicry(far, 0.4)
+
+        close_n = sum(1 for p in close.placements if p.do_shift)
+        far_n = sum(1 for p in far.placements if p.do_shift)
+        assert far_n > close_n, (
+            f"far song shifted {far_n} units, close song {close_n} -- a folded "
+            "song must shift more to carry the same amount of the tune"
+        )
+
+    def test_target_above_the_ceiling_shifts_everything(self, bank):
+        plan = plan_words(self._far_slots(40, 26.0), bank)
+        decide_by_mimicry(plan, 0.99)
+        assert all(p.do_shift for p in plan.placements)
+
+    def test_empty_plan_is_safe(self):
+        assert mimicry(Plan()) == 0.0
+        assert decide_by_mimicry(Plan(), 0.5) == 0.0
 
 
 def test_report_on_an_empty_plan():

@@ -70,9 +70,12 @@ def build_parser() -> argparse.ArgumentParser:
                    help="stop after analysis and write only the instrumental")
     p.add_argument("--no-shift", action="store_true",
                    help="place clips at their own recorded pitch (the step 3 sound)")
+    p.add_argument("--mimicry", type=float, default=None, metavar="0..1",
+                   help="how closely the words track the original singing; the tool "
+                        "solves for the shift this song needs [default: MIMICRY]")
     p.add_argument("--mix", type=float, default=None, metavar="0..1",
-                   help="how much of the track sings along: 0 = all clashing, "
-                        "1 = all on the melody [default: SHIFT_MIX in config.py]")
+                   help="drive the raw proportion of shifted units instead, "
+                        "overriding --mimicry")
     p.add_argument("--mix-mode", choices=["furthest", "random"], default=None,
                    help="which units keep their own pitch")
     p.add_argument("--engine", choices=["world", "rubberband"], default=config.SHIFT_ENGINE,
@@ -186,7 +189,8 @@ def main(argv: list[str] | None = None) -> int:
     word_plan.merged, word_plan.split = merged, split
 
     decide_shifts(word_plan, mix=0.0 if args.no_shift else args.mix,
-                  mode=args.mix_mode, seed=args.seed)
+                  mode=args.mix_mode, seed=args.seed,
+                  target_mimicry=args.mimicry)
     word_bus = render(word_plan, stems.instrumental.shape[1], config.SAMPLE_RATE,
                       shift=not args.no_shift, engine=args.engine)
     mixed = mix_buses(word_bus, stems.instrumental, config.SAMPLE_RATE)

@@ -303,19 +303,90 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
 # Render and mix
 # ---------------------------------------------------------------------------
 
+def unit_fit(p: Placement) -> float:
+    """How much of the original melody this unit would carry, if shifted.
+
+    A syllable inside the shift cap lands exactly on the melody's note and
+    counts fully. One that had to be octave-folded carries the right note name
+    and the melody's shape but sits in the wrong octave, so it only partly
+    mimics the original -- recognisably the tune, still audibly wrong.
+    """
+    fits = []
+    for i, slot in enumerate(p.slots):
+        source = p.unit.source_midi(i)
+        if source is None:
+            continue
+        raw = abs(slot.midi - source)
+        fits.append(1.0 if raw <= config.SHIFT_CAP_SEMITONES else config.FOLDED_FIT)
+    return float(np.mean(fits)) if fits else 0.0
+
+
+def mimicry(plan: Plan) -> float:
+    """How much of the original singing survives in the result, 0.0 to 1.0."""
+    if not plan.placements:
+        return 0.0
+    got = sum(unit_fit(p) for p in plan.placements if p.do_shift)
+    return got / len(plan.placements)
+
+
+def decide_by_mimicry(plan: Plan, target: float, mode: str | None = None,
+                      seed: int | None = None) -> float:
+    """Shift as many units as it takes to reach the wanted mimicry.
+
+    How many that is depends on the song: one whose melody sits far above the
+    bank folds most of its syllables, each carrying less of the original, so
+    more units have to be shifted to reach the same result.
+    """
+    mode = mode or config.SHIFT_MIX_MODE
+    placements = plan.placements
+    if not placements:
+        return 0.0
+
+    for p in placements:
+        p.do_shift = False
+
+    if mode == "furthest":
+        # Shift the closest-fitting units first: most mimicry per unit, and it
+        # leaves the big jumps clashing, which is where they are funniest.
+        order = sorted(placements, key=lambda p: p.raw_distance())
+    else:
+        rng = random.Random(config.WORD_ROTATION_SEED if seed is None else seed)
+        order = list(placements)
+        rng.shuffle(order)
+
+    n = len(placements)
+    running = 0.0
+    for p in order:
+        if running / n >= target:
+            break
+        p.do_shift = True
+        running += unit_fit(p)
+
+    return mimicry(plan)
+
+
 def decide_shifts(plan: Plan, mix: float | None = None, mode: str | None = None,
-                  seed: int | None = None) -> None:
+                  seed: int | None = None, target_mimicry: float | None = None) -> None:
     """Mark which units sing along and which keep their own pitch.
 
     Everything shifted sounds sung and stops being funny; nothing shifted is
     funny but never sounds like singing. The setting worth using is in between,
     and which units are left alone matters as much as how many.
     """
-    mix = config.SHIFT_MIX if mix is None else mix
-    mode = mode or config.SHIFT_MIX_MODE
     placements = plan.placements
     if not placements:
         return
+
+    # A mimicry target overrides the raw count, because it is the one that means
+    # the same thing across songs.
+    if mix is None:
+        target = config.MIMICRY if target_mimicry is None else target_mimicry
+        if target is not None:
+            decide_by_mimicry(plan, target, mode, seed)
+            return
+
+    mix = config.SHIFT_MIX if mix is None else mix
+    mode = mode or config.SHIFT_MIX_MODE
 
     if mix >= 1.0:
         for p in placements:
@@ -470,12 +541,16 @@ def report(plan: Plan, units: list[Unit]) -> str:
         f"{k} x{v}" for k, v in sorted(used.items(), key=lambda kv: -kv[1])))
 
     singing = sum(1 for p in plan.placements if p.do_shift)
+    ceiling = sum(unit_fit(p) for p in plan.placements) / len(plan.placements)
     add("")
-    add("  shift mix")
+    add("  how much it mimics the original")
+    add(f"    mimicry           {mimicry(plan):.2f}  "
+        f"(0 = ignores the tune, 1 = sings it exactly)")
     add(f"    sings along       {singing} of {len(plan.placements)} units "
-        f"({singing / len(plan.placements) * 100:.0f}%)")
-    add(f"    keeps own pitch   {len(plan.placements) - singing} units "
-        f"(mode {config.SHIFT_MIX_MODE!r})")
+        f"({singing / len(plan.placements) * 100:.0f}%), mode {config.SHIFT_MIX_MODE!r}")
+    add(f"    ceiling           {ceiling:.2f} -- the most this song can mimic even")
+    add(f"                      with every unit shifted, because octave-folded")
+    add(f"                      syllables only carry the tune in part")
 
     shifts = np.array([s for p in plan.placements if p.do_shift for s in p.shifts])
     if shifts.size:
