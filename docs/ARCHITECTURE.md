@@ -68,7 +68,7 @@ These do not run during a song. They turn source videos into reviewed clips.
 | `mine_words.py` | Many sources at once: separate, cut candidates, one folder each |
 | `extract_words.py` | Cut one source into candidate clips |
 | `flatten.py` | Collapse per-source folders into one flat reviewable folder |
-| `label_words.py` | Speech-recognition *hints* (unreliable here — see CLAUDE.md) |
+| `label_words.py` | Speech-recognition *hints* (unreliable here — see AGENTS.md) |
 | `precheck.py` | Per-clip guessing, constrained by measured syllable count |
 | `hunt.py` | Find a shout-then-word shape on the envelope, no model needed |
 | `successors.py` | Re-cut what follows a shout, since cutting severs `eee paviaani` |

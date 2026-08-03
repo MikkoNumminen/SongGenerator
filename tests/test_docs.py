@@ -22,7 +22,7 @@ def read(path: Path) -> str:
 
 
 @pytest.mark.parametrize("name", [
-    "CLAUDE.md",
+    "AGENTS.md",
     "README.md",
     "docs/GLOSSARY.md",
     "docs/ARCHITECTURE.md",
@@ -67,7 +67,7 @@ def _referenced_constants(text: str) -> set[str]:
 
 
 @pytest.mark.parametrize("doc", [
-    "CLAUDE.md", "README.md",
+    "AGENTS.md", "README.md",
     "docs/WORKFLOWS.md", "docs/GLOSSARY.md",
     "docs/ARCHITECTURE.md", "docs/DATA-FORMATS.md",
 ])
@@ -76,7 +76,7 @@ def test_constants_named_in_docs_actually_exist(doc):
     known = set(dir(config))
     # Words that look like constants but are prose or JSON keys.
     allowed = {
-        "CLAUDE", "README", "GLOSSARY", "ARCHITECTURE", "WORKFLOWS",
+        "AGENTS", "README", "GLOSSARY", "ARCHITECTURE", "WORKFLOWS",
         "DEMUCS", "WORLD", "PATH", "JSON", "LUFS", "PYTHONPATH", "GPU",
         "NVIDIA", "TSV", "BOM", "DENSITY", "CLIMAXES", "STAGE", "LISTEN",
         "FIRST", "FORMATS", "PASKA", "OTHER",
@@ -100,9 +100,9 @@ def test_every_review_prefix_is_documented():
         assert prefix in glossary, f"{prefix} is written by the tools but undocumented"
 
 
-def test_claude_md_states_the_irreversible_rule():
+def test_agents_md_states_the_irreversible_rule():
     """The one thing in the repo that cannot be regenerated."""
-    text = read(ROOT / "CLAUDE.md")
+    text = read(ROOT / "AGENTS.md")
     assert "words/candidates/" in text
     assert "prefix" in text.lower()
 
@@ -123,6 +123,41 @@ def test_workflows_commands_name_real_modules():
     invoked = set(re.findall(r"-m luokkaretki_generator\.(\w+)", read(DOCS / "WORKFLOWS.md")))
     missing = sorted(invoked - modules)
     assert not missing, f"WORKFLOWS.md invokes modules that do not exist: {missing}"
+
+
+def test_no_assistant_is_named_anywhere_in_the_repo():
+    """No AI assistant or vendor is credited anywhere in published files.
+
+    A hard project rule, not a preference. It covers comments, docstrings,
+    docs, filenames and attribution lines alike. .gitignore is the sole
+    exception, since an ignore rule has to name the file it ignores.
+
+    Commit messages are checked separately by hand -- a test cannot see them,
+    and a trailer in history is not undone by removing it going forward.
+    """
+    import subprocess
+
+    banned = ("claude", "anthropic", "copilot", "chatgpt", "openai")
+    tracked = subprocess.run(
+        ["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, check=True
+    ).stdout.split()
+
+    offenders = []
+    for rel in tracked:
+        if rel == ".gitignore":
+            continue
+        if any(word in rel.lower() for word in banned):
+            offenders.append(f"{rel} (filename)")
+            continue
+        try:
+            text = (ROOT / rel).read_text(encoding="utf-8").lower()
+        except (UnicodeDecodeError, FileNotFoundError):
+            continue
+        for word in banned:
+            if word in text:
+                offenders.append(f"{rel} (contains {word!r})")
+
+    assert not offenders, "assistant/vendor named in: " + ", ".join(offenders)
 
 
 def test_every_cli_module_can_be_imported():

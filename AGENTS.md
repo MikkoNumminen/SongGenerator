@@ -11,9 +11,10 @@ The venv is deliberately isolated (torch, demucs and heavy audio deps live
 there and must not leak into other projects). Always use it explicitly:
 
 ```powershell
-.\.venv\Scripts\luokkaretki-generator.exe input\song.mp4          # full run, 7 variants
-.\.venv\Scripts\python.exe -m pytest tests\ -q          # 191 tests, ~10s
-.\.venv\Scripts\python.exe -m luokkaretki_generator.build_bank    # rebuild the word bank
+.\.venv\Scripts\luokkaretki-generator.exe input\song.mp4              # full run, 7 variants
+.\.venv\Scripts\python.exe -m pytest tests\ -q                        # 191 tests, ~10s
+.\.venv\Scripts\python.exe -m luokkaretki_generator.build_bank        # rebuild the word bank
+.\.venv\Scripts\python.exe -m luokkaretki_generator.doctor            # diagnose anything
 ```
 
 Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
@@ -21,11 +22,14 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
 
 ## Never do these
 
+- **Never commit audio.** Not source material, not rendered output, not the
+  word samples. All of it is excluded by `.gitignore` on extension, so it is
+  refused wherever it lands. The repo is the tool, not the media.
 - **Never rename or delete anything in `words/candidates/` that has no prefix.**
   Unprefixed clips are hand-reviewed by ear and cannot be regenerated. Prefixed
   ones (`TODO_`, `AI_`, `SYL_`, `EEE_then__`, `THEN_`) are machine-written and
-  safe. This rule is enforced structurally: no prefix parses as a bank word, so
-  an unreviewed clip cannot reach the bank.
+  safe. This is enforced structurally: no prefix parses as a bank word, so an
+  unreviewed clip cannot reach the bank.
 - **Never hardcode a tunable.** Everything adjustable lives in `config.py`,
   grouped by stage, with the reasoning recorded next to the value. If you find
   yourself typing a number into logic, it belongs there instead.
@@ -46,11 +50,11 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   sequences out of filenames. It deliberately refuses names ending mid-word, and
   deliberately accepts a shout spelled any of several ways. Change it carefully;
   the tests spell out the intended edge cases.
-- **Whisper is non-deterministic by default.** Its temperature ladder made two
-  runs over the same audio return 25 matches and then 3. It is pinned to
-  `temperature=0.0` with beam search. Do not remove that.
-- **The venv has no Triton.** Whisper falls back to a slower DTW path and warns
-  about it. Harmless.
+- **Speech recognition is non-deterministic by default.** Its temperature ladder
+  made two runs over the same audio return 25 matches and then 3. It is pinned
+  to `temperature=0.0` with beam search. Do not remove that.
+- **The venv has no Triton.** The recogniser falls back to a slower DTW path and
+  warns about it. Harmless.
 
 ## Reading order
 
@@ -71,7 +75,7 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
 The second is the real check: it prints how many units were placed, how much of
 the melody survives, and how far clips had to be shifted. Those numbers move
 when behaviour changes, and they are the fastest way to see whether a change did
-what you intended.
+what you intended. `doctor` explains anything that looks wrong.
 
 ## The one thing to understand
 

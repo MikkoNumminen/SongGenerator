@@ -35,7 +35,7 @@ See [docs/TODO.md](docs/TODO.md).
 
 | | |
 |---|---|
-| [CLAUDE.md](CLAUDE.md) | Start here if you are an agent. What to run, what never to touch. |
+| [AGENTS.md](AGENTS.md) | Start here if you are an agent. What to run, what never to touch. |
 | [docs/GLOSSARY.md](docs/GLOSSARY.md) | Slot, unit, phrase, mimicry, fold. Load-bearing terms. |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The pipeline, module by module. |
 | [docs/WORKFLOWS.md](docs/WORKFLOWS.md) | Recipes: add a song, extend the bank, tune density. |

@@ -96,3 +96,10 @@ desktop.ini
 # ---------------------------------------------------------------------------
 # docs/ and src/ and tests/ carry everything needed to rebuild all of the above
 # from your own source material. The repo is the tool, not the media.
+
+# ---------------------------------------------------------------------------
+# Local only
+# ---------------------------------------------------------------------------
+# Carries a rule that must never reach GitHub, and its filename is itself a
+# mention. The published agent guide is AGENTS.md.
+CLAUDE.md

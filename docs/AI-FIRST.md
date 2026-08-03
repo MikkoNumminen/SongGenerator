@@ -11,7 +11,7 @@ with instead of taken on faith.
 
 | # | Dimension | A 10 looks like |
 |---|---|---|
-| 1 | **Agent onboarding** | A `CLAUDE.md` at root that tells an agent what to run, what never to touch, and where the traps are. |
+| 1 | **Agent onboarding** | A `AGENTS.md` at root that tells an agent what to run, what never to touch, and where the traps are. |
 | 2 | **README accuracy** | Every claim is true today. No stale status, no features described that no longer work that way. |
 | 3 | **Architecture legibility** | A module map and a data-flow diagram, so nobody has to read 18 files to learn what calls what. |
 | 4 | **Configuration** | Every tunable in one place, each with the reasoning behind its value, not just the value. |
@@ -28,7 +28,7 @@ with instead of taken on faith.
 
 | # | Dimension | Score | Why |
 |---|---|---|---|
-| 1 | Agent onboarding | 0 | No `CLAUDE.md`. An agent starts cold with no idea the venv is isolated or that `words/` holds hand-reviewed work. |
+| 1 | Agent onboarding | 0 | No `AGENTS.md`. An agent starts cold with no idea the venv is isolated or that `words/` holds hand-reviewed work. |
 | 2 | README accuracy | 3 | Says "Commit 1 of 4" and "outputs the instrumental bed". Both false for many commits. No mention of mimicry, banks, density or climaxes. |
 | 3 | Architecture legibility | 4 | Module docstrings are strong, but 18 modules with no map. The pipeline order is only discoverable by reading `cli.py`. |
 | 4 | Configuration | 9 | `config.py` holds everything, grouped by stage, with the reasoning recorded. Loses a point only for not naming which module consumes each block. |
@@ -50,7 +50,7 @@ is everything that lets someone who was not there pick it up.
 
 Wrote the missing documents, worst score first.
 
-- `CLAUDE.md` — how to run things, the one irreversible rule, the traps that
+- `AGENTS.md` — how to run things, the one irreversible rule, the traps that
   have already bitten (illegal filename characters, non-deterministic ASR,
   filenames as a parsing contract), and a reading order.
 - `docs/GLOSSARY.md` — slot, note, phrase, unit, bank, shift, fold, mimicry,
