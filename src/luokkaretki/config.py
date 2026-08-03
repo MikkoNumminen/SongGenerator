@@ -155,6 +155,31 @@ SHOUT_WORDS = ("eee",)
 # instead of being sung bare.
 PLACE_BARE_SYLLABLES = False
 
+# ---------------------------------------------------------------------------
+# DENSITY -- how much of the song gets words at all
+# ---------------------------------------------------------------------------
+# A smooth song wants space. Filling every slot the melody offers makes the
+# words relentless and buries the joke; the original that worked best was much
+# sparser than a full fill.
+
+# Fraction of phrases that get words. The rest are left instrumental, so the
+# track breathes and the words land as events rather than as a texture.
+PHRASE_FILL = 0.78
+
+# Cap on how much of the track may be bare shouts. "eee" on its own is
+# punctuation: excellent once a verse, wearing every few seconds. Without a cap
+# it wins constantly, being the only unit that fits a single leftover slot.
+SHOUT_MAX_SHARE = 0.12
+
+# How strongly to prefer longer units over short ones when both fit.
+# 0 = pick purely on how naturally the clip fills the time, which favours
+# short units and makes the track busy. Higher = fewer, longer placements.
+#
+# Kept mild. At 1.4 the bonus overwhelmed the time-fit entirely and the longest
+# clip in the bank won almost every slot, so the track became one phrase on
+# repeat -- sparse, but monotonous, which is its own kind of wrong.
+PREFER_LONGER_UNITS = 0.45
+
 # How each word breaks into syllables.
 #
 # A melody slot holds exactly one syllable and a syllable clip fills exactly

@@ -47,6 +47,11 @@ class Unit:
         return "+".join(self.words)
 
     @property
+    def is_bare_shout(self) -> bool:
+        """A shout on its own -- punctuation, not vocabulary."""
+        return all(w in config.SHOUT_WORDS for w in self.words)
+
+    @property
     def is_word_like(self) -> bool:
         """True when every part is a real word, not a bare syllable.
 
@@ -304,9 +309,12 @@ def group_phrases(slots: list[Slot]) -> list[list[Slot]]:
 # ---------------------------------------------------------------------------
 
 def _choose(units: list[Unit], remaining: int, span_s: float,
-            rng: random.Random, last: str | None) -> Unit | None:
+            rng: random.Random, last: str | None,
+            allow_shouts: bool = True) -> Unit | None:
     """Pick a unit that fits the slots left, preferring a natural time fit."""
     fits = [u for u in units if u.syllables <= remaining]
+    if not allow_shouts:
+        fits = [u for u in fits if not u.is_bare_shout] or fits
     if not fits:
         return None
 
@@ -319,7 +327,10 @@ def _choose(units: list[Unit], remaining: int, span_s: float,
         allotted = span_s * (u.syllables / remaining) if remaining else span_s
         if allotted <= 0:
             return float("inf")
-        return abs(np.log(u.duration_s / allotted))
+        # Longer units are preferred at equal fit: fewer, longer placements
+        # read as singing, while many short ones read as chatter.
+        length_bonus = config.PREFER_LONGER_UNITS * np.log(u.syllables + 1)
+        return abs(np.log(u.duration_s / allotted)) - length_bonus
 
     ranked = sorted(pool, key=mismatch)
     top = [u for u in ranked if mismatch(u) <= mismatch(ranked[0]) + 0.35] or ranked[:1]
@@ -334,7 +345,20 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
     by_label = {u.label: u for u in units}
     forced_queue = list(forced) if forced else []
 
-    for group in group_phrases(slots):
+    groups = group_phrases(slots)
+    # Leave some phrases instrumental. Filling every one makes the words a
+    # texture rather than events, which buries them on a smooth song.
+    fill = config.PHRASE_FILL
+    keep = {id(g) for g in groups} if fill >= 1.0 else {
+        id(g) for g in rng.sample(groups, max(1, int(round(len(groups) * fill))))
+    }
+    shout_budget = max(1, int(round(len(groups) * config.SHOUT_MAX_SHARE)))
+    shouts_used = 0
+
+    for group in groups:
+        if id(group) not in keep:
+            plan.slots_dropped += len(group)
+            continue
         i = 0
         last: str | None = None
         while i < len(group):
@@ -342,12 +366,16 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
             span_s = group[-1].offset_s - group[i].onset_s
 
             if remaining == 1:
-                # A one-syllable unit -- a shouted "eee" or similar -- fits the
-                # leftover slot exactly, which beats every ODD_SLOT_POLICY
-                # fudge. Only fall back to the policy when the bank has none.
-                filler = _choose([u for u in units if u.syllables == 1],
-                                 1, span_s, rng, last)
+                # A one-syllable unit -- a shouted "eee" -- fits the leftover
+                # slot exactly, which beats every ODD_SLOT_POLICY fudge. But it
+                # is the ONLY thing that fits, so without a budget it wins every
+                # odd phrase in the song and the shout stops being an event.
+                filler = None
+                if shouts_used < shout_budget:
+                    filler = _choose([u for u in units if u.syllables == 1],
+                                     1, span_s, rng, last)
                 if filler is not None:
+                    shouts_used += 1
                     covered = group[i:i + 1]
                     plan.placements.append(Placement(
                         unit=filler,
@@ -374,7 +402,10 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
                 break
 
             unit = (by_label.get(forced_queue.pop(0)) if forced_queue else None) \
-                or _choose(units, remaining, span_s, rng, last)
+                or _choose(units, remaining, span_s, rng, last,
+                           allow_shouts=shouts_used < shout_budget)
+            if unit is not None and unit.is_bare_shout:
+                shouts_used += 1
             if unit is None:
                 plan.slots_dropped += remaining
                 break
