@@ -39,10 +39,21 @@ class Unit:
     duration_s: float
     midi: float | None
     audio: np.ndarray
+    bounds_s: list[float] = field(default_factory=list)
+    syllable_midi: list[float | None] = field(default_factory=list)
 
     @property
     def label(self) -> str:
         return "+".join(self.words)
+
+    def syllable_spans(self) -> list[tuple[float, float]]:
+        edges = [0.0] + list(self.bounds_s) + [self.duration_s]
+        return list(zip(edges[:-1], edges[1:]))
+
+    def source_midi(self, i: int) -> float | None:
+        if i < len(self.syllable_midi) and self.syllable_midi[i] is not None:
+            return self.syllable_midi[i]
+        return self.midi
 
 
 @dataclass
@@ -65,6 +76,8 @@ class Placement:
     play_s: float           # what actually sounds, after truncation
     n_slots: int
     phrase: int
+    slots: list[Slot] = field(default_factory=list)   # the notes to land on
+    shifts: list[float] = field(default_factory=list)  # semitones, after folding
 
     @property
     def stretch_needed(self) -> float:
@@ -109,6 +122,8 @@ def load_bank(words_dir: Path = Path("words")) -> list[Unit]:
             duration_s=e["duration_s"],
             midi=e.get("midi"),
             audio=audio_io.read_wav(path),
+            bounds_s=e.get("syllable_bounds_s", []),
+            syllable_midi=e.get("syllable_midi", []),
         ))
 
     if not units:
@@ -214,8 +229,25 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
             span_s = group[-1].offset_s - group[i].onset_s
 
             if remaining == 1:
-                # Every unit in the bank is an even number of syllables, so a
-                # phrase of odd length always ends here and nowhere else.
+                # A one-syllable unit -- a shouted "eee" or similar -- fits the
+                # leftover slot exactly, which beats every ODD_SLOT_POLICY
+                # fudge. Only fall back to the policy when the bank has none.
+                filler = _choose([u for u in units if u.syllables == 1],
+                                 1, span_s, rng, last)
+                if filler is not None:
+                    covered = group[i:i + 1]
+                    plan.placements.append(Placement(
+                        unit=filler,
+                        onset_s=covered[0].onset_s,
+                        slot_span_s=covered[0].dur_s,
+                        play_s=filler.duration_s,
+                        n_slots=1,
+                        phrase=covered[0].phrase,
+                        slots=list(covered),
+                    ))
+                    plan.slots_used += 1
+                    break
+
                 if config.ODD_SLOT_POLICY == "merge_last" and plan.placements:
                     prev = plan.placements[-1]
                     prev.slot_span_s = group[i].offset_s - prev.onset_s
@@ -234,15 +266,17 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
                 plan.slots_dropped += remaining
                 break
 
-            start = group[i].onset_s
-            end = group[i + unit.syllables - 1].offset_s
+            covered = group[i:i + unit.syllables]
+            start = covered[0].onset_s
+            end = covered[-1].offset_s
             plan.placements.append(Placement(
                 unit=unit,
                 onset_s=start,
                 slot_span_s=end - start,
                 play_s=unit.duration_s,
                 n_slots=unit.syllables,
-                phrase=group[i].phrase,
+                phrase=covered[0].phrase,
+                slots=list(covered),
             ))
             plan.slots_used += unit.syllables
             last = unit.name
@@ -259,20 +293,68 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
 # Render and mix
 # ---------------------------------------------------------------------------
 
-def render(plan: Plan, n_samples: int, sr: int = config.SAMPLE_RATE) -> np.ndarray:
+def build_segments(p: Placement) -> tuple[list, float]:
+    """Work out where each syllable must land, and how far it must move."""
+    from .pitchshift import Segment, fold_shift
+
+    spans = p.unit.syllable_spans()
+    segments, shifts = [], []
+    origin = p.onset_s
+
+    for i, (src_a, src_b) in enumerate(spans):
+        if i >= len(p.slots):
+            break
+        slot = p.slots[i]
+        source = p.unit.source_midi(i)
+        if source is None:
+            continue
+
+        shift = fold_shift(slot.midi - source)
+        shifts.append(shift)
+        segments.append(Segment(
+            src_start_s=src_a,
+            src_end_s=src_b,
+            out_start_s=slot.onset_s - origin,
+            out_dur_s=slot.dur_s,
+            semitones=shift,
+        ))
+
+    total = (p.slots[-1].offset_s - origin) if p.slots else p.unit.duration_s
+    p.shifts = shifts
+    return segments, max(total, 1e-3)
+
+
+def render(plan: Plan, n_samples: int, sr: int = config.SAMPLE_RATE,
+           shift: bool = True, engine: str | None = None) -> np.ndarray:
     bus = np.zeros((2, n_samples), dtype=np.float32)
     fade = max(1, int(config.EDGE_FADE_S * sr))
 
     for p in plan.placements:
-        audio = p.unit.audio
-        if audio.shape[0] == 1:
-            audio = np.repeat(audio, 2, axis=0)
+        if shift and p.slots and p.unit.duration_s > 0:
+            from .pitchshift import render_unit
 
-        take = min(audio.shape[1], max(1, int(p.play_s * sr)))
-        clip = np.array(audio[:, :take], dtype=np.float32)
+            segments, total = build_segments(p)
+            if segments:
+                mono = audio_io.to_mono(p.unit.audio)
+                voiced = render_unit(mono, sr, segments, total, engine)
+                clip = np.stack([voiced, voiced]).astype(np.float32)
+            else:
+                clip = np.array(p.unit.audio, dtype=np.float32)
+        else:
+            audio = p.unit.audio
+            if audio.shape[0] == 1:
+                audio = np.repeat(audio, 2, axis=0)
+            take = min(audio.shape[1], max(1, int(p.play_s * sr)))
+            clip = np.array(audio[:, :take], dtype=np.float32)
+            if take < audio.shape[1] and take > fade:
+                clip[:, -fade:] *= np.linspace(1.0, 0.0, fade, dtype=np.float32)
 
-        if take < audio.shape[1] and take > fade:
-            clip[:, -fade:] *= np.linspace(1.0, 0.0, fade, dtype=np.float32)
+        if clip.shape[0] == 1:
+            clip = np.repeat(clip, 2, axis=0)
+        if clip.shape[1] > fade * 2:
+            ramp = np.linspace(0.0, 1.0, fade, dtype=np.float32)
+            clip[:, :fade] *= ramp
+            clip[:, -fade:] *= ramp[::-1]
 
         start = int(p.onset_s * sr)
         end = min(n_samples, start + clip.shape[1])
@@ -339,4 +421,25 @@ def report(plan: Plan, units: list[Unit]) -> str:
         f"{len(stretches)} within 30% of a natural fit")
     add("    units used        " + ", ".join(
         f"{k} x{v}" for k, v in sorted(used.items(), key=lambda kv: -kv[1])))
+
+    shifts = np.array([s for p in plan.placements for s in p.shifts])
+    if shifts.size:
+        raw = np.array([
+            slot.midi - (p.unit.source_midi(i) or 0.0)
+            for p in plan.placements
+            for i, slot in enumerate(p.slots)
+            if p.unit.source_midi(i) is not None
+        ])
+        add("")
+        add("  pitch shift")
+        add(f"    requested         median {np.median(np.abs(raw)):.1f} semitones, "
+            f"max {np.abs(raw).max():.1f}")
+        add(f"    after folding     median {np.median(np.abs(shifts)):.1f} semitones, "
+            f"max {np.abs(shifts).max():.1f} "
+            f"(cap {config.SHIFT_CAP_SEMITONES:.0f})")
+        folded = int((np.abs(raw) > config.SHIFT_CAP_SEMITONES).sum())
+        add(f"    octave-folded     {folded} of {len(raw)} syllables "
+            f"({folded / len(raw) * 100:.0f}%) were too far to shift directly")
+        add(f"    engine            {config.SHIFT_ENGINE}, "
+            f"formants held at {config.FORMANT_SCALE:.2f}")
     return "\n".join(lines)

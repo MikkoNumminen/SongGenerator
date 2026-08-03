@@ -68,6 +68,10 @@ def build_parser() -> argparse.ArgumentParser:
                    help="word choice seed [default: WORD_ROTATION_SEED in config.py]")
     p.add_argument("--no-words", action="store_true",
                    help="stop after analysis and write only the instrumental")
+    p.add_argument("--no-shift", action="store_true",
+                   help="place clips at their own recorded pitch (the step 3 sound)")
+    p.add_argument("--engine", choices=["world", "rubberband"], default=config.SHIFT_ENGINE,
+                   help="pitch/time engine")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return p
 
@@ -176,7 +180,8 @@ def main(argv: list[str] | None = None) -> int:
     word_plan = plan_words(slots, units, seed=args.seed)
     word_plan.merged, word_plan.split = merged, split
 
-    word_bus = render(word_plan, stems.instrumental.shape[1], config.SAMPLE_RATE)
+    word_bus = render(word_plan, stems.instrumental.shape[1], config.SAMPLE_RATE,
+                      shift=not args.no_shift, engine=args.engine)
     mixed = mix_buses(word_bus, stems.instrumental, config.SAMPLE_RATE)
     audio_io.encode_mp3(output, mixed)
 
@@ -186,8 +191,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  wrote     {output}")
         print(f"  analysis  {work / 'analysis.json'}")
         print()
-        print("  No pitch shifting yet -- clips are at their own recorded pitch.")
-        print("  Judge the timing and the word choice; pitch comes in step 4.")
+        if args.no_shift:
+            print("  --no-shift: clips are at their own recorded pitch.")
     return EXIT_OK
 
 

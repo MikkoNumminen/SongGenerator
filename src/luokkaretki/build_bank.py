@@ -168,7 +168,9 @@ def scan_folder(folder: Path) -> tuple[list[Named], list[Path]]:
     named: list[Named] = []
     ignored: list[Path] = []
 
-    for path in sorted(folder.glob("*.wav")):
+    # Recursive: mining many sources puts each one's clips in its own subfolder,
+    # which keeps a few hundred candidates navigable while listening.
+    for path in sorted(folder.rglob("*.wav")):
         parsed = parse_phrase(path.stem)
         if parsed is None:
             ignored.append(path)
@@ -243,6 +245,30 @@ def measure(clip: np.ndarray, sr: int, device: str | None) -> tuple[float, float
     voiced = hz[np.isfinite(hz)]
     midi = float(np.median(hz_to_midi(voiced))) if voiced.size else float("nan")
     return midi, mono.shape[0] / sr
+
+
+def syllable_pitches(clip: np.ndarray, sr: int, bounds: list[float],
+                     device: str | None) -> list[float | None]:
+    """Median pitch of each syllable, so stage 4 can shift them independently.
+
+    A per-syllable reference matters when a clip has internal melody of its own:
+    shifting the whole clip by one amount would carry that movement along and
+    land later syllables off their target notes. Measured per syllable, each one
+    arrives where the song's melody asked for it, while the expression *within*
+    a syllable is left alone.
+    """
+    mono = audio_io.to_mono(clip)
+    dur = mono.shape[0] / sr
+    hz, _, hop_s = extract_f0(mono, sr, device)
+
+    edges = [0.0] + list(bounds) + [dur]
+    out: list[float | None] = []
+    for a, b in zip(edges[:-1], edges[1:]):
+        lo, hi = int(a / hop_s), max(int(b / hop_s), int(a / hop_s) + 1)
+        window = hz[lo:hi]
+        voiced = window[np.isfinite(window)]
+        out.append(round(float(np.median(hz_to_midi(voiced))), 2) if voiced.size else None)
+    return out
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -371,6 +397,7 @@ def main(argv: list[str] | None = None) -> int:
             "word_syllables": per_word,
             "word_start_syllable": starts,
             "syllable_bounds_s": bounds,
+            "syllable_midi": syllable_pitches(clip, config.SAMPLE_RATE, bounds, device),
         }
         note = bank[name]["note"] or "?"
         print(f"  {name:<28} {dur * 1000:5.0f}ms  {note:<5} {n_syl} syl "

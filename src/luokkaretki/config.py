@@ -133,7 +133,23 @@ WORD_SYLLABLES = {
     "pillu": 2,
     "pornolehti": 4,
     "paviaani": 4,
+    # A sustained shouted vowel, as in the "eee" that leads into paviaani. One
+    # syllable, and the only odd-length unit in the bank -- which makes it the
+    # natural filler for the single leftover slot an odd phrase produces, where
+    # ODD_SLOT_POLICY previously had to fudge.
+    "eee": 1,
+    # Any other human shout, yell or non-verbal noise worth keeping. Counted as
+    # one syllable because it occupies one slot however long it rings.
+    "huuto": 1,
 }
+
+# Units that are shouts rather than words. Kept separate so the mapper can be
+# told to use them for punctuation rather than treating them as vocabulary.
+SHOUT_WORDS = ("eee", "huuto")
+
+# A candidate with a single syllable nucleus lasting at least this long is
+# probably a held shout rather than a clipped word, and gets flagged as such.
+SHOUT_MIN_S = 0.35
 
 
 # ---------------------------------------------------------------------------

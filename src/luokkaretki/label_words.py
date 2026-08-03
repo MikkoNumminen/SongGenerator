@@ -66,6 +66,12 @@ def best_target(heard: str) -> tuple[str | None, float]:
 
     best, score = None, 0.0
     for target in config.WORD_SYLLABLES:
+        # Shouts are non-verbal; a recogniser has nothing useful to say about
+        # them, and a 3-letter target like "eee" scores highly against all
+        # sorts of unrelated short tokens. The sustained-nucleus heuristic in
+        # mine_words finds these instead.
+        if target in config.SHOUT_WORDS:
+            continue
         ratio = SequenceMatcher(None, heard, target).ratio()
         # A long target heard as one of its own syllables ("porno" for
         # "pornolehti") scores poorly on whole-word ratio but is still very
