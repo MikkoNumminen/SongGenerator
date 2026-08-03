@@ -48,7 +48,10 @@ class Candidate:
 
     @property
     def note(self) -> str:
-        return note_name(int(round(self.midi))) if np.isfinite(self.midi) else "?"
+        # "NA" rather than "?" because this goes into a filename, and "?" is
+        # illegal on Windows. A whole source was lost to that: one unpitched
+        # clip made the write throw and the run abandoned the file.
+        return note_name(int(round(self.midi))) if np.isfinite(self.midi) else "NA"
 
     @property
     def guesses(self) -> list[str]:

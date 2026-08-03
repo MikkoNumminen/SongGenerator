@@ -117,6 +117,19 @@ _BANK_BY_LENGTH = sorted(set(config.WORD_SYLLABLES) | SYLLABLES, key=len, revers
 _SEPARATORS = "_- .()"
 
 
+# A held shout gets spelled however it sounded: eee, eeei, eiii, heei, eeiii.
+# They are one gesture, so any run of these letters reads as the shout rather
+# than forcing a house spelling on someone naming clips by ear.
+_SHOUT_CHARS = frozenset("eih")
+
+
+def _shout_run(raw: str, i: int) -> int:
+    j = i
+    while j < len(raw) and raw[j] in _SHOUT_CHARS:
+        j += 1
+    return j - i
+
+
 def syllables_of(token: str) -> int:
     """How many melody slots this token occupies."""
     if token in config.WORD_SYLLABLES:
@@ -151,14 +164,34 @@ def parse_phrase(stem: str) -> tuple[list[str], str] | None:
             i += 1
             after_separator = True
             continue
+        # Longest wins, so "paska" beats the syllable "pas", and a shout spelled
+        # "eeei" beats the shorter canonical "eee" hiding inside it.
+        best_word, best_len = None, 0
         for word in _BANK_BY_LENGTH:
-            if raw.startswith(word, i):
-                words.append(word)
-                i += len(word)
-                after_separator = False
-                break
-        else:
+            if raw.startswith(word, i) and len(word) > best_len:
+                best_word, best_len = word, len(word)
+
+        # A shout run only counts when what follows it is a separator, the end
+        # of the name, or another bank word. Without that check the variant
+        # label in "paska-high" is eaten, since h and i are both shout letters.
+        # Not straight after a separator: that position introduces a variant
+        # label, and labels like "high" or "hei" are made of shout letters.
+        run = 0 if after_separator else _shout_run(raw, i)
+        if run > best_len:
+            after = i + run
+            follows_cleanly = (
+                after >= len(raw)
+                or raw[after] in _SEPARATORS
+                or any(raw.startswith(w, after) for w in _BANK_BY_LENGTH)
+            )
+            if follows_cleanly:
+                best_word, best_len = "eee", run
+
+        if best_word is None:
             break
+        words.append(best_word)
+        i += best_len
+        after_separator = False
 
     if not words:
         return None

@@ -23,3 +23,6 @@ words/candidates/
 
 # Raw chaos bank: 833 clips, regenerable with build_bank --raw
 words_chaos/
+
+# Local scratch, not part of the project.
+.local/

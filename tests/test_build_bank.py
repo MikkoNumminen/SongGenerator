@@ -51,11 +51,27 @@ class TestPhraseNames:
         """
         assert parse_phrase(stem) == (words, "")
 
-    @pytest.mark.parametrize("stem", [
-        "persee",     # perse plus a stray vowel: neither word nor syllable
-        "xyz",
-        "paskaxx",
+    @pytest.mark.parametrize("stem,words", [
+        ("eeeipaviaani", ["eee", "paviaani"]),
+        ("eeiiipaviaani", ["eee", "paviaani"]),
+        ("eiiipaviaani", ["eee", "paviaani"]),
+        ("persee", ["perse", "eee"]),
     ])
+    def test_a_shout_is_accepted_however_it_is_spelled(self, stem, words):
+        """One gesture, spelled by ear: eee, eeei, eiii, eeiii all mean it.
+
+        Someone naming clips by ear writes what they heard, and a held shout
+        has no canonical spelling. Insisting on one would mean silently
+        ignoring correctly identified clips.
+        """
+        assert parse_phrase(stem) == (words, "")
+
+    def test_a_shout_run_does_not_eat_a_variant_label(self):
+        """h and i are shout letters, so 'high' must not be read as a shout."""
+        assert parse_phrase("paska-high") == (["paska"], "high")
+        assert parse_phrase("pillu_hei") == (["pillu"], "hei")
+
+    @pytest.mark.parametrize("stem", ["xyz", "paskaxx"])
     def test_still_rejects_names_that_spell_nothing(self, stem):
         assert parse_phrase(stem) is None, (
             f"{stem!r} was accepted despite ending in something that is neither "
