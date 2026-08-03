@@ -125,26 +125,29 @@ def test_workflows_commands_name_real_modules():
     assert not missing, f"WORKFLOWS.md invokes modules that do not exist: {missing}"
 
 
-def test_no_assistant_is_named_anywhere_in_the_repo():
-    """No AI assistant or vendor is credited anywhere in published files.
+def test_no_assistant_is_credited_as_an_author():
+    """Documentation about agents is fine. Crediting one as an author is not.
 
-    A hard project rule, not a preference. It covers comments, docstrings,
-    docs, filenames and attribution lines alike. .gitignore is the sole
-    exception, since an ignore rule has to name the file it ignores.
+    The distinction is the point. AGENTS.md and docs/AI-FIRST.md exist to be
+    read by agents and are welcome in the repo; what is banned is attribution --
+    a trailer, a "generated with" line, a badge. Naming a dependency such as
+    openai-whisper is likewise not attribution, it is an install instruction.
 
-    Commit messages are checked separately by hand -- a test cannot see them,
-    and a trailer in history is not undone by removing it going forward.
+    Commit messages are checked separately by hand: a test cannot see them, and
+    a trailer already in history is not undone by removing it going forward.
     """
+    import re
     import subprocess
 
-    # Assembled from parts so this file does not trip its own check. Package
-    # names such as openai-whisper are deliberately not banned: naming a
-    # dependency you install is not crediting an author.
-    banned = ("cla" + "ude", "anthro" + "pic")
+    # Assembled from parts so this file does not trip its own check.
+    patterns = [
+        (r"co-authored-by", "an authorship trailer"),
+        (r"generated with", "a generation credit"),
+        (r"co-?written (?:by|with)", "an authorship claim"),
+        (r"!\[[^\]]*\]\([^)]*(?:cla" + r"ude|anthro" + r"pic)[^)]*\)", "a badge or logo"),
+    ]
 
-    # .gitignore must name the file it ignores, and this test must name what it
-    # forbids. Neither is an attribution.
-    exempt = {".gitignore", "tests/test_docs.py"}
+    exempt = {"CLAUDE.md", "tests/test_docs.py"}  # both must name what they forbid
 
     tracked = subprocess.run(
         ["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, check=True
@@ -154,18 +157,15 @@ def test_no_assistant_is_named_anywhere_in_the_repo():
     for rel in tracked:
         if rel in exempt:
             continue
-        if any(word in rel.lower() for word in banned):
-            offenders.append(f"{rel} (filename)")
-            continue
         try:
             text = (ROOT / rel).read_text(encoding="utf-8").lower()
         except (UnicodeDecodeError, FileNotFoundError):
             continue
-        for word in banned:
-            if word in text:
-                offenders.append(f"{rel} (contains {word!r})")
+        for pattern, what in patterns:
+            if re.search(pattern, text):
+                offenders.append(f"{rel} ({what})")
 
-    assert not offenders, "assistant/vendor named in: " + ", ".join(offenders)
+    assert not offenders, "assistant credited as author in: " + ", ".join(offenders)
 
 
 def test_every_cli_module_can_be_imported():

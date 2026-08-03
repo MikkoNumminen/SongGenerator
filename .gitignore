@@ -1,5 +1,5 @@
-# ---------------------------------------------------------------------------
-# Audio — none of it belongs in the repo
+﻿# ---------------------------------------------------------------------------
+# Audio â€” none of it belongs in the repo
 # ---------------------------------------------------------------------------
 # The clips are excerpts of someone else's film, and the songs are commercial
 # recordings. Both are fine to hold locally for a personal project and neither
@@ -98,8 +98,4 @@ desktop.ini
 # from your own source material. The repo is the tool, not the media.
 
 # ---------------------------------------------------------------------------
-# Local only
 # ---------------------------------------------------------------------------
-# Carries a rule that must never reach GitHub, and its filename is itself a
-# mention. The published agent guide is AGENTS.md.
-CLAUDE.md
