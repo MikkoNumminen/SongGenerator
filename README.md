@@ -77,6 +77,23 @@ song needs to reach the mimicry you asked for.
 More clips at *new pitches* raise the ceiling. More clips at pitches you already
 have do not.
 
+## Bring your own audio
+
+**No audio ships with this repo, by design.** The clips it was built against
+are excerpts of someone else's film and the test songs are commercial
+recordings — fine to hold locally for a personal project, not fine to publish.
+`.gitignore` excludes all of it.
+
+So a fresh clone has the tool and none of the material. To use it you supply:
+
+- **songs** to convert, in `input/`
+- **source video or audio** to cut word clips from, anywhere on disk
+
+Then follow [docs/WORKFLOWS.md](docs/WORKFLOWS.md) to build a bank. Nothing
+about the pipeline is specific to these particular words — `WORD_SPELLING` and
+`WORD_SYLLABLES` in `config.py` define the vocabulary, and any set of short
+sung clips will work.
+
 ## The word bank
 
 Individually recorded sung clips in `words/`, lifted from a Finnish film's

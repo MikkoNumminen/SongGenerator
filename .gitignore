@@ -1,28 +1,98 @@
-.venv/
-__pycache__/
-*.py[cod]
-*.egg-info/
+# ---------------------------------------------------------------------------
+# Audio — none of it belongs in the repo
+# ---------------------------------------------------------------------------
+# The clips are excerpts of someone else's film, and the songs are commercial
+# recordings. Both are fine to hold locally for a personal project and neither
+# should be published. Everything here is also regenerable from sources kept
+# outside the repo, so nothing is lost by excluding it.
+*.wav
+*.mp3
+*.mp4
+*.m4a
+*.flac
+*.ogg
+*.opus
+*.aac
+*.wma
+*.aiff
+*.aif
+*.mkv
+*.mov
+*.webm
+*.avi
 
-# Cached stems and analysis -- large, and regenerable from the input.
-work/
-
-# Songs in, memes out. Neither belongs in the repo.
+# Songs in, memes out.
 input/
 output/
 
-# The word clips themselves are the one audio asset worth tracking, and so is
-# labels.tsv -- it is generated, but the labelling in it is hand work that
-# cannot be regenerated. words.json likewise holds hand-corrected boundaries.
-!words/
-!words/*.wav
-!words/words.json
-!words/labels.tsv
+# Cached stems and analysis: large, and rebuilt from the input on demand.
+work/
 
-# Candidate cuts are pure scratch: regenerable from the scene at any time.
-words/candidates/
-
-# Raw chaos bank: 833 clips, regenerable with build_bank --raw
+# The word bank and everything feeding it. words.json is only an index of
+# audio that is not published either, so it goes too.
+words/
 words_chaos/
 
-# Local scratch, not part of the project.
+# Local scratch, source material, anything personal.
 .local/
+scratch/
+tmp/
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.egg
+build/
+dist/
+.eggs/
+pip-wheel-metadata/
+
+# Tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+
+# ---------------------------------------------------------------------------
+# Models and heavy downloads
+# ---------------------------------------------------------------------------
+# Whisper weights, Demucs checkpoints and anything else pulled at runtime.
+# These are gigabytes and are fetched on demand.
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.safetensors
+models/
+checkpoints/
+.cache/
+
+# ---------------------------------------------------------------------------
+# Editors and OS
+# ---------------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------------------------------------------------------------------------
+# Deliberately NOT ignored
+# ---------------------------------------------------------------------------
+# docs/ and src/ and tests/ carry everything needed to rebuild all of the above
+# from your own source material. The repo is the tool, not the media.
