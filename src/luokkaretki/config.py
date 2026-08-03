@@ -294,7 +294,13 @@ PREFER_NEAREST_SOURCE_PITCH = True
 # The joke lives in the tension between those, so the interesting settings are
 # in between: enough units land on the melody for it to read as singing, while
 # enough stay put to keep it obviously wrong.
-SHIFT_MIX = 0.55
+#
+# 0.35 chosen by ear, from an A/B across 0.0 / 0.35 / 0.55 / 0.8 / 1.0: the
+# leanest of them that still reads as singing. Note that the right number is
+# partly a property of the song -- a melody sitting near the bank's own register
+# needs less shifting to sound fitted, so it will feel more sung at the same
+# setting than one that ranges far above it.
+SHIFT_MIX = 0.35
 
 # Which units keep their own pitch when SHIFT_MIX is below 1.0:
 #
