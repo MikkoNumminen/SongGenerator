@@ -14,7 +14,7 @@ from . import __version__, audio_io, config
 from .analysis import analyse, report as analysis_report
 from .detect import detect_vocal
 from .mapping import (
-    BankError, clean_slots, load_bank, plan_words, render,
+    BankError, clean_slots, decide_shifts, load_bank, plan_words, render,
     mix as mix_buses, report as mapping_report,
 )
 from .separate import SeparationError, separate
@@ -70,6 +70,11 @@ def build_parser() -> argparse.ArgumentParser:
                    help="stop after analysis and write only the instrumental")
     p.add_argument("--no-shift", action="store_true",
                    help="place clips at their own recorded pitch (the step 3 sound)")
+    p.add_argument("--mix", type=float, default=None, metavar="0..1",
+                   help="how much of the track sings along: 0 = all clashing, "
+                        "1 = all on the melody [default: SHIFT_MIX in config.py]")
+    p.add_argument("--mix-mode", choices=["furthest", "random"], default=None,
+                   help="which units keep their own pitch")
     p.add_argument("--engine", choices=["world", "rubberband"], default=config.SHIFT_ENGINE,
                    help="pitch/time engine")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -180,6 +185,8 @@ def main(argv: list[str] | None = None) -> int:
     word_plan = plan_words(slots, units, seed=args.seed)
     word_plan.merged, word_plan.split = merged, split
 
+    decide_shifts(word_plan, mix=0.0 if args.no_shift else args.mix,
+                  mode=args.mix_mode, seed=args.seed)
     word_bus = render(word_plan, stems.instrumental.shape[1], config.SAMPLE_RATE,
                       shift=not args.no_shift, engine=args.engine)
     mixed = mix_buses(word_bus, stems.instrumental, config.SAMPLE_RATE)

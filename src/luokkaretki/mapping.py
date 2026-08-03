@@ -78,6 +78,16 @@ class Placement:
     phrase: int
     slots: list[Slot] = field(default_factory=list)   # the notes to land on
     shifts: list[float] = field(default_factory=list)  # semitones, after folding
+    do_shift: bool = True     # False = leave it at its own recorded pitch
+
+    def raw_distance(self) -> float:
+        """Furthest any of this unit's syllables would have to move, unfolded."""
+        worst = 0.0
+        for i, slot in enumerate(self.slots):
+            source = self.unit.source_midi(i)
+            if source is not None:
+                worst = max(worst, abs(slot.midi - source))
+        return worst
 
     @property
     def stretch_needed(self) -> float:
@@ -293,6 +303,43 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
 # Render and mix
 # ---------------------------------------------------------------------------
 
+def decide_shifts(plan: Plan, mix: float | None = None, mode: str | None = None,
+                  seed: int | None = None) -> None:
+    """Mark which units sing along and which keep their own pitch.
+
+    Everything shifted sounds sung and stops being funny; nothing shifted is
+    funny but never sounds like singing. The setting worth using is in between,
+    and which units are left alone matters as much as how many.
+    """
+    mix = config.SHIFT_MIX if mix is None else mix
+    mode = mode or config.SHIFT_MIX_MODE
+    placements = plan.placements
+    if not placements:
+        return
+
+    if mix >= 1.0:
+        for p in placements:
+            p.do_shift = True
+        return
+    if mix <= 0.0:
+        for p in placements:
+            p.do_shift = False
+        return
+
+    n_shift = int(round(len(placements) * mix))
+
+    if mode == "furthest":
+        # Shift the ones closest to their target; leave the big jumps alone.
+        order = sorted(placements, key=lambda p: p.raw_distance())
+    else:
+        rng = random.Random(config.WORD_ROTATION_SEED if seed is None else seed)
+        order = list(placements)
+        rng.shuffle(order)
+
+    for i, p in enumerate(order):
+        p.do_shift = i < n_shift
+
+
 def build_segments(p: Placement) -> tuple[list, float]:
     """Work out where each syllable must land, and how far it must move."""
     from .pitchshift import Segment, fold_shift
@@ -330,7 +377,7 @@ def render(plan: Plan, n_samples: int, sr: int = config.SAMPLE_RATE,
     fade = max(1, int(config.EDGE_FADE_S * sr))
 
     for p in plan.placements:
-        if shift and p.slots and p.unit.duration_s > 0:
+        if shift and p.do_shift and p.slots and p.unit.duration_s > 0:
             from .pitchshift import render_unit
 
             segments, total = build_segments(p)
@@ -422,7 +469,15 @@ def report(plan: Plan, units: list[Unit]) -> str:
     add("    units used        " + ", ".join(
         f"{k} x{v}" for k, v in sorted(used.items(), key=lambda kv: -kv[1])))
 
-    shifts = np.array([s for p in plan.placements for s in p.shifts])
+    singing = sum(1 for p in plan.placements if p.do_shift)
+    add("")
+    add("  shift mix")
+    add(f"    sings along       {singing} of {len(plan.placements)} units "
+        f"({singing / len(plan.placements) * 100:.0f}%)")
+    add(f"    keeps own pitch   {len(plan.placements) - singing} units "
+        f"(mode {config.SHIFT_MIX_MODE!r})")
+
+    shifts = np.array([s for p in plan.placements if p.do_shift for s in p.shifts])
     if shifts.size:
         raw = np.array([
             slot.midi - (p.unit.source_midi(i) or 0.0)

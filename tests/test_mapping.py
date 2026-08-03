@@ -5,7 +5,8 @@ import pytest
 
 from luokkaretki import config
 from luokkaretki.mapping import (
-    Plan, Slot, Unit, clean_slots, group_phrases, mix, plan_words, render, report,
+    Plan, Slot, Unit, clean_slots, decide_shifts, group_phrases, mix, plan_words,
+    render, report,
 )
 
 SR = config.SAMPLE_RATE
@@ -147,6 +148,55 @@ class TestRenderAndMix:
         a = np.zeros((2, SR * 2), dtype=np.float32)
         b = np.zeros((2, SR * 3), dtype=np.float32)
         assert mix(a, b).shape[1] == SR * 2
+
+
+class TestShiftMix:
+    """How much of the track sings along.
+
+    Everything shifted sounds sung and stops being funny; nothing shifted is
+    funny but never sounds like singing. The knob has to reach both ends
+    exactly, and land in between without drifting.
+    """
+
+    def test_zero_leaves_everything_at_its_own_pitch(self, bank):
+        plan = plan_words(_slots(40), bank)
+        decide_shifts(plan, mix=0.0)
+        assert not any(p.do_shift for p in plan.placements)
+
+    def test_one_puts_everything_on_the_melody(self, bank):
+        plan = plan_words(_slots(40), bank)
+        decide_shifts(plan, mix=1.0)
+        assert all(p.do_shift for p in plan.placements)
+
+    @pytest.mark.parametrize("mix", [0.25, 0.5, 0.75])
+    def test_proportion_is_honoured(self, bank, mix):
+        plan = plan_words(_slots(80), bank)
+        decide_shifts(plan, mix=mix)
+        n = len(plan.placements)
+        shifted = sum(1 for p in plan.placements if p.do_shift)
+        assert abs(shifted / n - mix) < 0.1, f"{shifted}/{n} for mix={mix}"
+
+    def test_furthest_mode_leaves_the_big_jumps_alone(self, bank):
+        """Those are the most absurd unshifted, and the worst damaged shifted."""
+        slots = [Slot(i * 0.3, i * 0.3 + 0.25, 53.0 + (30.0 if i % 2 else 0.0), 0)
+                 for i in range(24)]
+        plan = plan_words(slots, bank)
+        decide_shifts(plan, mix=0.5, mode="furthest")
+
+        shifted = [p.raw_distance() for p in plan.placements if p.do_shift]
+        kept = [p.raw_distance() for p in plan.placements if not p.do_shift]
+        if shifted and kept:
+            assert max(shifted) <= min(kept) + 1e-6
+
+    def test_random_mode_is_reproducible(self, bank):
+        a = plan_words(_slots(40), bank, seed=3)
+        b = plan_words(_slots(40), bank, seed=3)
+        decide_shifts(a, mix=0.5, mode="random", seed=3)
+        decide_shifts(b, mix=0.5, mode="random", seed=3)
+        assert [p.do_shift for p in a.placements] == [p.do_shift for p in b.placements]
+
+    def test_empty_plan_is_safe(self):
+        decide_shifts(Plan(), mix=0.5)
 
 
 def test_report_on_an_empty_plan():

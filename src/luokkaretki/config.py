@@ -284,6 +284,26 @@ SHIFT_CAP_SEMITONES = 7.0
 # distance is as small as possible.
 PREFER_NEAREST_SOURCE_PITCH = True
 
+# How much of the track sings along, from 0.0 to 1.0.
+#
+#   0.0  every unit at its own recorded pitch. Clashes with the song, which is
+#        exactly why it is funny -- the words obviously do not belong.
+#   1.0  every unit on the melody. Sounds genuinely sung, and the absurdity
+#        drains out of it precisely because it fits.
+#
+# The joke lives in the tension between those, so the interesting settings are
+# in between: enough units land on the melody for it to read as singing, while
+# enough stay put to keep it obviously wrong.
+SHIFT_MIX = 0.55
+
+# Which units keep their own pitch when SHIFT_MIX is below 1.0:
+#
+# "furthest" - the ones whose target is furthest from their recorded pitch.
+#              Those are the most absurd when left alone, and are also the ones
+#              that shifting damages most, so the choice pays twice.
+# "random"   - a seeded coin flip per unit, for an evenly scattered mix.
+SHIFT_MIX_MODE = "furthest"
+
 
 # ---------------------------------------------------------------------------
 # STAGE 5 -- MIXING
