@@ -14,8 +14,8 @@ from . import __version__, audio_io, config
 from .analysis import analyse, report as analysis_report
 from .detect import detect_vocal
 from .mapping import (
-    BankError, clean_slots, decide_shifts, load_bank, plan_words, render,
-    mix as mix_buses, report as mapping_report,
+    BankError, clean_slots, decide_shifts, load_bank, mimicry, plan_words,
+    precompute_shifted, render, mix as mix_buses, report as mapping_report,
 )
 from .separate import SeparationError, separate
 from .util import fmt_duration, resolve_device, work_dir_for
@@ -188,22 +188,51 @@ def main(argv: list[str] | None = None) -> int:
     word_plan = plan_words(slots, units, seed=args.seed)
     word_plan.merged, word_plan.split = merged, split
 
-    decide_shifts(word_plan, mix=0.0 if args.no_shift else args.mix,
-                  mode=args.mix_mode, seed=args.seed,
-                  target_mimicry=args.mimicry)
-    word_bus = render(word_plan, stems.instrumental.shape[1], config.SAMPLE_RATE,
-                      shift=not args.no_shift, engine=args.engine)
-    mixed = mix_buses(word_bus, stems.instrumental, config.SAMPLE_RATE)
-    audio_io.encode_mp3(output, mixed)
+    single = args.no_shift or args.mix is not None or args.mimicry is not None
+    targets = [None] if single else list(config.MIMICRY_VARIANTS)
+
+    # The resynthesis is shared: which units a variant shifts is only a
+    # selection over the same shifted set, so the whole sweep costs barely
+    # more than one render.
+    cache = None if args.no_shift else precompute_shifted(
+        word_plan, config.SAMPLE_RATE, args.engine)
+
+    written: list[tuple[Path, float, int]] = []
+    for target in targets:
+        if single:
+            decide_shifts(word_plan, mix=0.0 if args.no_shift else args.mix,
+                          mode=args.mix_mode, seed=args.seed,
+                          target_mimicry=args.mimicry)
+            path = output
+        else:
+            decide_shifts(word_plan, mode=args.mix_mode, seed=args.seed,
+                          target_mimicry=target)
+            tag = f"{target:.2f}".replace(".", "p")
+            path = output.with_name(f"{output.stem}.mim{tag}{output.suffix}")
+
+        word_bus = render(word_plan, stems.instrumental.shape[1], config.SAMPLE_RATE,
+                          shift=not args.no_shift, engine=args.engine, cache=cache)
+        audio_io.encode_mp3(path, mix_buses(word_bus, stems.instrumental,
+                                            config.SAMPLE_RATE))
+        written.append((path, mimicry(word_plan),
+                        sum(1 for p in word_plan.placements if p.do_shift)))
+
+    mixed = None
 
     if not args.json:
         print(mapping_report(word_plan, units))
         print()
-        print(f"  wrote     {output}")
+        if len(written) == 1:
+            print(f"  wrote     {written[0][0]}")
+        else:
+            print(f"  wrote {len(written)} versions to {output.parent.resolve()}")
+            print()
+            print("    mimicry   units singing   file")
+            for path, got, singing in written:
+                note = "  <- ignores the tune" if got <= 0 else ""
+                print(f"      {got:.2f}      {singing:>3}/{len(word_plan.placements):<3}"
+                      f"      {path.name}{note}")
         print(f"  analysis  {work / 'analysis.json'}")
-        print()
-        if args.no_shift:
-            print("  --no-shift: clips are at their own recorded pitch.")
     return EXIT_OK
 
 

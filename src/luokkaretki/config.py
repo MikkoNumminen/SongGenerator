@@ -320,6 +320,12 @@ SHIFT_MIX = 0.35
 # needs to get there. Set MIMICRY to None to drive SHIFT_MIX directly instead.
 MIMICRY = 0.45
 
+# Rendered on every run unless a single --mimicry is asked for. Resynthesis is
+# done once and shared across all of them, so the whole set costs barely more
+# than one, and picking by ear beats guessing a number up front. The right
+# value varies by song anyway.
+MIMICRY_VARIANTS = (0.0, 0.15, 0.3, 0.45, 0.6, 0.75, 1.0)
+
 # What a folded syllable is worth against one that landed exactly. It carries
 # the right note name and the melody's shape, but in the wrong octave, so it
 # mimics the original in part rather than fully.

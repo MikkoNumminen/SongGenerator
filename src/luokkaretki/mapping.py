@@ -442,22 +442,50 @@ def build_segments(p: Placement) -> tuple[list, float]:
     return segments, max(total, 1e-3)
 
 
+def precompute_shifted(plan: Plan, sr: int = config.SAMPLE_RATE,
+                       engine: str | None = None) -> dict[int, np.ndarray]:
+    """Shift every unit once, whether or not this variant will use it.
+
+    Resynthesis is the only expensive part of rendering, and which units a
+    variant shifts is purely a selection over the same set. Doing the work once
+    makes every additional mimicry setting almost free, so there is no reason
+    to make anyone choose a single one up front.
+    """
+    from .pitchshift import render_unit
+
+    cache: dict[int, np.ndarray] = {}
+    for idx, p in enumerate(plan.placements):
+        if not p.slots or p.unit.duration_s <= 0:
+            continue
+        segments, total = build_segments(p)
+        if not segments:
+            continue
+        mono = audio_io.to_mono(p.unit.audio)
+        voiced = render_unit(mono, sr, segments, total, engine)
+        cache[idx] = np.stack([voiced, voiced]).astype(np.float32)
+    return cache
+
+
 def render(plan: Plan, n_samples: int, sr: int = config.SAMPLE_RATE,
-           shift: bool = True, engine: str | None = None) -> np.ndarray:
+           shift: bool = True, engine: str | None = None,
+           cache: dict[int, np.ndarray] | None = None) -> np.ndarray:
     bus = np.zeros((2, n_samples), dtype=np.float32)
     fade = max(1, int(config.EDGE_FADE_S * sr))
 
-    for p in plan.placements:
+    for idx, p in enumerate(plan.placements):
         if shift and p.do_shift and p.slots and p.unit.duration_s > 0:
-            from .pitchshift import render_unit
-
-            segments, total = build_segments(p)
-            if segments:
-                mono = audio_io.to_mono(p.unit.audio)
-                voiced = render_unit(mono, sr, segments, total, engine)
-                clip = np.stack([voiced, voiced]).astype(np.float32)
+            if cache is not None and idx in cache:
+                clip = np.array(cache[idx], dtype=np.float32)
             else:
-                clip = np.array(p.unit.audio, dtype=np.float32)
+                from .pitchshift import render_unit
+
+                segments, total = build_segments(p)
+                if segments:
+                    mono = audio_io.to_mono(p.unit.audio)
+                    voiced = render_unit(mono, sr, segments, total, engine)
+                    clip = np.stack([voiced, voiced]).astype(np.float32)
+                else:
+                    clip = np.array(p.unit.audio, dtype=np.float32)
         else:
             audio = p.unit.audio
             if audio.shape[0] == 1:
