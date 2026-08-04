@@ -81,11 +81,18 @@ These do not run during a song. They turn source videos into reviewed clips.
 |---|---|
 | `batch.py` | Render many songs in one command; one failure does not end the run |
 | `doctor.py` | Read-only: bank contents, pitch coverage, a song's slots and predicted shift |
+| `separate_hq.py` | Re-separate sources with Mel-Band Roformer into `vocal_hq.wav` |
+| `recut_bank.py` | Re-cut the bank from those stems, keeping every label |
 
-Both are deliberately scripts rather than anything cleverer. Their inputs are
+These are deliberately scripts rather than anything cleverer. Their inputs are
 enumerable and their work is deterministic, so there is no judgement to
-delegate — and the one decision that *does* need judgement, whether a result
-sounds good, cannot be made by anything without ears.
+delegate. The one decision that does need judgement, whether a result sounds
+good, cannot be made by anything without ears.
+
+`recut_bank.py` takes the source from a clip's filename but always derives the
+offset by cross-correlation. Filenames are not reliable evidence of where audio
+starts: clips written by `successors.py` are padded 50 ms earlier than the
+timestamp they record, and trusting the name cut the attack off 34 shouts.
 
 ## Data on disk
 

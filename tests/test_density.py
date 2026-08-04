@@ -91,6 +91,9 @@ class TestClimaxes:
     def test_paviaani_is_refused_away_from_a_peak(self, bank, monkeypatch):
         monkeypatch.setattr(config, "PHRASE_FILL", 1.0)
         monkeypatch.setattr(config, "CLIMAX_PHRASE_SHARE", 0.0)
+        # The floor exists so a short song still gets a payoff; it has to be
+        # lifted here to create the no-peaks case this test is about.
+        monkeypatch.setattr(config, "CLIMAX_MIN_PEAKS", 0)
         monkeypatch.setattr(config, "CLIMAX_WILDCARD_CHANCE", 0.0)
 
         plan = plan_words(_phrases(12, 6), bank)

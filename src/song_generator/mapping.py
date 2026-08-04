@@ -357,7 +357,8 @@ def find_climaxes(groups: list[list[Slot]], min_slots: int = 1) -> set[int]:
     score = (config.CLIMAX_PITCH_WEIGHT * z(pitch)
              + config.CLIMAX_LOUDNESS_WEIGHT * z(loud))
 
-    how_many = max(1, int(round(len(groups) * config.CLIMAX_PHRASE_SHARE)))
+    how_many = max(config.CLIMAX_MIN_PEAKS,
+                   int(round(len(groups) * config.CLIMAX_PHRASE_SHARE)))
     ranked = [eligible[j] for j in np.argsort(-score)]
     return set(ranked[:how_many])
 
@@ -446,9 +447,23 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
     if fill >= 1.0:
         keep = {id(g) for g in groups}
     else:
-        ordinary = [g for i, g in enumerate(groups) if i not in climaxes]
-        want = max(0, int(round(len(groups) * fill)) - len(keep))
-        keep |= {id(g) for g in rng.sample(ordinary, min(want, len(ordinary)))}
+        # Never drop two phrases in a row. Thinning at random once removed two
+        # adjacent phrases from an eleven-phrase song, leaving an 8.7 second
+        # hole where the original was singing throughout -- audible as a dead
+        # section rather than as breathing space. Spacing the drops keeps the
+        # same overall density while guaranteeing the gaps stay short.
+        ordinary = [i for i in range(len(groups)) if i not in climaxes]
+        want_drop = max(0, len(ordinary) - (int(round(len(groups) * fill)) - len(keep)))
+
+        dropped: set[int] = set()
+        for i in rng.sample(ordinary, len(ordinary)):
+            if len(dropped) >= want_drop:
+                break
+            if (i - 1) in dropped or (i + 1) in dropped:
+                continue
+            dropped.add(i)
+
+        keep |= {id(groups[i]) for i in ordinary if i not in dropped}
 
     shout_budget = max(1, int(round(len(groups) * config.SHOUT_MAX_SHARE)))
     shouts_used = 0
@@ -529,6 +544,39 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
             if unit is None:
                 plan.slots_dropped += remaining
                 break
+
+            # A shout announcing the unit that follows. Expected before the
+            # payoff and occasionally not, which is where the surprise lives:
+            # an ear set up for paviaani and given pornolehti is the joke.
+            # Skipped when a recorded eee+paviaani already fits, since that clip
+            # carries the singer's own transition and cannot be bettered by
+            # butting two clips together.
+            if (not unit.is_bare_shout
+                    and not unit.words[:1] == ["eee"]
+                    and shouts_used < shout_budget
+                    and remaining > unit.syllables):
+                bias = config.SHOUT_LEAD_IN_CLIMAX_BIAS if unit.is_climax else 1.0
+                if rng.random() < min(0.95, config.SHOUT_LEAD_IN_CHANCE * bias):
+                    lead = _choose([u for u in units if u.is_bare_shout],
+                                   1, group[i].dur_s, rng, last, allow_climax=True,
+                                   targets=targets)
+                    if lead is not None:
+                        plan.placements.append(Placement(
+                            unit=lead,
+                            onset_s=group[i].onset_s,
+                            slot_span_s=group[i].dur_s,
+                            play_s=lead.duration_s,
+                            n_slots=1,
+                            phrase=group[i].phrase,
+                            slots=[group[i]],
+                        ))
+                        plan.slots_used += 1
+                        shouts_used += 1
+                        i += 1
+                        remaining -= 1
+                        if remaining < unit.syllables:
+                            last = lead.name
+                            continue
 
             covered = group[i:i + unit.syllables]
             start = covered[0].onset_s

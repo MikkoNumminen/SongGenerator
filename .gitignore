@@ -31,7 +31,7 @@ work/
 # The word bank and everything feeding it. words.json is only an index of
 # audio that is not published either, so it goes too.
 words/
-words_chaos/
+words_*/
 
 # Local scratch, source material, anything personal.
 .local/

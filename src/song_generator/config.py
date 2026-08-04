@@ -169,7 +169,29 @@ PHRASE_FILL = 0.78
 # Cap on how much of the track may be bare shouts. "eee" on its own is
 # punctuation: excellent once a verse, wearing every few seconds. Without a cap
 # it wins constantly, being the only unit that fits a single leftover slot.
-SHOUT_MAX_SHARE = 0.12
+#
+# Raised from 0.12: at that level paska, pillu and pornolehti dominated while
+# eee barely registered, because a shout could only ever land in a leftover slot
+# and most phrases had none.
+SHOUT_MAX_SHARE = 0.28
+
+# Chance that a unit is introduced by a shout in the slot before it.
+#
+# This is where a shout stops being filler and becomes a gesture. In this genre
+# it is *expected* before paviaani -- that pairing is the whole joke -- so a
+# recorded eee+paviaani clip is always preferred when one fits, since it carries
+# the real transition into the word.
+#
+# But a lead-in that only ever precedes one word is a rule rather than a joke.
+# Letting it occasionally announce paska or pornolehti instead produces the
+# unexpected combination, which is funnier precisely because the ear was set up
+# for something else.
+SHOUT_LEAD_IN_CHANCE = 0.30
+
+# How much more likely a lead-in is when the thing it introduces is the payoff.
+# Above 1.0 the expected pairing stays the common case and the surprises stay
+# surprises.
+SHOUT_LEAD_IN_CLIMAX_BIAS = 2.5
 
 # Leave shouts alone: no pitch shift, no time stretch, no resynthesis.
 #
@@ -203,10 +225,18 @@ CLIMAX_WORDS = ("paviaani",)
 
 # Fraction of phrases that count as peaks. Small on purpose: the point is
 # scarcity, and a climax that recurs every few seconds is not a climax.
-CLIMAX_PHRASE_SHARE = 0.14
+CLIMAX_PHRASE_SHARE = 0.18
 
-# Even within a peak, not every phrase takes one.
-CLIMAX_USE_CHANCE = 0.75
+# Floor, because a share collapses on a short song. A 41-second track with six
+# phrases got 14% of 6 = one peak, then a 25% chance of skipping even that, and
+# duly produced no paviaani at all. A proportion is the wrong tool when the
+# count is small.
+CLIMAX_MIN_PEAKS = 2
+
+# Even within a peak, not every phrase takes one. Kept high: skipping is only
+# interesting when there are several opportunities, and gambling away a scarce
+# one just loses the payoff.
+CLIMAX_USE_CHANCE = 0.9
 
 # Chance that an ordinary phrase gets one anyway, purely as a joke. Rare on
 # purpose: an unexpected one is funny, a predictable one is a pattern.
@@ -361,7 +391,14 @@ WORD_SEQUENCE = None
 #             mapper only needs each clip's syllable count and pitch, so this
 #             still sings; it just stops saying anything.
 BANKS = {
-    "curated": "words",
+    # Cut from Mel-Band Roformer stems. Around 47% of each clip's content in
+    # the older bank turned out to be instrumental Demucs had left behind,
+    # audible as a synthesiser tone under some words. Cleaner separation also
+    # lets pitch detection read the sung note more accurately, so clips match
+    # their targets better and fold less often.
+    "curated": "words_hq",
+    # The original Demucs-cut bank, kept for comparison.
+    "demucs": "words",
     "chaos": "words_chaos",
 }
 DEFAULT_BANK = "curated"
