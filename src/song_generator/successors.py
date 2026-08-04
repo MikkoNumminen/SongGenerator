@@ -49,7 +49,13 @@ class Shout:
 
 def find_work_vocal(source: str, work_root: Path) -> Path | None:
     """Map a clip's short source tag back to its separated vocal."""
-    for candidate in (f"session{source}", source, f"session{source.lower()}"):
+    # A clip name carries the shortened source tag, so try it both with and
+    # without the prefix that work directories share.
+    prefix = config.SOURCE_NAME_PREFIX
+    candidates = [source]
+    if prefix:
+        candidates.insert(0, f"{prefix}{source}")
+    for candidate in candidates:
         vocal = work_root / candidate.lower() / "vocal.wav"
         if vocal.is_file():
             return vocal

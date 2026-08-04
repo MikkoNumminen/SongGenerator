@@ -132,10 +132,10 @@ never see. Resolve it on a real vocal.
 
   `python -m song_generator.doctor` reports this breakdown per bank.
 
-- **Syllables may not be worth keeping.** Clips of bare syllables (`pas`, `ka`,
-  `leh`, `ti`) map onto a melody 1:1 and can spell words that were never
+- **Syllables may not be worth keeping.** Clips of bare syllables (`bra`, `vo`,
+  `me`, `ter`) map onto a melody 1:1 and can spell words that were never
   recorded intact, which is why they were tried. In practice they crowded out
-  the words: a clip of `pas` fills a slot as neatly as one of `bravo` and says
+  the words: a clip of `bra` fills a slot as neatly as one of `bravo` and says
   nothing, and a track full of them stops being about bravo, tango, delta,
   kilometer and aah calculator. They are currently set aside rather than deleted
   (`SYL_` prefix, `python -m song_generator.set_aside --restore` puts them back).
@@ -145,8 +145,8 @@ never see. Resolve it on a real vocal.
   so it is the only thing that fits the leftover slot of an odd phrase.
 
 - **`calculator` is not in the bank yet.** It does not appear anywhere in the
-  `bravotango.mp4` scene's labelling. Mikko is supplying it from another source
-  later. Until then the bank has four of the five words, and
+  the source material it was first built against. It is expected to come from
+  another source later. Until then the bank has four of the five words, and
   `config.WORD_SYLLABLES` still lists `calculator` (4 syllables) so it slots in
   with no code change the moment a clip named `calculator*.wav` appears.
 

@@ -1,6 +1,6 @@
 ﻿"""Cut individual sung word clips out of a source scene, ready for the bank.
 
-    python -m song_generator.extract_words sources/session.mp4
+    python -m song_generator.extract_words sources/clip.mp4
 
 Separates the vocal first (any music under the singing would otherwise ride
 along into every clip), finds the sung regions, counts each one's syllable

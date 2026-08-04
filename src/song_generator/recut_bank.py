@@ -69,7 +69,11 @@ def from_name(source_clip: str, dirs: dict[str, Path]) -> Origin | None:
     if not m:
         return None
     tag, a, b = m.group(1).lower(), float(m.group(2)), float(m.group(3))
-    d = dirs.get(tag) or dirs.get(f"session{tag}")
+    # A clip name carries the shortened source tag, so the full directory name
+    # may still have the shared prefix in front of it.
+    d = dirs.get(tag)
+    if d is None and config.SOURCE_NAME_PREFIX:
+        d = dirs.get(f"{config.SOURCE_NAME_PREFIX.lower()}{tag}")
     return Origin(d, a, b, "name") if d else None
 
 

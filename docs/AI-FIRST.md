@@ -109,15 +109,15 @@ change, rather than only naming what went wrong. Errors 7→9.
 | 9 | Domain glossary | 1 | 10 |
 | 10 | Runbooks | 3 | 10 |
 
-**Mean: 9.6**, up from 5.0. Tests: 159 → 191.
+**Mean: 9.6**, up from 5.0. Tests: 159 → 216.
 
 The four remaining 9s are honest rather than modest:
 
-- **Onboarding (9)**, good, but only proven on this repo's actual traps. A
+- **Onboarding (9)**: good, but only proven on this repo's actual traps. A
   fresh agent might still hit something nobody has hit yet.
 - **Configuration (9)**. Every value carries its reasoning, but the file does
   not say which module consumes each block.
-- **Determinism (9)**, seeded and documented, though nothing *tests* that two
+- **Determinism (9)**: seeded and documented, though nothing *tests* that two
   runs produce identical output.
 - **Errors (9)**. The common paths are actionable; the rarer ones still just
   raise.
