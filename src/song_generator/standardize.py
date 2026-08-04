@@ -211,3 +211,99 @@ def shift_bounds(bounds: list[float], head_s: float, duration_s: float) -> list[
         out.append(round(value, 4))
         previous = value
     return out
+
+
+# ---------------------------------------------------------------------------
+# Level
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class Level:
+    """What levelling did to one clip, and whether it got all the way there."""
+    lufs_before: float
+    lufs_after: float
+    gain_db: float
+    ceiling_limited: bool
+    skipped: bool = False
+
+
+def clip_lufs(mono: np.ndarray, sr: int = config.SAMPLE_RATE) -> float:
+    """Gated integrated loudness, with a block size a short clip can satisfy.
+
+    detect.integrated_lufs answers -inf below 400 ms, which is right for a song
+    stem and wrong here: a trimmed word can land under the default gating
+    window and still needs a number. The block shrinks to fit rather than the
+    measurement being abandoned.
+    """
+    import warnings
+
+    import pyloudnorm as pyln
+
+    mono = np.asarray(mono, dtype=np.float64)
+    if mono.size == 0 or not np.any(np.abs(mono) > 0):
+        return float("-inf")
+
+    dur_s = mono.shape[0] / sr
+    block_s = 0.400 if dur_s >= 0.400 else max(0.050, dur_s * 0.9)
+    meter = pyln.Meter(sr, block_size=block_s)
+    with warnings.catch_warnings():
+        # pyloudnorm warns when the signal sits below its own gating threshold,
+        # which for a quiet clip is the case being measured.
+        warnings.simplefilter("ignore")
+        return float(meter.integrated_loudness(mono))
+
+
+def target_lufs(is_shout: bool, mode: str | None = None) -> float | None:
+    """The loudness a clip should land on. None means leave it alone.
+
+    The shout is not ordinary vocabulary. SHOUT_KEEP_RAW already exempts it
+    from resynthesis because its rawness is the sound, and how loud it was
+    shouted is part of that. Which of the two treatments is right is an ear
+    question, so both are buildable and neither is hidden.
+    """
+    if not is_shout:
+        return config.CLIP_TARGET_LUFS
+
+    mode = mode or config.SHOUT_LEVEL_MODE
+    if mode == "as_recorded":
+        return None
+    if mode == "offset":
+        return config.CLIP_TARGET_LUFS - config.SHOUT_LUFS_OFFSET
+    raise StandardizeError(
+        f"unknown SHOUT_LEVEL_MODE {mode!r}.\n"
+        "    Expected 'offset' (a quieter target of its own) or 'as_recorded' "
+        "(not levelled at all).\n"
+        "    Set it in the BANK STANDARDISATION block of config.py, or pass "
+        "--shouts on the command line."
+    )
+
+
+def level(clip: np.ndarray, is_shout: bool, mode: str | None = None,
+          sr: int = config.SAMPLE_RATE) -> tuple[np.ndarray, Level]:
+    """Bring one clip to its target, without letting it clip.
+
+    A clip too quiet to reach its target without going over the peak ceiling
+    keeps the ceiling and lands short. That is recorded rather than silently
+    accepted: a handful of clips sitting below target is worth knowing about,
+    because it means the bank has takes whose peaks and loudness disagree.
+    """
+    clip = np.atleast_2d(np.asarray(clip, dtype=np.float32))
+    before = clip_lufs(audio_io.to_mono(clip), sr)
+    want = target_lufs(is_shout, mode)
+
+    if want is None or not np.isfinite(before):
+        return clip, Level(before, before, 0.0, False, skipped=True)
+
+    gain = 10.0 ** ((want - before) / 20.0)
+    peak = float(np.abs(clip).max()) * gain
+    limited = peak > config.CLIP_PEAK_CEILING
+    if limited:
+        gain *= config.CLIP_PEAK_CEILING / peak
+
+    out = (clip * gain).astype(np.float32)
+    return out, Level(
+        lufs_before=round(before, 2),
+        lufs_after=round(clip_lufs(audio_io.to_mono(out), sr), 2),
+        gain_db=round(20.0 * float(np.log10(max(gain, 1e-12))), 3),
+        ceiling_limited=limited,
+    )

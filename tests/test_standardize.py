@@ -12,8 +12,8 @@ import pytest
 
 from song_generator import audio_io, config
 from song_generator.standardize import (
-    StandardizeError, apply_trim, check_destination, find_trim, shift_bounds,
-    write_derivative,
+    StandardizeError, apply_trim, check_destination, clip_lufs, find_trim,
+    level, shift_bounds, target_lufs, write_derivative,
 )
 
 SR = config.SAMPLE_RATE
@@ -231,3 +231,79 @@ def test_bounds_are_consistent_with_the_trimmed_clip():
     # Unit.syllable_spans builds.
     edges = [0.0] + bounds + [duration_s]
     assert all(b > a for a, b in zip(edges[:-1], edges[1:]))
+
+
+# ---------------------------------------------------------------------------
+# Level
+# ---------------------------------------------------------------------------
+
+def test_a_word_lands_on_the_word_target():
+    out, info = level(_clip(sound_s=1.0, amp=0.1), is_shout=False)
+    assert info.lufs_after == pytest.approx(config.CLIP_TARGET_LUFS, abs=0.5)
+    assert not info.skipped
+
+
+def test_two_words_at_different_levels_end_up_together():
+    quiet, _ = level(_clip(sound_s=1.0, amp=0.03), is_shout=False)
+    loud, _ = level(_clip(sound_s=1.0, amp=0.6), is_shout=False)
+    assert clip_lufs(_mono(quiet)) == pytest.approx(clip_lufs(_mono(loud)), abs=0.5)
+
+
+def test_offset_mode_puts_the_shout_below_the_word():
+    assert target_lufs(is_shout=True, mode="offset") == pytest.approx(
+        config.CLIP_TARGET_LUFS - config.SHOUT_LUFS_OFFSET)
+    _, info = level(_clip(sound_s=1.0, amp=0.1), is_shout=True, mode="offset")
+    assert info.lufs_after == pytest.approx(
+        config.CLIP_TARGET_LUFS - config.SHOUT_LUFS_OFFSET, abs=0.5)
+
+
+def test_as_recorded_mode_does_not_touch_a_shout():
+    source = _clip(sound_s=1.0, amp=0.1)
+    out, info = level(source, is_shout=True, mode="as_recorded")
+    assert target_lufs(is_shout=True, mode="as_recorded") is None
+    assert info.skipped
+    assert info.gain_db == 0.0
+    assert np.array_equal(out, source)
+
+
+def test_as_recorded_mode_still_levels_ordinary_words():
+    _, info = level(_clip(sound_s=1.0, amp=0.1), is_shout=False, mode="as_recorded")
+    assert not info.skipped
+    assert info.lufs_after == pytest.approx(config.CLIP_TARGET_LUFS, abs=0.5)
+
+
+def test_an_unknown_shout_mode_is_refused_by_name():
+    with pytest.raises(StandardizeError, match="unknown SHOUT_LEVEL_MODE"):
+        target_lufs(is_shout=True, mode="loudest")
+
+
+def test_peak_ceiling_wins_and_says_so():
+    """A quiet clip with one loud sample cannot reach target without clipping."""
+    mono = np.full(int(SR * 1.0), 0.001, dtype=np.float32)
+    mono[: int(SR * 0.5)] = (0.001 * np.sin(
+        2 * np.pi * 220 * np.arange(int(SR * 0.5)) / SR)).astype(np.float32)
+    mono[100] = 0.94
+    out, info = level(np.stack([mono, mono]), is_shout=False)
+    assert info.ceiling_limited
+    assert float(np.abs(out).max()) <= config.CLIP_PEAK_CEILING + 1e-6
+    assert info.lufs_after < config.CLIP_TARGET_LUFS
+
+
+def test_silence_is_skipped_rather_than_amplified():
+    out, info = level(np.zeros((2, int(SR * 0.5)), dtype=np.float32), is_shout=False)
+    assert info.skipped
+    assert float(np.abs(out).max()) == 0.0
+
+
+def test_levelling_is_a_scalar_gain_and_changes_nothing_else():
+    """The waveform is scaled, never reshaped: no compression, no EQ."""
+    source = _clip(sound_s=1.0, amp=0.2)
+    out, info = level(source, is_shout=False)
+    gain = 10.0 ** (info.gain_db / 20.0)
+    assert np.allclose(out, source * gain, atol=1e-6)
+
+
+def test_a_short_clip_can_still_be_measured():
+    """Under the 400 ms gating window the block shrinks instead of giving up."""
+    value = clip_lufs(_mono(_clip(sound_s=0.2, amp=0.3)))
+    assert np.isfinite(value)
