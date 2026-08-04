@@ -96,6 +96,37 @@ never see. Resolve it on a real vocal.
 
 ## Open items
 
+- **Record word takes at higher pitches. This is the biggest remaining win, and
+  it is not a code problem.**
+
+  Every song so far is heavily octave-folded — 52% of syllables on musicHyva,
+  31% on Juna Turkuun. A folded syllable lands on the right note *name* in the
+  wrong register, so it carries the tune only in part, and that is what caps
+  each song's mimicry ceiling (0.70 and 0.78 respectively).
+
+  The bank looks like it has range and does not. Of 54 units:
+
+  | category | units | spread | shiftable? |
+  |---|---|---|---|
+  | bare shouts | 34 | E3–B4, 19.4 st | never shifted at all |
+  | climax-only | 9 | B3–C#5, 14.0 st | peaks only |
+  | **ordinary — what actually places** | **11** | **F3–C4, 6.6 st** | yes |
+
+  Ten of those eleven sit at F3 or F#3. Against melodies covering A3–A#5,
+  folding is unavoidable: selection cannot invent a pitch the bank does not
+  hold. Wiring up `PREFER_NEAREST_SOURCE_PITCH` moved folding only 54% → 52%
+  for exactly this reason — an earlier estimate of 1% was made by measuring the
+  whole bank, shouts included, and was simply wrong.
+
+  What would move it: **more takes of `paska`, `perse`, `pillu`, `pornolehti`
+  and `paviaani` sung noticeably higher, around C4–F4.** A handful would do it.
+
+  What would *not* move it: more shouts (never shifted, so their spread is
+  decorative), more takes at F3 (already ten), or any further tuning of
+  selection weights.
+
+  `python -m luokkaretki_generator.doctor` reports this breakdown per bank.
+
 - **Syllables may not be worth keeping.** Clips of bare syllables (`pas`, `ka`,
   `leh`, `ti`) map onto a melody 1:1 and can spell words that were never
   recorded intact, which is why they were tried. In practice they crowded out
