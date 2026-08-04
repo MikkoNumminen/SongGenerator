@@ -20,12 +20,22 @@ than merely avoided.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import argparse
+import hashlib
+import json
+import sys
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
 
 from . import audio_io, config
+
+# Bumped when the pass would produce different audio from the same sources and
+# the same config. Folded into the parameter fingerprint, so raising it makes
+# every existing derivative read as stale instead of silently surviving a
+# change in how they are made.
+FORMAT_VERSION = 1
 
 # Envelope resolution for edge detection. Finer than the 256 used elsewhere:
 # this measures a boundary rather than finding a region, and 2.9 ms of
@@ -307,3 +317,258 @@ def level(clip: np.ndarray, is_shout: bool, mode: str | None = None,
         gain_db=round(20.0 * float(np.log10(max(gain, 1e-12))), 3),
         ceiling_limited=limited,
     )
+
+
+# ---------------------------------------------------------------------------
+# Traceability
+# ---------------------------------------------------------------------------
+
+def sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for block in iter(lambda: fh.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def params_fingerprint(mode: str) -> str:
+    """Everything that decides what a derivative sounds like, as one hash.
+
+    Hashing the parameters alongside each source is the half that a
+    per-file hash alone would miss: change a trim threshold and no source
+    moves, yet every derivative on disk is now wrong. With this, a config edit
+    makes the whole tier read as stale at once.
+    """
+    payload = {
+        "format": FORMAT_VERSION,
+        "sample_rate": config.SAMPLE_RATE,
+        "dead_air_db": config.STD_DEAD_AIR_DB,
+        "head_guard_s": config.STD_HEAD_GUARD_S,
+        "tail_guard_s": config.STD_TAIL_GUARD_S,
+        "head_cap_s": config.STD_HEAD_CAP_S,
+        "word_min_s": config.WORD_MIN_S,
+        "fade_in_s": config.STD_FADE_IN_S,
+        "fade_out_s": config.STD_FADE_OUT_S,
+        "target_lufs": config.CLIP_TARGET_LUFS,
+        "shout_mode": mode,
+        "shout_offset_db": config.SHOUT_LUFS_OFFSET,
+        "peak_ceiling": config.CLIP_PEAK_CEILING,
+    }
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def read_manifest(root: Path) -> dict:
+    path = Path(root) / config.STD_MANIFEST
+    if not path.is_file():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise StandardizeError(
+            f"{path} is not readable JSON ({exc}).\n"
+            "    Delete the tier and run the pass again; nothing is lost, the "
+            "recorded clips are untouched."
+        ) from exc
+
+
+def _write_if_changed(path: Path, text: str) -> bool:
+    """Leave a file alone when its content would not change.
+
+    Idempotence has to be visible on disk, not merely true in principle: a run
+    that rewrites every file with identical bytes still looks like work
+    happened to anything watching timestamps.
+    """
+    if path.is_file() and path.read_text(encoding="utf-8") == text:
+        return False
+    path.write_text(text, encoding="utf-8")
+    return True
+
+
+# ---------------------------------------------------------------------------
+# The pass
+# ---------------------------------------------------------------------------
+
+@dataclass
+class Report:
+    built: list[str] = field(default_factory=list)
+    reused: list[str] = field(default_factory=list)
+    missing_audio: list[str] = field(default_factory=list)
+    ceiling_limited: list[str] = field(default_factory=list)
+    trimmed_s: float = 0.0
+    index_written: bool = False
+    manifest_written: bool = False
+
+
+def is_shout_entry(entry: dict) -> bool:
+    """A clip that is nothing but shout, matching Unit.is_bare_shout."""
+    words = entry.get("words") or []
+    return bool(words) and all(w in config.SHOUT_WORDS for w in words)
+
+
+def standardise_clip(clip: np.ndarray, entry: dict, mode: str,
+                     sr: int = config.SAMPLE_RATE) -> tuple[np.ndarray, dict, Trim, Level]:
+    """Trim, fade, level. The order matters: level measures what survives."""
+    trim = find_trim(audio_io.to_mono(clip), sr)
+    trimmed = apply_trim(clip, trim, sr)
+    levelled, info = level(trimmed, is_shout_entry(entry), mode, sr)
+
+    duration_s = levelled.shape[1] / sr
+    updated = dict(entry)
+    updated["duration_s"] = round(duration_s, 4)
+    updated["syllable_bounds_s"] = shift_bounds(
+        entry.get("syllable_bounds_s") or [], trim.head_s, duration_s)
+    return levelled, updated, trim, info
+
+
+def standardise_bank(source: Path, out: Path, mode: str,
+                     force: bool = False) -> Report:
+    """Build or refresh the derivative tier for one bank."""
+    source = Path(source)
+    index_path = source / "words.json"
+    if not index_path.is_file():
+        raise StandardizeError(
+            f"{index_path} not found. Standardisation runs on a built bank:\n"
+            "    python -m song_generator.build_bank"
+        )
+
+    check_destination(out, [source])
+    entries = json.loads(index_path.read_text(encoding="utf-8"))
+    fingerprint = params_fingerprint(mode)
+
+    previous = read_manifest(out)
+    previous_clips = previous.get("clips", {}) if previous.get("params_sha256") == fingerprint else {}
+    previous_index = {}
+    if (Path(out) / "words.json").is_file():
+        previous_index = json.loads((Path(out) / "words.json").read_text(encoding="utf-8"))
+
+    protected = {_resolved(source / name) for name in entries}
+    report = Report()
+    clips: dict[str, dict] = {}
+    index: dict[str, dict] = {}
+
+    for name, entry in entries.items():
+        path = source / name
+        if not path.is_file():
+            report.missing_audio.append(name)
+            continue
+
+        digest = sha256_file(path)
+        record = previous_clips.get(name)
+        derivative_exists = (Path(out) / name).is_file()
+
+        if (not force and record and record.get("source_sha256") == digest
+                and derivative_exists and name in previous_index):
+            clips[name] = record
+            index[name] = previous_index[name]
+            report.reused.append(name)
+            continue
+
+        audio, updated, trim, info = standardise_clip(
+            audio_io.read_wav(path), entry, mode)
+        write_derivative(out, name, audio, [source], protected=protected)
+
+        index[name] = updated
+        clips[name] = {
+            "source_dir": str(source).replace("\\", "/"),
+            "source_sha256": digest,
+            "source_bytes": path.stat().st_size,
+            "trim_head_s": round(trim.head_s, 4),
+            "trim_tail_s": round(trim.tail_s, 4),
+            "lufs_before": info.lufs_before,
+            "lufs_after": info.lufs_after,
+            "gain_db": info.gain_db,
+            "ceiling_limited": info.ceiling_limited,
+            "levelled": not info.skipped,
+            "group": "shout" if is_shout_entry(entry) else "word",
+        }
+        report.built.append(name)
+        report.trimmed_s += trim.head_s + trim.tail_s
+        if info.ceiling_limited:
+            report.ceiling_limited.append(name)
+
+    if not index:
+        raise StandardizeError(
+            f"nothing to standardise: none of the {len(entries)} clips in "
+            f"{index_path} exist on disk."
+        )
+
+    out = Path(out)
+    report.index_written = _write_if_changed(
+        out / "words.json", json.dumps(index, indent=2, ensure_ascii=False))
+    report.manifest_written = _write_if_changed(
+        out / config.STD_MANIFEST,
+        json.dumps({
+            "format": FORMAT_VERSION,
+            "params_sha256": fingerprint,
+            "shout_mode": mode,
+            "source_dir": str(source).replace("\\", "/"),
+            "clips": clips,
+        }, indent=2, ensure_ascii=False))
+    return report
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="song_generator.standardize",
+        description="Build a standardised derivative tier from a bank, "
+                    "without ever writing to the recorded clips.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    p.add_argument("--bank", default=config.DEFAULT_BANK, choices=sorted(config.BANKS),
+                   help="which prebuilt bank to standardise")
+    p.add_argument("--words-dir", type=Path, default=None,
+                   help="a bank directory directly, overriding --bank")
+    p.add_argument("--out", type=Path, default=None,
+                   help=f"where the derivatives go [default: <bank>{config.STD_SUFFIX}]")
+    p.add_argument("--shouts", choices=["offset", "as-recorded"],
+                   default=config.SHOUT_LEVEL_MODE.replace("_", "-"),
+                   help="how the shout is levelled: its own quieter target, "
+                        "or not levelled at all")
+    p.add_argument("--force", action="store_true",
+                   help="rebuild every derivative even when nothing changed")
+    return p
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    source = args.words_dir or Path(config.BANKS[args.bank])
+    out = args.out or source.with_name(source.name + config.STD_SUFFIX)
+    mode = args.shouts.replace("-", "_")
+
+    try:
+        report = standardise_bank(source, out, mode, force=args.force)
+    except StandardizeError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+
+    total = len(report.built) + len(report.reused)
+    print(f"  source    {source}  (never written to)")
+    print(f"  tier      {out}")
+    print(f"  shouts    {mode}")
+    print()
+    print(f"  {total} clips: {len(report.built)} built, {len(report.reused)} already current")
+    if report.built:
+        print(f"  trimmed   {report.trimmed_s:.1f}s of dead air off the ends")
+    if report.missing_audio:
+        print(f"  MISSING   {len(report.missing_audio)} clips listed in words.json "
+              f"are not on disk: {', '.join(report.missing_audio[:4])}")
+    if report.ceiling_limited:
+        print(f"  ceiling   {len(report.ceiling_limited)} clips could not reach the "
+              f"target without clipping and landed short:")
+        for name in report.ceiling_limited[:6]:
+            print(f"              {name}")
+    if not report.index_written and not report.manifest_written and not report.built:
+        print("\n  nothing changed. Sources and parameters are both untouched, so "
+              "the tier\n  already on disk is the one this run would have produced.")
+    print(f"\n  Use it:   song-generator.exe input\\song.mp4 --words-dir {out}")
+    print("            (or just run normally: the tier is picked up automatically)")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

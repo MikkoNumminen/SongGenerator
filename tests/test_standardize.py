@@ -7,13 +7,16 @@ that a source can never be written over -- the last one being the reason the
 tier exists at all.
 """
 
+import json
+
 import numpy as np
 import pytest
 
 from song_generator import audio_io, config
 from song_generator.standardize import (
     StandardizeError, apply_trim, check_destination, clip_lufs, find_trim,
-    level, shift_bounds, target_lufs, write_derivative,
+    level, params_fingerprint, sha256_file, shift_bounds, standardise_bank,
+    target_lufs, write_derivative,
 )
 
 SR = config.SAMPLE_RATE
@@ -307,3 +310,161 @@ def test_a_short_clip_can_still_be_measured():
     """Under the 400 ms gating window the block shrinks instead of giving up."""
     value = clip_lufs(_mono(_clip(sound_s=0.2, amp=0.3)))
     assert np.isfinite(value)
+
+
+# ---------------------------------------------------------------------------
+# The pass, end to end
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def built(tmp_path):
+    """A source bank with an index, as build_bank would leave it."""
+    d = tmp_path / "words_hq"
+    d.mkdir()
+    audio_io.write_wav(d / "bravo_1.wav", _clip(sound_s=0.8, head_s=0.2, tail_s=0.5))
+    audio_io.write_wav(d / "aah_1.wav", _clip(sound_s=0.9, head_s=0.1, amp=0.2))
+    audio_io.write_wav(d / "bravo-tango_1.wav",
+                       _clip(sound_s=1.2, head_s=0.15, tail_s=0.4, amp=0.3))
+    index = {
+        "bravo_1.wav": {"words": ["bravo"], "syllables": 2, "duration_s": 1.5,
+                        "midi": 53.0, "syllable_bounds_s": [0.6]},
+        "aah_1.wav": {"words": ["aah"], "syllables": 1, "duration_s": 1.0,
+                      "midi": 55.0, "syllable_bounds_s": []},
+        "bravo-tango_1.wav": {"words": ["bravo", "tango"], "syllables": 4,
+                              "duration_s": 1.75, "midi": 54.0,
+                              "syllable_bounds_s": [0.4, 0.8, 1.2]},
+    }
+    (d / "words.json").write_text(json.dumps(index), encoding="utf-8")
+    return d
+
+
+def _out(built):
+    return built.with_name(built.name + config.STD_SUFFIX)
+
+
+def test_the_pass_builds_a_loadable_bank(built):
+    out = _out(built)
+    report = standardise_bank(built, out, "offset")
+    assert len(report.built) == 3
+    assert (out / "words.json").is_file()
+    assert (out / config.STD_MANIFEST).is_file()
+    for name in ("bravo_1.wav", "aah_1.wav", "bravo-tango_1.wav"):
+        assert (out / name).is_file()
+
+
+def test_sources_are_byte_identical_afterwards(built):
+    before = {p.name: p.read_bytes() for p in built.glob("*.wav")}
+    standardise_bank(built, _out(built), "offset")
+    after = {p.name: p.read_bytes() for p in built.glob("*.wav")}
+    assert before == after
+
+
+def test_the_index_matches_the_audio_it_describes(built):
+    out = _out(built)
+    standardise_bank(built, out, "offset")
+    index = json.loads((out / "words.json").read_text(encoding="utf-8"))
+    for name, entry in index.items():
+        real = audio_io.read_wav(out / name).shape[1] / SR
+        assert entry["duration_s"] == pytest.approx(real, abs=0.001)
+        for bound in entry["syllable_bounds_s"]:
+            assert 0.0 < bound < entry["duration_s"]
+
+
+def test_labels_survive_untouched(built):
+    out = _out(built)
+    standardise_bank(built, out, "offset")
+    index = json.loads((out / "words.json").read_text(encoding="utf-8"))
+    assert index["bravo-tango_1.wav"]["words"] == ["bravo", "tango"]
+    assert index["bravo-tango_1.wav"]["syllables"] == 4
+    assert index["bravo-tango_1.wav"]["midi"] == 54.0
+    assert len(index["bravo-tango_1.wav"]["syllable_bounds_s"]) == 3
+
+
+def test_a_second_run_rebuilds_nothing(built):
+    out = _out(built)
+    standardise_bank(built, out, "offset")
+    stamps = {p: p.stat().st_mtime_ns for p in out.iterdir()}
+
+    again = standardise_bank(built, out, "offset")
+    assert again.built == []
+    assert len(again.reused) == 3
+    assert not again.index_written
+    assert not again.manifest_written
+    assert {p: p.stat().st_mtime_ns for p in out.iterdir()} == stamps
+
+
+def test_the_same_inputs_give_byte_identical_derivatives(built, tmp_path):
+    a = standardise_bank(built, tmp_path / "a", "offset")
+    b = standardise_bank(built, tmp_path / "b", "offset")
+    assert len(a.built) == len(b.built) == 3
+    for name in ("bravo_1.wav", "aah_1.wav", "bravo-tango_1.wav"):
+        assert (tmp_path / "a" / name).read_bytes() == (tmp_path / "b" / name).read_bytes()
+
+
+def test_a_changed_source_is_rebuilt_and_the_rest_are_not(built):
+    out = _out(built)
+    standardise_bank(built, out, "offset")
+    audio_io.write_wav(built / "bravo_1.wav", _clip(sound_s=0.7, head_s=0.3, amp=0.4))
+
+    again = standardise_bank(built, out, "offset")
+    assert again.built == ["bravo_1.wav"]
+    assert sorted(again.reused) == ["aah_1.wav", "bravo-tango_1.wav"]
+
+
+def test_changing_a_parameter_restandardises_everything(built, monkeypatch):
+    out = _out(built)
+    standardise_bank(built, out, "offset")
+    monkeypatch.setattr(config, "STD_HEAD_GUARD_S", 0.05)
+
+    again = standardise_bank(built, out, "offset")
+    assert len(again.built) == 3
+
+
+def test_the_two_shout_modes_differ_only_on_the_shout(built, tmp_path):
+    standardise_bank(built, tmp_path / "offset", "offset")
+    standardise_bank(built, tmp_path / "raw", "as_recorded")
+
+    shout_a = (tmp_path / "offset" / "aah_1.wav").read_bytes()
+    shout_b = (tmp_path / "raw" / "aah_1.wav").read_bytes()
+    assert shout_a != shout_b
+
+    word_a = (tmp_path / "offset" / "bravo_1.wav").read_bytes()
+    word_b = (tmp_path / "raw" / "bravo_1.wav").read_bytes()
+    assert word_a == word_b
+
+
+def test_the_manifest_traces_every_derivative_to_its_source(built):
+    out = _out(built)
+    standardise_bank(built, out, "offset")
+    manifest = json.loads((out / config.STD_MANIFEST).read_text(encoding="utf-8"))
+
+    assert manifest["shout_mode"] == "offset"
+    assert manifest["params_sha256"] == params_fingerprint("offset")
+    for name, record in manifest["clips"].items():
+        assert record["source_sha256"] == sha256_file(built / name)
+        assert record["group"] in ("shout", "word")
+    assert manifest["clips"]["aah_1.wav"]["group"] == "shout"
+    assert manifest["clips"]["bravo_1.wav"]["group"] == "word"
+
+
+def test_the_fingerprint_moves_with_the_shout_mode():
+    assert params_fingerprint("offset") != params_fingerprint("as_recorded")
+
+
+def test_a_clip_listed_but_absent_is_reported_not_fatal(built):
+    (built / "aah_1.wav").unlink()
+    report = standardise_bank(built, _out(built), "offset")
+    assert report.missing_audio == ["aah_1.wav"]
+    assert len(report.built) == 2
+
+
+def test_an_unbuilt_bank_is_refused_with_the_command_to_run(built, tmp_path):
+    empty = tmp_path / "nothing"
+    empty.mkdir()
+    with pytest.raises(StandardizeError, match="build_bank"):
+        standardise_bank(empty, tmp_path / "nothing.std", "offset")
+
+
+def test_the_pass_refuses_to_target_its_own_source(built):
+    with pytest.raises(StandardizeError):
+        standardise_bank(built, built, "offset")
