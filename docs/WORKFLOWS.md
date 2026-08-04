@@ -12,7 +12,7 @@ and the project's own venv.
 ```
 
 Writes seven mp3s to `output/`, one per mimicry setting from 0.00 (words ignore
-the tune entirely â€” clashing, and funny for it) to 1.00 (sings the melody as
+the tune entirely, clashing, and funny for it) to 1.00 (sings the melody as
 closely as the song allows). Pick by ear; there is no correct value, and the
 right one varies by song.
 
@@ -82,7 +82,7 @@ listening. It is the one part that cannot be automated.
 
 **Naming.** All of these parse: `bravo`, `bravo1`, `bravo_2`, `bravo_low`,
 `BRAVO3`. Multi-word clips keep the singer's own transitions and are worth more
-than their parts â€” name them as sequences: `tangodelta`, `eeecalculator`. A shout
+than their parts, name them as sequences: `tangodelta`, `aahcalculator`. A shout
 can be spelled however it sounded: `aah`, `aaah`, `ahh`, `aaahh`.
 
 **Removing the prefix is what confirms a clip.** Anything still tagged is
@@ -98,14 +98,14 @@ takes at the same pitch as everything else change nothing.
 
 All in the `DENSITY` block of `config.py`:
 
-| Constant | Raise it toâ€¦ | Lower it toâ€¦ |
+| Constant | Raise it to... | Lower it to... |
 |---|---|---|
 | `PHRASE_FILL` | fill more phrases | leave more instrumental space |
 | `SHOUT_MAX_SHARE` | more `aah` | less |
 | `PREFER_LONGER_UNITS` | fewer, longer placements | busier, more varied |
 
 `PHRASE_FILL` is the blunt instrument; reach for it first. Keep
-`PREFER_LONGER_UNITS` mild â€” at 1.4 the longest clip in the bank won nearly
+`PREFER_LONGER_UNITS` mild, at 1.4 the longest clip in the bank won nearly
 every slot and the track became one phrase on repeat.
 
 ---
@@ -123,14 +123,14 @@ stays a payoff.
 
 ---
 
-## A song comes back "Mode B â€” no vocals"
+## A song comes back "Mode B, no vocals"
 
 It failed one of two independent tests, and the run prints which. Both must
 pass, because they catch different things: loudness catches a near-silent stem,
 voicing catches a stem that is loud but full of instrumental bleed.
 
 If it genuinely has vocals, the thresholds are in the `STAGE 1b` block. Try
-`--separator roformer` first â€” it separates vocals noticeably better, and a
+`--separator roformer` first. It separates vocals noticeably better, and a
 weak stem is the usual cause.
 
 ---
@@ -143,12 +143,12 @@ $env:PYTHONPATH='.\src'
 .\.venv\Scripts\song-generator.exe input\musicHyva.mp4 --rows 0
 ```
 
-The second matters more. Watch these numbers â€” they move when behaviour changes:
+The second matters more. Watch these numbers. They move when behaviour changes:
 
-- **units placed** and **slots filled** â€” density
-- **mimicry** and **ceiling** â€” how closely the tune survives
-- **octave-folded %** â€” how far the bank sits from this song's register
-- **units used** â€” whether the vocabulary is what you expect
+- **units placed** and **slots filled**: density
+- **mimicry** and **ceiling**: how closely the tune survives
+- **octave-folded %**: how far the bank sits from this song's register
+- **units used**: whether the vocabulary is what you expect
 
 ---
 
@@ -159,5 +159,5 @@ The second matters more. Watch these numbers â€” they move when behaviour c
 .\.venv\Scripts\python.exe -m song_generator.set_aside --restore  # back in
 ```
 
-Renames between `pas.wav` and `SYL_pas.wav`. Nothing is deleted; the ear-work
+Renames between `bra.wav` and `SYL_bra.wav`. Nothing is deleted; the ear-work
 that identified them stays recorded in the name either way.

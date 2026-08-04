@@ -12,7 +12,7 @@ Documentation about working with agents is welcome in this repo, that is what
 `AGENTS.md` and `docs/AI-FIRST.md` are for. **Crediting an assistant as an
 author is not.**
 
-- **No `Co-Authored-By:` trailer on any commit**, for any assistant. The habit
+- **No `Co-Authored-By:` trailer on any commit**: for any assistant. The habit
   of adding one does not apply here. The 26 commits that had one were rewritten
   to remove it.
 - **No "Generated with …" lines** in commit bodies, pull requests or issues.

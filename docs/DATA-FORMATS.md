@@ -64,7 +64,7 @@ The bank. Written by `build_bank.py`.
   "aah-calculator_1.wav": {
     "words": ["aah", "calculator"],
     "variant": "1",
-    "source_clip": "eeeicalculator.wav",
+    "source_clip": "aaahcalculator.wav",
     "duration_s": 1.6437,
     "midi": 55.2,
     "note": "G3",
@@ -144,7 +144,7 @@ TODO_2syl__kirby2__c07__1.42-1.98.wav
 ```
 
 An unprefixed name is a claim about content: `bravo1`, `tangodelta`,
-`eeecalculator`. See `docs/GLOSSARY.md` for the prefix table.
+`aahcalculator`. See `docs/GLOSSARY.md` for the prefix table.
 
 **No prefix parses as a bank word.** That is what makes it structurally
 impossible for an unreviewed clip to reach the bank, however confident a machine

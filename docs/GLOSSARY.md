@@ -58,12 +58,12 @@ run.
 **Word**. One of the five: `bravo`, `tango`, `delta`, `kilometer`,
 `calculator`. Plus `aah`, the shout.
 
-**Syllable**. A fragment of a word (`pas`, `ka`, `leh`, `ti`). Kept for
+**Syllable**. A fragment of a word (`bra`, `vo`, `me`, `ter`). Kept for
 *spelling* words that were never recorded intact, not for singing on its own
-a clip of `pas` fills a slot as neatly as one of `bravo` and says nothing.
+a clip of `bra` fills a slot as neatly as one of `bravo` and says nothing.
 Currently set aside with a `SYL_` prefix.
 
-**Shout**, `aah`. Treated unlike everything else: never pitch-shifted,
+**Shout** `aah`. Treated unlike everything else: never pitch-shifted,
 never time-stretched, never resynthesised, because a vocoder smooths away
 exactly the crack and attack that make it a shout.
 
