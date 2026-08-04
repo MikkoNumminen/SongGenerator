@@ -1,6 +1,6 @@
 """Pre-fill labels.tsv by running local speech recognition over the vocal.
 
-    python -m luokkaretki_generator.label_words
+    python -m song_generator.label_words
 
 Transcribes the separated vocal with Whisper, then keeps only the words that
 fuzzy-match the bank (paska, perse, pillu, pornolehti, paviaani) and writes
@@ -240,7 +240,7 @@ def rename_candidates(folder: Path, matches: list[Match]) -> tuple[int, int, lis
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="luokkaretki_generator.label_words",
+        prog="song_generator.label_words",
         description="Pre-fill labels.tsv using local speech recognition.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
@@ -328,7 +328,7 @@ def main(argv: list[str] | None = None) -> int:
     missing = [w for w in config.WORD_SYLLABLES if w not in counts]
     if missing:
         print(f"  not found: {', '.join(missing)}")
-    print("\n  Then:  python -m luokkaretki_generator.build_bank")
+    print("\n  Then:  python -m song_generator.build_bank")
     return 0
 
 

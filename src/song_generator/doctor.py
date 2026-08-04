@@ -1,7 +1,7 @@
 """Everything you need to diagnose or tune, in one command.
 
-    python -m luokkaretki_generator.doctor
-    python -m luokkaretki_generator.doctor --song input/musicHyva.mp4
+    python -m song_generator.doctor
+    python -m song_generator.doctor --song input/musicHyva.mp4
 
 Written because the alternative was worse. Diagnosing a bad-sounding render
 meant a dozen separate commands and a throwaway script each time -- what is in
@@ -174,7 +174,7 @@ def report_song(path: Path, units: list | None) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="luokkaretki_generator.doctor",
+        prog="song_generator.doctor",
         description="Print everything needed to diagnose or tune, in one command.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )

@@ -38,20 +38,20 @@ attempted rather than attempted and botched.
 See docs/TODO.md for the full write-up of what Mode B would take.
 
 If you believe this song DOES have vocals, the numbers above show which test
-drew the line -- the thresholds are all in src/luokkaretki_generator/config.py under
+drew the line -- the thresholds are all in src/song_generator/config.py under
 "STAGE 1b".\
 """
 
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="luokkaretki_generator",
+        prog="song_generator",
         description="Replace a song's vocals with sung Finnish word samples.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     p.add_argument("input", type=Path, help="input song (mp3, or anything ffmpeg reads)")
     p.add_argument("-o", "--output", type=Path, default=None,
-                   help="output mp3 [default: output/<input stem>.luokkaretki_generator.mp3]")
+                   help="output mp3 [default: output/<input stem>.song_generator.mp3]")
     p.add_argument("--separator", choices=["demucs", "roformer"], default=config.SEPARATOR,
                    help="source separation backend")
     p.add_argument("--device", default=None, help="torch device, e.g. cuda or cpu [default: autodetect]")
@@ -96,7 +96,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: input file not found: {args.input}", file=sys.stderr)
         return EXIT_ERROR
 
-    output = args.output or Path("output") / f"{args.input.stem}.luokkaretki_generator.mp3"
+    output = args.output or Path("output") / f"{args.input.stem}.song_generator.mp3"
     work = work_dir_for(args.input, args.work_dir)
     device = resolve_device(args.device)
 

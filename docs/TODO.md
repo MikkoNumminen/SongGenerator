@@ -51,15 +51,20 @@ starts, and the reason it is not being started now.
       wired with a Roformer alternative, instrumental saved, Mode B detection
       routing to the not-supported message.
 - [x] **2. Analysis** — beat/tempo via librosa; melody F0 and syllable timing
-      from the original vocal, written to `analysis.json`.
-      **Gate not yet cleared:** validated against synthesised singing with known
-      ground truth, but not yet reported on a real song. See below.
+      from the original vocal, written to `analysis.json`. Reported on a real
+      song, which exposed two bugs that synthetic material had hidden: voicing
+      dropouts ending notes, and a splitter that quantised to a semitone grid.
+      Both fixed and pinned by tests.
 - [x] **3. Word mapping, no pitch shift** — bank units placed on the extracted
-      slots at their original pitch, mixed, output. First listenable version;
-      awaiting a verdict on funniness before shifting is added.
-- [ ] **4. Pitch shift** — each clip moved to its slot's melody note,
+      slots at their original pitch, mixed, output. Judged funny enough to
+      continue.
+- [x] **4. Pitch shift** — each clip moved to its slot's melody note,
       formant-corrected, with `SHIFT_CAP_SEMITONES` folding large jumps by
       whole octaves instead of chipmunking. Re-mixed.
+
+Everything since is refinement rather than plan: `MIMICRY` as a dial that means
+the same thing across songs, density and climax control, raw shouts, and the
+switchable banks.
 
 ## Stage 2 findings so far
 
@@ -125,7 +130,7 @@ never see. Resolve it on a real vocal.
   decorative), more takes at F3 (already ten), or any further tuning of
   selection weights.
 
-  `python -m luokkaretki_generator.doctor` reports this breakdown per bank.
+  `python -m song_generator.doctor` reports this breakdown per bank.
 
 - **Syllables may not be worth keeping.** Clips of bare syllables (`pas`, `ka`,
   `leh`, `ti`) map onto a melody 1:1 and can spell words that were never
@@ -133,7 +138,7 @@ never see. Resolve it on a real vocal.
   the words: a clip of `pas` fills a slot as neatly as one of `paska` and says
   nothing, and a track full of them stops being about paska, perse, pillu,
   pornolehti and eee paviaani. They are currently set aside rather than deleted
-  (`SYL_` prefix, `python -m luokkaretki_generator.set_aside --restore` puts them back).
+  (`SYL_` prefix, `python -m song_generator.set_aside --restore` puts them back).
   If they stay unhelpful, drop `WORD_SPELLING`, `compose_words` and
   `PLACE_BARE_SYLLABLES` entirely rather than leaving dead machinery around.
   Shouts are exempt: `eee` is a real utterance and the only odd-length unit,

@@ -9,7 +9,7 @@ word just because it is the nearest of only five options.
 
 import pytest
 
-from luokkaretki_generator.label_words import (
+from song_generator.label_words import (
     MATCH_THRESHOLD, RENAME_CONFIDENT, LabelRow, best_target, candidate_span,
     merge, normalise, overlap, Match,
 )
@@ -32,7 +32,7 @@ def test_weak_matches_cannot_reach_the_bank_unaided():
     0.67. If that prefix parsed, a single shaky guess would populate the bank
     with clips nobody had listened to.
     """
-    from luokkaretki_generator.build_bank import parse_name
+    from song_generator.build_bank import parse_name
 
     assert MATCH_THRESHOLD < RENAME_CONFIDENT
     assert parse_name("maybe-pornolehti__c04__2syl__F#3__2.75-3.11") is None

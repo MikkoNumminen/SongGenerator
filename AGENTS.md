@@ -1,4 +1,4 @@
-# Working on LuokkaretkiGenerator
+# Working on SongGenerator
 
 Replaces a song's vocals with sung Finnish word clips, timed and pitched to the
 original melody. Everything runs locally on one GPU. No cloud, no paid services,
@@ -11,10 +11,10 @@ The venv is deliberately isolated (torch, demucs and heavy audio deps live
 there and must not leak into other projects). Always use it explicitly:
 
 ```powershell
-.\.venv\Scripts\luokkaretki-generator.exe input\song.mp4              # full run, 7 variants
+.\.venv\Scripts\song-generator.exe input\song.mp4              # full run, 7 variants
 .\.venv\Scripts\python.exe -m pytest tests\ -q                        # 191 tests, ~10s
-.\.venv\Scripts\python.exe -m luokkaretki_generator.build_bank        # rebuild the word bank
-.\.venv\Scripts\python.exe -m luokkaretki_generator.doctor            # diagnose anything
+.\.venv\Scripts\python.exe -m song_generator.build_bank        # rebuild the word bank
+.\.venv\Scripts\python.exe -m song_generator.doctor            # diagnose anything
 ```
 
 Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
@@ -61,7 +61,7 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
 1. `docs/GLOSSARY.md` — what slot, unit, phrase, mimicry and fold mean here.
    These are load-bearing terms; guessing at them will mislead you.
 2. `docs/ARCHITECTURE.md` — the pipeline, module by module.
-3. `src/luokkaretki_generator/config.py` — every decision that can be tuned, and why.
+3. `src/song_generator/config.py` — every decision that can be tuned, and why.
 4. `docs/WORKFLOWS.md` — the recipes for common jobs.
 5. `docs/TODO.md` — what is deliberately unfinished, including Mode B.
 
@@ -69,7 +69,7 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests\ -q
-.\.venv\Scripts\luokkaretki-generator.exe input\musicHyva.mp4 --rows 0
+.\.venv\Scripts\song-generator.exe input\musicHyva.mp4 --rows 0
 ```
 
 The second is the real check: it prints how many units were placed, how much of

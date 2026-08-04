@@ -1,4 +1,4 @@
-# LuokkaretkiGenerator
+# SongGenerator
 
 Takes a song, throws away the singer, and puts a small bank of sung Finnish
 words back in their place — on the same notes, at the same moments.
@@ -8,7 +8,7 @@ synthesis: the words are real recordings, and the tool only separates,
 analyses, re-pitches, re-times and mixes them.
 
 ```powershell
-.\.venv\Scripts\luokkaretki-generator.exe input\song.mp4
+.\.venv\Scripts\song-generator.exe input\song.mp4
 ```
 
 One command writes seven versions, from words that ignore the tune completely
@@ -41,7 +41,7 @@ See [docs/TODO.md](docs/TODO.md).
 | [docs/WORKFLOWS.md](docs/WORKFLOWS.md) | Recipes: add a song, extend the bank, tune density. |
 | [docs/TODO.md](docs/TODO.md) | What is deliberately unfinished. |
 | [docs/AI-FIRST.md](docs/AI-FIRST.md) | How legible this repo is, scored against a written rubric. |
-| [src/luokkaretki_generator/config.py](src/luokkaretki_generator/config.py) | Every tunable, with the reasoning behind its value. |
+| [src/song_generator/config.py](src/song_generator/config.py) | Every tunable, with the reasoning behind its value. |
 
 ## Install
 

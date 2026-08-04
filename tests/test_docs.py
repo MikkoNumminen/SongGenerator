@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from luokkaretki_generator import config
+from song_generator import config
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
@@ -38,7 +38,7 @@ def test_documented_files_exist(name):
 def test_every_module_is_in_the_architecture_map():
     """A module nobody documented is a module nobody will find."""
     modules = {
-        p.stem for p in (ROOT / "src" / "luokkaretki_generator").glob("*.py")
+        p.stem for p in (ROOT / "src" / "song_generator").glob("*.py")
         if not p.stem.startswith("__")
     }
     described = read(DOCS / "ARCHITECTURE.md")
@@ -47,7 +47,7 @@ def test_every_module_is_in_the_architecture_map():
 
 
 def test_architecture_map_lists_no_module_that_was_deleted():
-    modules = {p.stem for p in (ROOT / "src" / "luokkaretki_generator").glob("*.py")}
+    modules = {p.stem for p in (ROOT / "src" / "song_generator").glob("*.py")}
     described = set(re.findall(r"`(\w+)\.py`", read(DOCS / "ARCHITECTURE.md")))
     stale = sorted(described - modules)
     assert not stale, f"documented but gone: {stale}"
@@ -117,10 +117,10 @@ def test_readme_does_not_claim_a_stale_build_status():
 def test_workflows_commands_name_real_modules():
     """A runbook telling you to run a module that does not exist is worse than none."""
     modules = {
-        p.stem for p in (ROOT / "src" / "luokkaretki_generator").glob("*.py")
+        p.stem for p in (ROOT / "src" / "song_generator").glob("*.py")
         if not p.stem.startswith("__")
     }
-    invoked = set(re.findall(r"-m luokkaretki_generator\.(\w+)", read(DOCS / "WORKFLOWS.md")))
+    invoked = set(re.findall(r"-m song_generator\.(\w+)", read(DOCS / "WORKFLOWS.md")))
     missing = sorted(invoked - modules)
     assert not missing, f"WORKFLOWS.md invokes modules that do not exist: {missing}"
 
@@ -174,5 +174,5 @@ def test_every_cli_module_can_be_imported():
 
     for name in ("cli", "build_bank", "extract_words", "flatten",
                  "mine_words", "set_aside", "successors", "hunt"):
-        module = importlib.import_module(f"luokkaretki_generator.{name}")
+        module = importlib.import_module(f"song_generator.{name}")
         assert hasattr(module, "main"), f"{name} is documented as runnable but has no main()"

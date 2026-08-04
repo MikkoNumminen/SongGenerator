@@ -8,8 +8,8 @@ a test that would have caught it.
 import numpy as np
 import pytest
 
-from luokkaretki_generator import config
-from luokkaretki_generator.mapping import (
+from song_generator import config
+from song_generator.mapping import (
     Slot, Unit, find_climaxes, group_phrases, plan_words,
 )
 
@@ -123,7 +123,7 @@ class TestClimaxes:
 class TestRawShouts:
     def test_a_bare_shout_is_never_resynthesised(self, bank, monkeypatch):
         """A vocoder removes the crack and attack that make it a shout."""
-        from luokkaretki_generator.mapping import precompute_shifted
+        from song_generator.mapping import precompute_shifted
 
         monkeypatch.setattr(config, "PHRASE_FILL", 1.0)
         monkeypatch.setattr(config, "SHOUT_MAX_SHARE", 1.0)
@@ -135,14 +135,14 @@ class TestRawShouts:
                 assert i not in cache, "a bare shout was sent through the vocoder"
 
     def test_a_shout_inside_a_word_keeps_its_own_pitch(self, bank):
-        from luokkaretki_generator.mapping import build_segments
+        from song_generator.mapping import build_segments
 
         unit = _unit(["eee", "paviaani"], 5, 1.7)
         unit.bounds_s = [0.4, 0.7, 1.0, 1.35]
         unit.syllable_midi = [53.0] * 5
 
         slots = [Slot(i * 0.3, i * 0.3 + 0.28, 70.0, 0) for i in range(5)]
-        from luokkaretki_generator.mapping import Placement
+        from song_generator.mapping import Placement
 
         p = Placement(unit=unit, onset_s=0.0, slot_span_s=1.5, play_s=1.7,
                       n_slots=5, phrase=0, slots=slots)

@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from luokkaretki_generator import config
-from luokkaretki_generator.mapping import (
+from song_generator import config
+from song_generator.mapping import (
     Plan, Slot, Unit, clean_slots, decide_by_mimicry, decide_shifts, group_phrases,
     mimicry, mix, plan_words, render, report,
 )

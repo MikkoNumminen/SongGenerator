@@ -1,7 +1,7 @@
 """Render many songs in one command.
 
-    python -m luokkaretki_generator.batch "input/*.mp4"
-    python -m luokkaretki_generator.batch "input/*.mp4" --mimicry 0.45
+    python -m song_generator.batch "input/*.mp4"
+    python -m song_generator.batch "input/*.mp4" --mimicry 0.45
 
 This is the part that genuinely wanted automating, and it is a script rather
 than an agent because nothing in it needs judgement: the inputs are a glob, the
@@ -57,7 +57,7 @@ def expand(patterns: list[str]) -> list[Path]:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="luokkaretki_generator.batch",
+        prog="song_generator.batch",
         description="Render many songs in one go.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )

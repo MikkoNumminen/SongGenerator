@@ -8,7 +8,7 @@ and the project's own venv.
 ## Make a track from a song
 
 ```powershell
-.\.venv\Scripts\luokkaretki-generator.exe input\song.mp4
+.\.venv\Scripts\song-generator.exe input\song.mp4
 ```
 
 Writes seven mp3s to `output/`, one per mimicry setting from 0.00 (words ignore
@@ -35,8 +35,8 @@ the same song reuses the cached stems and takes seconds.
 ## Make many tracks at once
 
 ```powershell
-.\.venv\Scripts\python.exe -m luokkaretki_generator.batch "input\*.mp4"
-.\.venv\Scripts\python.exe -m luokkaretki_generator.batch "input\*.mp4" --mimicry 0.45
+.\.venv\Scripts\python.exe -m song_generator.batch "input\*.mp4"
+.\.venv\Scripts\python.exe -m song_generator.batch "input\*.mp4" --mimicry 0.45
 ```
 
 One song failing does not end the batch. A song with no vocal is refused as
@@ -47,8 +47,8 @@ Mode B, recorded, and the rest continue.
 ## Work out why something sounds wrong
 
 ```powershell
-.\.venv\Scripts\python.exe -m luokkaretki_generator.doctor
-.\.venv\Scripts\python.exe -m luokkaretki_generator.doctor --song input\musicHyva.mp4
+.\.venv\Scripts\python.exe -m song_generator.doctor
+.\.venv\Scripts\python.exe -m song_generator.doctor --song input\musicHyva.mp4
 ```
 
 Prints, in one go: whether the environment is sound, what the bank contains,
@@ -68,16 +68,16 @@ listening. It is the one part that cannot be automated.
 
 ```powershell
 # 1. Cut candidates out of one or many sources
-.\.venv\Scripts\python.exe -m luokkaretki_generator.mine_words "D:\clips\*.mp4"
+.\.venv\Scripts\python.exe -m song_generator.mine_words "D:\clips\*.mp4"
 
 # 2. Collapse into one flat folder, tagging what has not been reviewed
-.\.venv\Scripts\python.exe -m luokkaretki_generator.flatten
+.\.venv\Scripts\python.exe -m song_generator.flatten
 
 # 3. LISTEN. Delete junk. Rename keepers after what you hear.
 #       TODO_2syl__kirby__c07__1.42-1.98.wav   ->   paska7.wav
 
 # 4. Build
-.\.venv\Scripts\python.exe -m luokkaretki_generator.build_bank
+.\.venv\Scripts\python.exe -m song_generator.build_bank
 ```
 
 **Naming.** All of these parse: `paska`, `paska1`, `paska_2`, `paska_low`,
@@ -138,9 +138,9 @@ weak stem is the usual cause.
 ## Verify a change
 
 ```powershell
-$env:PYTHONPATH='D:\koodaamista\LuokkaretkiGenerator\src'
+$env:PYTHONPATH='.\src'
 .\.venv\Scripts\python.exe -m pytest tests\ -q
-.\.venv\Scripts\luokkaretki-generator.exe input\musicHyva.mp4 --rows 0
+.\.venv\Scripts\song-generator.exe input\musicHyva.mp4 --rows 0
 ```
 
 The second matters more. Watch these numbers — they move when behaviour changes:
@@ -155,8 +155,8 @@ The second matters more. Watch these numbers — they move when behaviour change
 ## Set syllables aside, or bring them back
 
 ```powershell
-.\.venv\Scripts\python.exe -m luokkaretki_generator.set_aside            # out of the bank
-.\.venv\Scripts\python.exe -m luokkaretki_generator.set_aside --restore  # back in
+.\.venv\Scripts\python.exe -m song_generator.set_aside            # out of the bank
+.\.venv\Scripts\python.exe -m song_generator.set_aside --restore  # back in
 ```
 
 Renames between `pas.wav` and `SYL_pas.wav`. Nothing is deleted; the ear-work

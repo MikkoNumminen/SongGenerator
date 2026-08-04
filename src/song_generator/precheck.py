@@ -1,6 +1,6 @@
 """Guess what each candidate clip contains, to make reviewing them bearable.
 
-    python -m luokkaretki_generator.precheck
+    python -m song_generator.precheck
 
 Three states, kept visibly separate so they never blur together:
 
@@ -167,7 +167,7 @@ def render_batch(batch: list[Clip], sr: int) -> np.ndarray:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="luokkaretki_generator.precheck",
+        prog="song_generator.precheck",
         description="Guess each candidate clip's contents to speed up reviewing.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )

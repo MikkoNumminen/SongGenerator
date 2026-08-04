@@ -1,13 +1,13 @@
 """Build the word bank from clips you have listened to and named.
 
-    python -m luokkaretki_generator.build_bank
+    python -m song_generator.build_bank
 
 Default workflow -- rename the files:
 
-    1. python -m luokkaretki_generator.extract_words <scene>     cuts words/candidates/
+    1. python -m song_generator.extract_words <scene>     cuts words/candidates/
     2. Play them. Delete the junk. Rename the keepers after the word you
        heard: paska1.wav, paska2.wav, perse1.wav, paviaani_low.wav ...
-    3. python -m luokkaretki_generator.build_bank                reads the names
+    3. python -m song_generator.build_bank                reads the names
 
 Anything still carrying its original c07__4syl__... name is ignored, so
 "leave it alone" and "reject it" both work without deleting anything.
@@ -15,7 +15,7 @@ Anything still carrying its original c07__4syl__... name is ignored, so
 Alternative workflow -- a labels.tsv of timestamps, for when you would rather
 adjust cut points than re-cut by hand:
 
-    python -m luokkaretki_generator.build_bank --labels words/labels.tsv
+    python -m song_generator.build_bank --labels words/labels.tsv
 
 Either way the output is words/<word>_<variant>.wav plus words/words.json,
 holding each clip's measured pitch, duration and syllable boundaries.
@@ -53,7 +53,7 @@ class LabelError(RuntimeError):
 def read_labels(path: Path) -> list[Row]:
     if not path.is_file():
         raise LabelError(
-            f"{path} not found. Run `python -m luokkaretki_generator.extract_words <scene>` first."
+            f"{path} not found. Run `python -m song_generator.extract_words <scene>` first."
         )
 
     rows: list[Row] = []
@@ -320,7 +320,7 @@ def syllable_pitches(clip: np.ndarray, sr: int, bounds: list[float],
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="luokkaretki_generator.build_bank",
+        prog="song_generator.build_bank",
         description="Cut a filled-in labels.tsv into the word bank.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
@@ -377,7 +377,7 @@ def _find_vocal(explicit: Path | None) -> Path:
     if not found:
         raise LabelError(
             "no separated vocal found under work/. "
-            "Run `python -m luokkaretki_generator.extract_words <scene>` first."
+            "Run `python -m song_generator.extract_words <scene>` first."
         )
     return found[-1]
 
@@ -414,7 +414,7 @@ def _collect(args, device) -> list[tuple[str, str, np.ndarray, dict]]:
     if not args.candidates.is_dir():
         raise LabelError(
             f"{args.candidates} not found. "
-            "Run `python -m luokkaretki_generator.extract_words <scene>` first."
+            "Run `python -m song_generator.extract_words <scene>` first."
         )
 
     named, ignored = scan_folder(args.candidates)

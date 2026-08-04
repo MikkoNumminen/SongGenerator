@@ -125,7 +125,7 @@ def extract_f0(
             f"F0_METHOD={method!r} is not implemented.\n"
             "    Working values: 'crepe' (default, GPU) or 'pyin' (CPU fallback).\n"
             "    'rmvpe' and 'fcpe' are named in config.py as future options only.\n"
-            "    Set it in the STAGE 2 block of src/luokkaretki_generator/config.py."
+            "    Set it in the STAGE 2 block of src/song_generator/config.py."
         )
 
     hz = np.where(per >= config.VOICED_PERIODICITY_MIN, hz, np.nan)

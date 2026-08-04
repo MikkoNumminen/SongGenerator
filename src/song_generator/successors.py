@@ -1,6 +1,6 @@
 """Cut what comes straight after a shout: the EEE PAVIAANI problem.
 
-    python -m luokkaretki_generator.successors
+    python -m song_generator.successors
 
 A shout and the word it introduces are one gesture, but silence-based cutting
 splits them, because there IS a gap between the held vowel and the word. That
@@ -87,7 +87,7 @@ def fade(clip: np.ndarray, sr: int) -> np.ndarray:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="luokkaretki_generator.successors",
+        prog="song_generator.successors",
         description="Re-cut the audio following each shout, to recover shout+word pairs.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
