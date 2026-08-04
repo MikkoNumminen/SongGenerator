@@ -38,6 +38,11 @@ words_*/
 scratch/
 tmp/
 
+# Agent tooling copied in from ~/.claude. Local to this machine, and a copy
+# rather than the original, so it is not the repo's to carry. The guidance that
+# IS the repo's lives in AGENTS.md and CLAUDE.md, both tracked.
+.claude/
+
 # ---------------------------------------------------------------------------
 # Python
 # ---------------------------------------------------------------------------
