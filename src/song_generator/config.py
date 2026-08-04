@@ -583,3 +583,63 @@ if not _os.environ.get("SONG_GENERATOR_NO_LOCAL_VOCAB"):
         from .vocabulary_local import *  # noqa: F401,F403
     except ImportError:
         pass
+
+
+def validate_vocabulary() -> list[str]:
+    """Problems with the active vocabulary, as readable sentences.
+
+    Every one of these fails silently rather than loudly. A spelling naming a
+    word that no longer exists simply stops composing; a shout letter at the
+    start of a real word quietly eats it during parsing. The result is a bank
+    that builds, runs, and is wrong.
+
+    Worth running after any change to the vocabulary, and especially after
+    writing a local override, where it is easy to redefine one table and forget
+    the one that depends on it.
+    """
+    problems: list[str] = []
+
+    orphans = sorted(set(WORD_SPELLING) - set(WORD_SYLLABLES))
+    if orphans:
+        problems.append(
+            f"WORD_SPELLING spells {orphans}, which are not in WORD_SYLLABLES. "
+            "Those words cannot be composed from syllables."
+        )
+
+    for word, parts in WORD_SPELLING.items():
+        expected = WORD_SYLLABLES.get(word)
+        if expected is not None and len(parts) != expected:
+            problems.append(
+                f"{word!r} is {expected} syllables in WORD_SYLLABLES but "
+                f"{len(parts)} in WORD_SPELLING: {list(parts)}"
+            )
+
+    for name, group in (("SHOUT_WORDS", SHOUT_WORDS), ("CLIMAX_WORDS", CLIMAX_WORDS)):
+        missing = sorted(set(group) - set(WORD_SYLLABLES))
+        if missing:
+            problems.append(f"{name} names {missing}, which are not in WORD_SYLLABLES.")
+
+    words = sorted(WORD_SYLLABLES)
+    for short in words:
+        for long in words:
+            if short != long and long.startswith(short):
+                problems.append(
+                    f"{short!r} is a prefix of {long!r}. Filename parsing takes the "
+                    "longest match, so the shorter word can never be named on its own."
+                )
+
+    # The one that is easiest to get wrong and hardest to notice.
+    for word in WORD_SYLLABLES:
+        if word not in SHOUT_WORDS and word and word[0] in SHOUT_CHARS:
+            problems.append(
+                f"{word!r} starts with {word[0]!r}, which is in SHOUT_CHARS. "
+                "A run of shout letters would be read as a shout instead."
+            )
+    for word, parts in WORD_SPELLING.items():
+        for part in parts:
+            if part and part[0] in SHOUT_CHARS:
+                problems.append(
+                    f"syllable {part!r} of {word!r} starts with a shout letter."
+                )
+
+    return problems
