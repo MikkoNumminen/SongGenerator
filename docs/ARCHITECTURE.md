@@ -83,6 +83,7 @@ These do not run during a song. They turn source videos into reviewed clips.
 | `doctor.py` | Read-only: bank contents, pitch coverage, a song's slots and predicted shift |
 | `separate_hq.py` | Re-separate sources with Mel-Band Roformer into `vocal_hq.wav` |
 | `recut_bank.py` | Re-cut the bank from those stems, keeping every label |
+| `standardize.py` | Trim, fade and level a bank into a derivative tier beside it |
 
 These are deliberately scripts rather than anything cleverer. Their inputs are
 enumerable and their work is deterministic, so there is no judgement to
@@ -94,6 +95,23 @@ offset by cross-correlation. Filenames are not reliable evidence of where audio
 starts: clips written by `successors.py` are padded 50 ms earlier than the
 timestamp they record, and trusting the name cut the attack off 34 shouts.
 
+`standardize.py` works in tiers. The recorded clips are the source of truth and
+are never written to; the pass reads them and produces new files in a sibling
+directory, `words_hq.std`, each traceable to the clip it came from by a hash of
+that clip's bytes. Every write goes through one function that refuses any
+destination which is, contains, or sits inside a source directory, so
+overwriting a recording is structurally impossible rather than merely avoided.
+
+It changes edges and levels only: dead air trimmed off each end, a short fade
+over the cut, and a loudness target so no word blares while the next disappears.
+Nothing touches timbre. The rough sound of each word is the point of the bank.
+
+The runtime prefers the tier when it exists and falls back to the recorded clips
+when it does not, so a clone that has never run the pass behaves exactly as it
+did before the tier existed. Standardised clips skip `level_clip` on load: they
+arrive levelled to a loudness target, and re-levelling them to an RMS one would
+undo that silently.
+
 ## Data on disk
 
 | Path | Written by | Contains | Regenerable? |
@@ -103,6 +121,8 @@ timestamp they record, and trusting the name cut the attack off 34 shouts.
 | `work/<song>/detect.json` | `cli` | The Mode A/B verdict and its numbers | Yes |
 | `words/words.json` | `build_bank` | Every unit: pitch, duration, syllable bounds | Yes |
 | `words/*.wav` | `build_bank` | The bank's audio | Yes |
+| `words_hq.std/*.wav` | `standardize` | Trimmed, levelled derivatives | Yes |
+| `words_hq.std/standardized.json` | `standardize` | Each derivative's source and hash | Yes |
 | `words/candidates/*.wav` **unprefixed** | **a human** | **Reviewed clips** | **No** |
 | `output/*.mp3` | `cli` | The results | Yes |
 

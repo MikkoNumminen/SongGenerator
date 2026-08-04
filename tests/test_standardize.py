@@ -13,6 +13,7 @@ import numpy as np
 import pytest
 
 from song_generator import audio_io, config
+from song_generator.mapping import load_bank, resolve_bank
 from song_generator.standardize import (
     StandardizeError, apply_trim, check_destination, check_tier, clip_lufs,
     find_trim, level, main, params_fingerprint, sha256_file, shift_bounds,
@@ -557,3 +558,62 @@ def test_check_writes_nothing(built):
     stamps = {p: p.stat().st_mtime_ns for p in out.iterdir()}
     check_tier(built, out, "offset")
     assert {p: p.stat().st_mtime_ns for p in out.iterdir()} == stamps
+
+
+# ---------------------------------------------------------------------------
+# What the runtime picks up
+# ---------------------------------------------------------------------------
+
+def test_a_bank_with_no_tier_reads_as_recorded(built):
+    """A fresh clone that has never standardised behaves exactly as before."""
+    where, standardised = resolve_bank(built)
+    assert where == built
+    assert not standardised
+
+
+def test_a_tier_is_preferred_once_it_exists(built):
+    standardise_bank(built, _out(built), "offset")
+    where, standardised = resolve_bank(built)
+    assert where == _out(built)
+    assert standardised
+
+
+def test_raw_clips_opts_back_out(built):
+    standardise_bank(built, _out(built), "offset")
+    where, standardised = resolve_bank(built, prefer_standardised=False)
+    assert where == built
+    assert not standardised
+
+
+def test_pointing_straight_at_a_tier_still_reads_as_standardised(built):
+    """--words-dir words_hq.std must not look for words_hq.std.std."""
+    out = _out(built)
+    standardise_bank(built, out, "offset")
+    where, standardised = resolve_bank(out)
+    assert where == out
+    assert standardised
+
+
+def test_a_half_written_tier_is_not_trusted(built):
+    """words.json without a manifest is some other bank, not a tier."""
+    out = _out(built)
+    out.mkdir()
+    (out / "words.json").write_text("{}", encoding="utf-8")
+    where, standardised = resolve_bank(built)
+    assert where == built
+    assert not standardised
+
+
+def test_standardised_clips_are_not_levelled_again(built):
+    """The silent failure this guards: level_clip replacing a LUFS decision."""
+    out = _out(built)
+    standardise_bank(built, out, "offset")
+    units = {u.name: u for u in load_bank(built)}
+    on_disk = audio_io.read_wav(out / "bravo_1.wav")
+    assert np.allclose(units["bravo_1.wav"].audio, on_disk, atol=1e-6)
+
+
+def test_recorded_clips_are_still_levelled_on_load(built):
+    units = {u.name: u for u in load_bank(built, prefer_standardised=False)}
+    on_disk = audio_io.read_wav(built / "bravo_1.wav")
+    assert not np.allclose(units["bravo_1.wav"].audio, on_disk, atol=1e-6)

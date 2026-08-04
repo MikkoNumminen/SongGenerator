@@ -15,7 +15,8 @@ from .analysis import analyse, report as analysis_report
 from .detect import detect_vocal
 from .mapping import (
     BankError, clean_slots, decide_shifts, load_bank, mimicry, plan_words,
-    precompute_shifted, render, mix as mix_buses, report as mapping_report,
+    precompute_shifted, render, resolve_bank, mix as mix_buses,
+    report as mapping_report,
 )
 from .separate import SeparationError, separate
 from .util import fmt_duration, resolve_device, work_dir_for
@@ -66,6 +67,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="which prebuilt bank to sing with")
     p.add_argument("--words-dir", type=Path, default=None,
                    help="a bank directory directly, overriding --bank")
+    p.add_argument("--raw-clips", action="store_true",
+                   help="sing from the recorded clips even when a standardised "
+                        "tier exists beside them")
     p.add_argument("--bare-syllables", action="store_true",
                    help="let lone syllables be sung on their own, not just used to "
                         "spell words (the pre-words-only behaviour)")
@@ -187,9 +191,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.bare_syllables:
         config.PLACE_BARE_SYLLABLES = True
     try:
-        units = load_bank(words_dir)
+        units = load_bank(words_dir, prefer_standardised=not args.raw_clips)
         if not args.json:
-            print(f"  bank      {args.bank} ({words_dir})")
+            singing_from, standardised = resolve_bank(
+                words_dir, prefer_standardised=not args.raw_clips)
+            how = "standardised" if standardised else "as recorded"
+            print(f"  bank      {args.bank} ({singing_from}, {how})")
     except BankError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_ERROR
