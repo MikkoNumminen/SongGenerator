@@ -60,7 +60,7 @@ class Unit:
     def is_word_like(self) -> bool:
         """True when every part is a real word, not a bare syllable.
 
-        A clip of "pas" fits a slot as neatly as one of "paska" and says
+        A clip of "pas" fits a slot as neatly as one of "bravo" and says
         nothing, so syllables are kept for spelling words rather than sung on
         their own.
         """
@@ -225,7 +225,7 @@ def compose_words(units: list[Unit]) -> list[Unit]:
     """Spell whole words out of single-syllable clips.
 
     A bank of syllables reaches words that were never recorded intact --
-    paviaani from pa + vi + aa + ni. The joins are crossfades rather than the
+    calculator from pa + vi + aa + ni. The joins are crossfades rather than the
     singer's own transitions, so these are worth less than a real recording of
     the same word and the mapper prefers a genuine clip wherever one exists.
     They are what makes a handful of syllables cover a whole song.
@@ -337,7 +337,7 @@ def find_climaxes(groups: list[list[Slot]], min_slots: int = 1) -> set[int]:
 
     Only phrases long enough to hold the payoff are eligible. Ranking on
     intensity alone picked two four-slot phrases in a song whose shortest
-    paviaani unit is five syllables, so the climax could never be placed and
+    calculator unit is five syllables, so the climax could never be placed and
     silently never was.
     """
     if not groups:
@@ -375,8 +375,8 @@ def _choose(units: list[Unit], remaining: int, span_s: float,
     """
     fits = [u for u in units if u.syllables <= remaining]
     if not allow_climax:
-        # eee and paviaani are a payoff, not vocabulary. Outside a peak the
-        # song runs on paska, perse, pillu and pornolehti.
+        # aah and calculator are a payoff, not vocabulary. Outside a peak the
+        # song runs on bravo, tango, delta and kilometer.
         fits = [u for u in fits if not u.is_climax]
     if not allow_shouts:
         fits = [u for u in fits if not u.is_bare_shout] or fits
@@ -441,7 +441,7 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
     # texture rather than events, which buries them on a smooth song.
     #
     # Peaks are exempt: thinning at random was silently discarding the very
-    # phrases reserved for paviaani, so the payoff never arrived at all.
+    # phrases reserved for calculator, so the payoff never arrived at all.
     fill = config.PHRASE_FILL
     keep = {id(g) for i, g in enumerate(groups) if i in climaxes}
     if fill >= 1.0:
@@ -487,7 +487,7 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
             targets = [s.midi for s in group[i:]]
 
             if remaining == 1:
-                # A one-syllable unit -- a shouted "eee" -- fits the leftover
+                # A one-syllable unit -- a shouted "aah" -- fits the leftover
                 # slot exactly, which beats every ODD_SLOT_POLICY fudge. But it
                 # is the ONLY thing that fits, so without a budget it wins every
                 # odd phrase in the song and the shout stops being an event.
@@ -547,12 +547,12 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
 
             # A shout announcing the unit that follows. Expected before the
             # payoff and occasionally not, which is where the surprise lives:
-            # an ear set up for paviaani and given pornolehti is the joke.
-            # Skipped when a recorded eee+paviaani already fits, since that clip
+            # an ear set up for calculator and given kilometer is the joke.
+            # Skipped when a recorded aah+calculator already fits, since that clip
             # carries the singer's own transition and cannot be bettered by
             # butting two clips together.
             if (not unit.is_bare_shout
-                    and not unit.words[:1] == ["eee"]
+                    and not unit.words[:1] == ["aah"]
                     and shouts_used < shout_budget
                     and remaining > unit.syllables):
                 bias = config.SHOUT_LEAD_IN_CLIMAX_BIAS if unit.is_climax else 1.0

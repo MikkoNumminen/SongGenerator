@@ -6,7 +6,7 @@ Default workflow -- rename the files:
 
     1. python -m song_generator.extract_words <scene>     cuts words/candidates/
     2. Play them. Delete the junk. Rename the keepers after the word you
-       heard: paska1.wav, paska2.wav, perse1.wav, paviaani_low.wav ...
+       heard: bravo1.wav, bravo2.wav, tango1.wav, calculator_low.wav ...
     3. python -m song_generator.build_bank                reads the names
 
 Anything still carrying its original c07__4syl__... name is ignored, so
@@ -107,7 +107,7 @@ class Named:
 
 SYLLABLES = {s for parts in config.WORD_SPELLING.values() for s in parts}
 
-# Words and syllables share one namespace, matched longest first so "paska" is
+# Words and syllables share one namespace, matched longest first so "bravo" is
 # never read as the syllable "pas" plus leftovers, and "pas" on its own is
 # still recognised as a syllable rather than rejected.
 _BANK_BY_LENGTH = sorted(set(config.WORD_SYLLABLES) | SYLLABLES, key=len, reverse=True)
@@ -117,10 +117,10 @@ _BANK_BY_LENGTH = sorted(set(config.WORD_SYLLABLES) | SYLLABLES, key=len, revers
 _SEPARATORS = "_- .()"
 
 
-# A held shout gets spelled however it sounded: eee, eeei, eiii, heei, eeiii.
+# A held shout gets spelled however it sounded: aah, aaah, ahh, heei, aaahh.
 # They are one gesture, so any run of these letters reads as the shout rather
 # than forcing a house spelling on someone naming clips by ear.
-_SHOUT_CHARS = frozenset("eih")
+_SHOUT_CHARS = frozenset(config.SHOUT_CHARS)
 
 
 def _shout_run(raw: str, i: int) -> int:
@@ -140,16 +140,16 @@ def syllables_of(token: str) -> int:
 def parse_phrase(stem: str) -> tuple[list[str], str] | None:
     """Read a clip name into the sequence of words it contains.
 
-        paska1           -> (['paska'], '1')
-        paviaani_low     -> (['paviaani'], 'low')
-        persepilluperse  -> (['perse', 'pillu', 'perse'], '')
-        perse-pillu_2    -> (['perse', 'pillu'], '2')
+        bravo1           -> (['bravo'], '1')
+        calculator_low     -> (['calculator'], 'low')
+        tangodeltatango  -> (['tango', 'delta', 'tango'], '')
+        tango-delta_2    -> (['tango', 'delta'], '2')
 
     Multi-word names matter because a clip holding two words also holds the
     real sung transition between them, which is worth far more than the same
     two words cut apart and spliced back together.
 
-    Returns None when a trailing fragment is left over -- 'paskapersepor' ends
+    Returns None when a trailing fragment is left over -- 'bravotangopor' ends
     mid-word, and treating 'por' as a variant label would quietly admit a clip
     that cuts off mid-syllable. A variant must therefore be purely numeric or
     introduced by a separator; anything else is a fragment.
@@ -164,8 +164,8 @@ def parse_phrase(stem: str) -> tuple[list[str], str] | None:
             i += 1
             after_separator = True
             continue
-        # Longest wins, so "paska" beats the syllable "pas", and a shout spelled
-        # "eeei" beats the shorter canonical "eee" hiding inside it.
+        # Longest wins, so "bravo" beats the syllable "pas", and a shout spelled
+        # "aaah" beats the shorter canonical "aah" hiding inside it.
         best_word, best_len = None, 0
         for word in _BANK_BY_LENGTH:
             if raw.startswith(word, i) and len(word) > best_len:
@@ -173,7 +173,7 @@ def parse_phrase(stem: str) -> tuple[list[str], str] | None:
 
         # A shout run only counts when what follows it is a separator, the end
         # of the name, or another bank word. Without that check the variant
-        # label in "paska-high" is eaten, since h and i are both shout letters.
+        # label in "bravo-high" is eaten, since h and i are both shout letters.
         # Not straight after a separator: that position introduces a variant
         # label, and labels like "high" or "hei" are made of shout letters.
         run = 0 if after_separator else _shout_run(raw, i)
@@ -185,7 +185,7 @@ def parse_phrase(stem: str) -> tuple[list[str], str] | None:
                 or any(raw.startswith(w, after) for w in _BANK_BY_LENGTH)
             )
             if follows_cleanly:
-                best_word, best_len = "eee", run
+                best_word, best_len = "aah", run
 
         if best_word is None:
             break
@@ -426,8 +426,8 @@ def _collect(args, device) -> list[tuple[str, str, np.ndarray, dict]]:
     if not named:
         raise LabelError(
             f"nothing in {args.candidates} is named after a bank word yet.\n"
-            f"       Rename the keepers to e.g. paska1.wav, perse2.wav, "
-            f"paviaani_low.wav\n"
+            f"       Rename the keepers to e.g. bravo1.wav, tango2.wav, "
+            f"calculator_low.wav\n"
             f"       (any of: {', '.join(config.WORD_SYLLABLES)})"
         )
 

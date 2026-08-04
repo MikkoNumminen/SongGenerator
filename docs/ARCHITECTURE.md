@@ -1,6 +1,6 @@
 # Architecture
 
-Read `docs/GLOSSARY.md` first — slot, unit, phrase, mimicry and fold all carry
+Read `docs/GLOSSARY.md` first, slot, unit, phrase, mimicry and fold all carry
 specific meanings here.
 
 ## The idea in one paragraph
@@ -9,7 +9,7 @@ A song's singer already decided everything musical: when each syllable starts,
 how long it lasts, what note it lands on. The tool recovers those decisions from
 the original vocal and then puts different words on them. It never invents a
 musical decision, which is why a song *without* a vocal (Mode B) is refused
-rather than attempted — there would be nothing to borrow.
+rather than attempted. There would be nothing to borrow.
 
 ## Pipeline
 
@@ -28,13 +28,13 @@ song.mp4
    │
    ├─ analysis.py ───── melody + timing ── analysis.json
    │                    F0 contour, note boundaries from TWO signals
-   │                    (pitch change AND energy onset — neither alone
+   │                    (pitch change AND energy onset, neither alone
    │                     sees both a slur and a repeated note)
    │
    ├─ mapping.py ────── plan + render ── the whole arrangement decision
    │      clean_slots      blips merged, held notes split
    │      group_phrases    slots → sung lines
-   │      find_climaxes    where paviaani is allowed
+   │      find_climaxes    where calculator is allowed
    │      plan_words       which unit goes where
    │      decide_shifts    which units sing along (MIMICRY)
    │      render           audio, via pitchshift
@@ -56,7 +56,7 @@ song.mp4
 | `analysis.py` | Melody and syllable timing out of the original vocal | `analyse`, `Analysis` |
 | `mapping.py` | Every arrangement decision, plus render and mix | `load_bank`, `plan_words`, `render`, `mix` |
 | `pitchshift.py` | WORLD or Rubber Band; octave folding | `render_unit`, `fold_shift` |
-| `config.py` | Every tunable, grouped by stage, with the reasoning | — |
+| `config.py` | Every tunable, grouped by stage, with the reasoning |, |
 | `util.py` | Device resolution, work-dir naming, formatting | `resolve_device`, `work_dir_for` |
 
 ### Building the bank
@@ -68,10 +68,10 @@ These do not run during a song. They turn source videos into reviewed clips.
 | `mine_words.py` | Many sources at once: separate, cut candidates, one folder each |
 | `extract_words.py` | Cut one source into candidate clips |
 | `flatten.py` | Collapse per-source folders into one flat reviewable folder |
-| `label_words.py` | Speech-recognition *hints* (unreliable here — see AGENTS.md) |
+| `label_words.py` | Speech-recognition *hints* (unreliable here, see AGENTS.md) |
 | `precheck.py` | Per-clip guessing, constrained by measured syllable count |
 | `hunt.py` | Find a shout-then-word shape on the envelope, no model needed |
-| `successors.py` | Re-cut what follows a shout, since cutting severs `eee paviaani` |
+| `successors.py` | Re-cut what follows a shout, since cutting severs `aah calculator` |
 | `set_aside.py` | Take syllable clips out of the bank without deleting them |
 | `build_bank.py` | Reviewed clips → `words/words.json`; filename parsing lives here |
 
@@ -117,7 +117,7 @@ notes is a mapping decision, and baking it into the analysis would make the
 record lie.
 
 **`config.py` holds reasoning, not just values.** Several constants have
-non-obvious values arrived at by measurement — `PREFER_LONGER_UNITS` was 1.4 and
+non-obvious values arrived at by measurement, `PREFER_LONGER_UNITS` was 1.4 and
 made the longest clip win every slot. The comment records that so it is not
 raised again casually.
 

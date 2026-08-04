@@ -1,6 +1,6 @@
-"""Mine many source clips at once for bank material.
+﻿"""Mine many source clips at once for bank material.
 
-    python -m song_generator.mine_words "D:/kuvat/kuvat/pilluvittu*.mp4"
+    python -m song_generator.mine_words "sources/*.mp4"
 
 For each source it separates the vocal, cuts candidate regions, and where the
 recogniser is confident renames them to a bank name. Each source gets its own
@@ -8,7 +8,7 @@ subfolder, because a few hundred candidates in one flat directory is unusable
 to listen through.
 
 Shouts get special handling. A sustained single-nucleus region is very likely a
-held "eee" or a yell rather than a clipped word, so it is flagged as such --
+held "aah" or a yell rather than a clipped word, so it is flagged as such --
 speech recognition is no help at all for non-verbal noise, and these are worth
 keeping: a one-syllable unit fills the leftover slot an odd phrase produces,
 which nothing else in the bank can do.
@@ -93,7 +93,7 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     p.add_argument("sources", nargs="+",
-                   help="files or glob patterns, e.g. 'D:/kuvat/kuvat/pilluvittu*.mp4'")
+                   help="files or glob patterns, e.g. 'sources/*.mp4'")
     p.add_argument("-o", "--out", type=Path, default=Path("words/candidates"))
     p.add_argument("--device", default=None)
     p.add_argument("--asr", action="store_true",
@@ -164,8 +164,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"\n  folder    {args.out.resolve()}")
     print("  One subfolder per source. Play them, delete the junk, and rename")
     print("  the keepers after what you hear:")
-    print("      paska1.wav   persepillu2.wav   eee1.wav   huuto3.wav")
-    print("      eeepaviaani1.wav      (multi-word names are read as sequences)")
+    print("      bravo1.wav   tangodelta2.wav   eee1.wav   huuto3.wav")
+    print("      eeecalculator1.wav      (multi-word names are read as sequences)")
     print("\n  Then:  python -m song_generator.build_bank")
     return 0 if summary.ok else 1
 

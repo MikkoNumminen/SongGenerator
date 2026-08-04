@@ -24,7 +24,7 @@ with instead of taken on faith.
 
 ## Iteration log
 
-### Iteration 0 — baseline: 5.0
+### Iteration 0, baseline: 5.0
 
 | # | Dimension | Score | Why |
 |---|---|---|---|
@@ -46,38 +46,38 @@ is everything that lets someone who was not there pick it up.
 
 ---
 
-### Iteration 1 — the four lowest: 7.4
+### Iteration 1. The four lowest: 7.4
 
 Wrote the missing documents, worst score first.
 
-- `AGENTS.md` — how to run things, the one irreversible rule, the traps that
+- `AGENTS.md`, how to run things, the one irreversible rule, the traps that
   have already bitten (illegal filename characters, non-deterministic ASR,
   filenames as a parsing contract), and a reading order.
-- `docs/GLOSSARY.md` — slot, note, phrase, unit, bank, shift, fold, mimicry,
+- `docs/GLOSSARY.md`, slot, note, phrase, unit, bank, shift, fold, mimicry,
   ceiling, climax, shout, plus the prefix table.
-- `docs/ARCHITECTURE.md` — pipeline diagram, module tables, what lands on disk
+- `docs/ARCHITECTURE.md`, pipeline diagram, module tables, what lands on disk
   and whether it can be regenerated, and why decisions live where they do.
-- `docs/WORKFLOWS.md` — make a track, extend the bank, tune density, chase down
-  a missing `paviaani`, handle a Mode B verdict, verify a change.
-- `README.md` — rewritten. It had claimed "Commit 1 of 4" and "outputs the
+- `docs/WORKFLOWS.md`, make a track, extend the bank, tune density, chase down
+  a missing `calculator`, handle a Mode B verdict, verify a change.
+- `README.md`, rewritten. It had claimed "Commit 1 of 4" and "outputs the
   instrumental bed" for many commits after both stopped being true.
 
 Onboarding 0→9, README 3→9, architecture 4→9, glossary 1→10, runbooks 3→9.
 
-### Iteration 2 — cover the untested logic: 8.9
+### Iteration 2, cover the untested logic: 8.9
 
 The density and climax rules had no tests, and every one of their failures had
-been **silent** — wrong output, never an error. `tests/test_density.py` pins each
+been **silent**, wrong output, never an error. `tests/test_density.py` pins each
 one, including the bug where a peak was chosen on intensity alone and turned out
-too short to hold the payoff, so `paviaani` could never be placed in any render.
+too short to hold the payoff, so `calculator` could never be placed in any render.
 
 Tests 8→9, and `docs/DATA-FORMATS.md` documented every on-disk schema, 7→10.
 
-### Iteration 3 — stop the docs from rotting: 9.6
+### Iteration 3, stop the docs from rotting: 9.6
 
 Documentation that drifts is worse than none: an agent trusting a stale
 instruction runs the wrong command confidently. So the docs are now checked by
-`tests/test_docs.py`, which fails when they disagree with the code —
+`tests/test_docs.py`, which fails when they disagree with the code
 
 - every module appears in the architecture map, and none that was deleted
 - every constant named in a doc exists in `config.py`
@@ -109,17 +109,17 @@ change, rather than only naming what went wrong. Errors 7→9.
 | 9 | Domain glossary | 1 | 10 |
 | 10 | Runbooks | 3 | 10 |
 
-**Mean: 9.6** — up from 5.0. Tests: 159 → 191.
+**Mean: 9.6**, up from 5.0. Tests: 159 → 191.
 
 The four remaining 9s are honest rather than modest:
 
-- **Onboarding (9)** — good, but only proven on this repo's actual traps. A
+- **Onboarding (9)**, good, but only proven on this repo's actual traps. A
   fresh agent might still hit something nobody has hit yet.
-- **Configuration (9)** — every value carries its reasoning, but the file does
+- **Configuration (9)**. Every value carries its reasoning, but the file does
   not say which module consumes each block.
-- **Determinism (9)** — seeded and documented, though nothing *tests* that two
+- **Determinism (9)**, seeded and documented, though nothing *tests* that two
   runs produce identical output.
-- **Errors (9)** — the common paths are actionable; the rarer ones still just
+- **Errors (9)**. The common paths are actionable; the rarer ones still just
   raise.
 
 Each is a real gap rather than a rounding-down, which is why they are not 10s.

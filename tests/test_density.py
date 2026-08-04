@@ -27,11 +27,11 @@ def _unit(words, syllables, dur=0.5):
 @pytest.fixture
 def bank():
     return [
-        _unit(["paska"], 2, 0.45),
-        _unit(["perse", "pillu"], 4, 0.9),
-        _unit(["perse", "pillu", "perse"], 6, 1.4),
-        _unit(["eee"], 1, 0.6),
-        _unit(["eee", "paviaani"], 5, 1.7),
+        _unit(["bravo"], 2, 0.45),
+        _unit(["tango", "delta"], 4, 0.9),
+        _unit(["tango", "delta", "tango"], 6, 1.4),
+        _unit(["aah"], 1, 0.6),
+        _unit(["aah", "calculator"], 5, 1.7),
     ]
 
 
@@ -61,7 +61,7 @@ class TestPhraseFill:
 
 class TestShoutBudget:
     def test_shouts_are_rationed(self, bank, monkeypatch):
-        """eee fits any leftover slot, so without a cap it wins every phrase."""
+        """aah fits any leftover slot, so without a cap it wins every phrase."""
         monkeypatch.setattr(config, "PHRASE_FILL", 1.0)
         monkeypatch.setattr(config, "SHOUT_MAX_SHARE", 0.1)
 
@@ -79,16 +79,16 @@ class TestClimaxes:
         assert len(groups) - 1 in peaks, "the loudest, highest phrase was not a peak"
 
     def test_phrases_too_short_for_the_payoff_are_not_peaks(self):
-        """The bug that made paviaani never appear, in any render.
+        """The bug that made calculator never appear, in any render.
 
         Peaks were ranked on intensity alone, and the highest-scoring phrases
-        were shorter than the shortest paviaani unit. It could not fit, so it
+        were shorter than the shortest calculator unit. It could not fit, so it
         was never placed, and nothing said so.
         """
         groups = group_phrases(_phrases(6, 3, midi=70.0, rms=-10.0))
         assert find_climaxes(groups, min_slots=5) == set()
 
-    def test_paviaani_is_refused_away_from_a_peak(self, bank, monkeypatch):
+    def test_calculator_is_refused_away_from_a_peak(self, bank, monkeypatch):
         monkeypatch.setattr(config, "PHRASE_FILL", 1.0)
         monkeypatch.setattr(config, "CLIMAX_PHRASE_SHARE", 0.0)
         # The floor exists so a short song still gets a payoff; it has to be
@@ -98,10 +98,10 @@ class TestClimaxes:
 
         plan = plan_words(_phrases(12, 6), bank)
         assert not any(p.unit.is_climax for p in plan.placements), (
-            "paviaani was placed outside a peak"
+            "calculator was placed outside a peak"
         )
 
-    def test_paviaani_lands_when_a_peak_can_hold_it(self, bank, monkeypatch):
+    def test_calculator_lands_when_a_peak_can_hold_it(self, bank, monkeypatch):
         monkeypatch.setattr(config, "PHRASE_FILL", 1.0)
         monkeypatch.setattr(config, "CLIMAX_PHRASE_SHARE", 0.4)
         monkeypatch.setattr(config, "CLIMAX_USE_CHANCE", 1.0)
@@ -140,7 +140,7 @@ class TestRawShouts:
     def test_a_shout_inside_a_word_keeps_its_own_pitch(self, bank):
         from song_generator.mapping import build_segments
 
-        unit = _unit(["eee", "paviaani"], 5, 1.7)
+        unit = _unit(["aah", "calculator"], 5, 1.7)
         unit.bounds_s = [0.4, 0.7, 1.0, 1.35]
         unit.syllable_midi = [53.0] * 5
 

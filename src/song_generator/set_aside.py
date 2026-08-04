@@ -5,9 +5,9 @@
 
 Syllables were worth trying -- they map onto a melody 1:1 and can spell words
 that were never recorded intact -- but in practice they crowd out the words. A
-clip of "pas" fills a slot as neatly as one of "paska" and says nothing, and a
-track full of them stops being about paska, perse, pillu, pornolehti and eee
-paviaani.
+clip of "pas" fills a slot as neatly as one of "bravo" and says nothing, and a
+track full of them stops being about bravo, tango, delta, kilometer and aah
+calculator.
 
 So they are renamed rather than deleted:
 
@@ -17,7 +17,7 @@ SYL_ does not parse as a bank word, so those clips leave the bank without
 anything being thrown away, and --restore puts them back. Identifying them by
 ear was real work and it stays recorded in the name.
 
-Shouts are exempt: eee is a genuine utterance, not a fragment of one, and it is
+Shouts are exempt: aah is a genuine utterance, not a fragment of one, and it is
 the only odd-length unit in the bank -- the single leftover slot an odd phrase
 produces has nothing else to fill it.
 """

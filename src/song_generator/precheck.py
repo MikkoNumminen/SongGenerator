@@ -4,8 +4,8 @@
 
 Three states, kept visibly separate so they never blur together:
 
-    paska1.wav                              yours. Confirmed. Never touched.
-    AI_paska__kirby2__c07__1.42-1.98.wav    a machine guess. Needs your ear.
+    bravo1.wav                              yours. Confirmed. Never touched.
+    AI_bravo__kirby2__c07__1.42-1.98.wav    a machine guess. Needs your ear.
     TODO_4syl__muumit__c03__0.50-1.10.wav   no guess. Unknown.
 
 Only a clip with no prefix counts. Neither AI_ nor TODO_ parses as a bank word,
@@ -14,8 +14,8 @@ confident it looked.
 
 Two things make the guessing better than transcribing whole sources:
 
-  Syllable count constrains the answer. A two-nucleus clip can only be paska,
-  perse or pillu; a four-nucleus one only pornolehti or paviaani -- pa-vi-aa-ni
+  Syllable count constrains the answer. A two-nucleus clip can only be bravo,
+  tango or delta; a four-nucleus one only kilometer or calculator -- pa-vi-aa-ni
   and por-no-leh-ti being the same length, that is the one pair the recogniser
   actually has to tell apart. The measurement comes from the envelope, so it is
   independent of anything the model thinks.
@@ -46,7 +46,7 @@ AI = "AI_"
 TODO = "TODO_"
 PREFIXES = (AI, TODO)
 
-PROMPT = "paska, perse, pillu, pornolehti, paviaani"
+PROMPT = "bravo, tango, delta, kilometer, calculator"
 
 STRONG = 0.72
 WEAK = 0.45

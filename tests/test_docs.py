@@ -16,6 +16,10 @@ from song_generator import config
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ROOT / "docs"
 
+# Gitignored, machine-specific, and deliberately not part of the published
+# module set, so the architecture map neither lists it nor should.
+_LOCAL_ONLY = {"vocabulary_local"}
+
 
 def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
@@ -39,7 +43,7 @@ def test_every_module_is_in_the_architecture_map():
     """A module nobody documented is a module nobody will find."""
     modules = {
         p.stem for p in (ROOT / "src" / "song_generator").glob("*.py")
-        if not p.stem.startswith("__")
+        if not p.stem.startswith("__") and p.stem not in _LOCAL_ONLY
     }
     described = read(DOCS / "ARCHITECTURE.md")
     missing = sorted(m for m in modules if f"{m}.py" not in described)
@@ -57,11 +61,11 @@ def _referenced_constants(text: str) -> set[str]:
     """SCREAMING_CASE names a doc claims exist in config.
 
     Example filenames are excluded: an uppercase name ending in a digit is
-    something like PASKA3.wav, not a constant.
+    something like BRAVO3.wav, not a constant.
     """
     return {
         name for name in re.findall(r"\b([A-Z][A-Z0-9_]{4,})\b", text)
-        if not name.startswith(("TODO", "NOTE", "MODE", "SYL", "THEN", "EEE", "AI"))
+        if not name.startswith(("TODO", "NOTE", "MODE", "SYL", "THEN", "AAH", "AI"))
         and not name[-1].isdigit()
     }
 
@@ -79,7 +83,7 @@ def test_constants_named_in_docs_actually_exist(doc):
         "AGENTS", "README", "GLOSSARY", "ARCHITECTURE", "WORKFLOWS",
         "DEMUCS", "WORLD", "PATH", "JSON", "LUFS", "PYTHONPATH", "GPU",
         "NVIDIA", "TSV", "BOM", "DENSITY", "CLIMAXES", "STAGE", "LISTEN",
-        "FIRST", "FORMATS", "PASKA", "OTHER",
+        "FIRST", "FORMATS", "BRAVO", "OTHER",
     }
     missing = sorted(_referenced_constants(read(ROOT / doc)) - known - allowed)
     assert not missing, f"{doc} names constants that do not exist: {missing}"
@@ -118,7 +122,7 @@ def test_workflows_commands_name_real_modules():
     """A runbook telling you to run a module that does not exist is worse than none."""
     modules = {
         p.stem for p in (ROOT / "src" / "song_generator").glob("*.py")
-        if not p.stem.startswith("__")
+        if not p.stem.startswith("__") and p.stem not in _LOCAL_ONLY
     }
     invoked = set(re.findall(r"-m song_generator\.(\w+)", read(DOCS / "WORKFLOWS.md")))
     missing = sorted(invoked - modules)

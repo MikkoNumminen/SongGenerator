@@ -46,8 +46,8 @@ What the original singer did. Written by `analysis.py`.
 
 `source` records which detector opened each note, and is worth reading when
 timing looks wrong. A pitch change and an energy onset have different blind
-spots — neither alone sees both a slurred note change and two syllables sung on
-one pitch — so a run consisting only of `"pitch"` means the onset detector has
+spots. Neither alone sees both a slurred note change and two syllables sung on
+one pitch. So a run consisting only of `"pitch"` means the onset detector has
 stopped contributing.
 
 These are **notes, not slots**. Slots are notes after cleanup, and cleanup
@@ -61,10 +61,10 @@ The bank. Written by `build_bank.py`.
 
 ```jsonc
 {
-  "eee-paviaani_1.wav": {
-    "words": ["eee", "paviaani"],
+  "aah-calculator_1.wav": {
+    "words": ["aah", "calculator"],
     "variant": "1",
-    "source_clip": "eeeipaviaani.wav",
+    "source_clip": "eeeicalculator.wav",
     "duration_s": 1.6437,
     "midi": 55.2,
     "note": "G3",
@@ -77,7 +77,7 @@ The bank. Written by `build_bank.py`.
 }
 ```
 
-`syllable_bounds_s` has `syllables - 1` entries — the split points inside the
+`syllable_bounds_s` has `syllables - 1` entries. The split points inside the
 clip. They are what make a multi-syllable word land its syllables on the
 melody's note onsets instead of drifting across them.
 
@@ -120,7 +120,7 @@ because Notepad and PowerShell both write a BOM.
 
 ```
 word	variant	start	end	syl	pitch	candidate
-paska		0.090	0.480	2	F3	c01.wav
+bravo		0.090	0.480	2	F3	c01.wav
 ?		4.060	4.900	5	F#3	c06.wav
 ```
 
@@ -130,7 +130,7 @@ paska		0.090	0.480	2	F3	c01.wav
 
 ## Filename conventions
 
-Filenames carry meaning in `words/candidates/`, and the parsing is real code —
+Filenames carry meaning in `words/candidates/`, and the parsing is real code
 `parse_phrase` in `build_bank.py`, with the edge cases pinned by tests.
 
 ```
@@ -143,8 +143,8 @@ TODO_2syl__kirby2__c07__1.42-1.98.wav
  └───────────────────────────── review state
 ```
 
-An unprefixed name is a claim about content: `paska1`, `persepillu`,
-`eeepaviaani`. See `docs/GLOSSARY.md` for the prefix table.
+An unprefixed name is a claim about content: `bravo1`, `tangodelta`,
+`eeecalculator`. See `docs/GLOSSARY.md` for the prefix table.
 
 **No prefix parses as a bank word.** That is what makes it structurally
 impossible for an unreviewed clip to reach the bank, however confident a machine

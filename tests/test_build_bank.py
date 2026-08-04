@@ -1,4 +1,4 @@
-"""Filename parsing and syllable boundaries for the word bank.
+﻿"""Filename parsing and syllable boundaries for the word bank.
 
 The rename workflow is the primary way clips enter the bank, so how a filename
 parses is load-bearing: a name that fails to parse is silently ignored, which
@@ -24,27 +24,27 @@ class TestPhraseNames:
     """
 
     @pytest.mark.parametrize("stem,words,variant", [
-        ("persepillu", ["perse", "pillu"], ""),
-        ("persepilluperse", ["perse", "pillu", "perse"], ""),
-        ("perse-pillu_2", ["perse", "pillu"], "2"),
-        ("paskapersepornolehti", ["paska", "perse", "pornolehti"], ""),
-        ("pillupaska1", ["pillu", "paska"], "1"),
-        ("paska", ["paska"], ""),
-        ("PASKA-PERSE", ["paska", "perse"], ""),
+        ("tangodelta", ["tango", "delta"], ""),
+        ("tangodeltatango", ["tango", "delta", "tango"], ""),
+        ("tango-delta_2", ["tango", "delta"], "2"),
+        ("bravotangokilometer", ["bravo", "tango", "kilometer"], ""),
+        ("deltabravo1", ["delta", "bravo"], "1"),
+        ("bravo", ["bravo"], ""),
+        ("BRAVO-TANGO", ["bravo", "tango"], ""),
     ])
     def test_reads_the_whole_sequence(self, stem, words, variant):
         assert parse_phrase(stem) == (words, variant)
 
     @pytest.mark.parametrize("stem,words", [
-        ("per", ["per"]),
-        ("nolehti", ["no", "leh", "ti"]),
-        ("paskapersepor", ["paska", "perse", "por"]),
-        ("pillupaskapor", ["pillu", "paska", "por"]),
+        ("tan", ["tan"]),
+        ("lometer", ["lo", "me", "ter"]),
+        ("bravotangoki", ["bravo", "tango", "ki"]),
+        ("deltabravoki", ["delta", "bravo", "ki"]),
     ])
     def test_syllable_names_parse_as_syllables(self, stem, words):
         """These read as fragments only while syllables are not first-class.
 
-        Once the bank holds syllables, 'nolehti' is precisely no + leh + ti,
+        Once the bank holds syllables, 'lometer' is precisely lo + me + ter,
         and a clip named that way is three usable slots rather than a chopped
         word. Naming is the user's act, so a name that spells out syllables is
         taken at its word.
@@ -52,13 +52,13 @@ class TestPhraseNames:
         assert parse_phrase(stem) == (words, "")
 
     @pytest.mark.parametrize("stem,words", [
-        ("eeeipaviaani", ["eee", "paviaani"]),
-        ("eeiiipaviaani", ["eee", "paviaani"]),
-        ("eiiipaviaani", ["eee", "paviaani"]),
-        ("persee", ["perse", "eee"]),
+        ("aaahcalculator", ["aah", "calculator"]),
+        ("aaahhcalculator", ["aah", "calculator"]),
+        ("ahhcalculator", ["aah", "calculator"]),
+        ("tangoaah", ["tango", "aah"]),
     ])
     def test_a_shout_is_accepted_however_it_is_spelled(self, stem, words):
-        """One gesture, spelled by ear: eee, eeei, eiii, eeiii all mean it.
+        """One gesture, spelled by ear: aah, aaah, ahh, aaahh all mean it.
 
         Someone naming clips by ear writes what they heard, and a held shout
         has no canonical spelling. Insisting on one would mean silently
@@ -67,11 +67,11 @@ class TestPhraseNames:
         assert parse_phrase(stem) == (words, "")
 
     def test_a_shout_run_does_not_eat_a_variant_label(self):
-        """h and i are shout letters, so 'high' must not be read as a shout."""
-        assert parse_phrase("paska-high") == (["paska"], "high")
-        assert parse_phrase("pillu_hei") == (["pillu"], "hei")
+        """a and h are shout letters, so 'haze' must not be read as a shout."""
+        assert parse_phrase("bravo-haze") == (["bravo"], "haze")
+        assert parse_phrase("delta_hah") == (["delta"], "hah")
 
-    @pytest.mark.parametrize("stem", ["xyz", "paskaxx"])
+    @pytest.mark.parametrize("stem", ["xyz", "bravoxx"])
     def test_still_rejects_names_that_spell_nothing(self, stem):
         assert parse_phrase(stem) is None, (
             f"{stem!r} was accepted despite ending in something that is neither "
@@ -79,30 +79,30 @@ class TestPhraseNames:
         )
 
     def test_longest_word_wins(self):
-        """'pornolehti' must not be read as some shorter word plus junk."""
-        assert parse_phrase("pornolehti") == (["pornolehti"], "")
+        """'kilometer' must not be read as some shorter word plus junk."""
+        assert parse_phrase("kilometer") == (["kilometer"], "")
 
     def test_separator_admits_a_word_like_variant(self):
-        """'low' is a label after a separator, but a fragment without one."""
-        assert parse_phrase("paviaani_low") == (["paviaani"], "low")
-        assert parse_phrase("paviaanilow") is None
+        """'quiet' is a label after a separator, but a fragment without one."""
+        assert parse_phrase("calculator_quiet") == (["calculator"], "quiet")
+        assert parse_phrase("calculatorquiet") is None
 
 SR = config.SAMPLE_RATE
 
 
 @pytest.mark.parametrize("stem,expected", [
-    ("paska", ("paska", "")),
-    ("paska1", ("paska", "1")),
-    ("paska2", ("paska", "2")),
-    ("paska_1", ("paska", "1")),
-    ("paska_low", ("paska", "low")),
-    ("paska-high", ("paska", "high")),
-    ("paska 3", ("paska", "3")),
-    ("PASKA1", ("paska", "1")),
-    ("Paviaani_Low", ("paviaani", "low")),
-    ("pornolehti3", ("pornolehti", "3")),
-    ("perse", ("perse", "")),
-    ("pillu_take2", ("pillu", "take2")),
+    ("bravo", ("bravo", "")),
+    ("bravo1", ("bravo", "1")),
+    ("bravo2", ("bravo", "2")),
+    ("bravo_1", ("bravo", "1")),
+    ("bravo_quiet", ("bravo", "quiet")),
+    ("bravo-haze", ("bravo", "haze")),
+    ("bravo 3", ("bravo", "3")),
+    ("BRAVO1", ("bravo", "1")),
+    ("Calculator_Quiet", ("calculator", "quiet")),
+    ("kilometer3", ("kilometer", "3")),
+    ("tango", ("tango", "")),
+    ("delta_soft", ("delta", "soft")),
 ])
 def test_parse_name_accepts_every_naming_style(stem, expected):
     assert parse_name(stem) == expected
@@ -121,16 +121,16 @@ def test_parse_name_rejects_non_bank_names(stem):
 def test_scan_folder_splits_named_from_unnamed(tmp_path):
     import soundfile as sf
 
-    for name in ("paska1.wav", "perse_low.wav", "persepillu.wav",
+    for name in ("bravo1.wav", "tango_quiet.wav", "tangodelta.wav",
                  "c03__2syl__F3__1.0-1.4.wav"):
         sf.write(str(tmp_path / name), np.zeros(1000, dtype=np.float32), SR)
 
     named, ignored = scan_folder(tmp_path)
-    assert sorted(n.stem for n in named) == ["paska", "perse", "perse-pillu"]
+    assert sorted(n.stem for n in named) == ["bravo", "tango", "tango-delta"]
     assert [p.name for p in ignored] == ["c03__2syl__F3__1.0-1.4.wav"]
 
-    phrase = next(n for n in named if n.stem == "perse-pillu")
-    assert phrase.words == ["perse", "pillu"]
+    phrase = next(n for n in named if n.stem == "tango-delta")
+    assert phrase.words == ["tango", "delta"]
     assert phrase.syllables == 4
 
 

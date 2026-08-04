@@ -6,10 +6,10 @@ Mining writes one subfolder per source, which is fine for the machine and
 useless for a person: reviewing means opening fifty folders. This puts every
 clip in one place and tags the ones nobody has confirmed yet.
 
-    TODO_paska__kirby2__c07__1.42-1.98.wav      a guess, unconfirmed
+    TODO_bravo__kirby2__c07__1.42-1.98.wav      a guess, unconfirmed
     TODO_shout__muumit__c11__3.20-3.80.wav      a held shout, unidentified
     TODO_4syl__uutiset__c03__0.50-1.10.wav      four syllables, no guess
-    paska1.wav                                  confirmed by you
+    bravo1.wav                                  confirmed by you
 
 Removing the TODO_ prefix IS the act of confirming a clip. Nothing tagged can
 reach the bank: "TODO_..." does not parse as a bank word, so an unreviewed
@@ -17,7 +17,7 @@ guess is structurally incapable of being built into the word bank, however
 confident the recogniser was about it.
 
 Sorting the folder by name groups clips by what they probably are, so all the
-likely paska sit together, all the shouts sit together, and so on.
+likely bravo sit together, all the shouts sit together, and so on.
 """
 
 from __future__ import annotations
@@ -54,7 +54,9 @@ def describe(stem: str) -> str:
 
 def source_tag(folder_name: str) -> str:
     """Shorten the source folder name; they all share a long common prefix."""
-    short = re.sub(r"^pilluvittu", "", folder_name, flags=re.IGNORECASE)
+    prefix = config.SOURCE_NAME_PREFIX
+    short = (re.sub(f"^{re.escape(prefix)}", "", folder_name, flags=re.IGNORECASE)
+             if prefix else folder_name)
     return short or "orig"
 
 
@@ -136,7 +138,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"\n  Sort by name and the guesses group together. Rename a clip to")
     print(f"  confirm it -- dropping the {TODO} prefix is what makes it count:")
-    print(f"      {TODO}paska__kirby2__c07__1.42-1.98.wav   ->   paska1.wav")
+    print(f"      {TODO}bravo__kirby2__c07__1.42-1.98.wav   ->   bravo1.wav")
     print(f"  Anything still tagged is ignored by build_bank, so leaving a clip")
     print(f"  alone is always safe.")
     return 0
