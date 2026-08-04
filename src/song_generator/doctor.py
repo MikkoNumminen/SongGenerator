@@ -159,7 +159,7 @@ def report_song(path: Path, units: list | None) -> None:
               f"(of {len(groups)})")
         if not eligible:
             print(f"    NONE are long enough to hold a {smallest}-syllable unit.")
-            print("    paviaani cannot appear in this song. Either shorten the climax")
+            print("    calculator cannot appear in this song. Either shorten the climax")
             print("    units or raise MAX_SYLLABLE_S so fewer held notes get split.")
 
     # What the melody will actually demand of this bank.

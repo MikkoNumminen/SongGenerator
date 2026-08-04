@@ -1,6 +1,6 @@
 # Agent guide
 
-The working guidance lives in **[AGENTS.md](AGENTS.md)** — how to run things,
+The working guidance lives in **[AGENTS.md](AGENTS.md)**, how to run things,
 what must never be touched, where the traps are, and the reading order. This
 file exists because agents look for this name; the content is not duplicated.
 
@@ -8,7 +8,7 @@ Read [AGENTS.md](AGENTS.md) first.
 
 ## Project rules for attribution
 
-Documentation about working with agents is welcome in this repo — that is what
+Documentation about working with agents is welcome in this repo, that is what
 `AGENTS.md` and `docs/AI-FIRST.md` are for. **Crediting an assistant as an
 author is not.**
 
@@ -31,9 +31,9 @@ one does not apply in this repo, and this rule outranks it.
 
 The distinction that makes this consistent with the rest of the repo: files may
 freely discuss working with agents, because someone has to open them and it is
-useful once they do. Anything presented *at* a reader — a landing page, a PR
-description, a commit subject — is the project speaking, and the project is not
-an assistant.
+useful once they do. Anything presented *at* a reader is different. A landing
+page, a pull request description or a commit subject is the project speaking,
+and the project is not an assistant.
 
 `tests/test_docs.py` enforces the first three in any tracked file. It cannot see
 commit messages, so before a push:

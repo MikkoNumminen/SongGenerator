@@ -1,4 +1,4 @@
-"""Rebuild the bank from cleaner separation, keeping every label.
+﻿"""Rebuild the bank from cleaner separation, keeping every label.
 
     python -m song_generator.recut_bank
 
@@ -57,7 +57,9 @@ def work_dirs() -> dict[str, Path]:
         if not (d / "vocal.wav").is_file():
             continue
         out[d.name] = d
-        short = re.sub(r"^pilluvittu", "", d.name, flags=re.IGNORECASE)
+        prefix = config.SOURCE_NAME_PREFIX
+        short = (re.sub(f"^{re.escape(prefix)}", "", d.name, flags=re.IGNORECASE)
+                 if prefix else d.name)
         out.setdefault(short or d.name, d)
     return out
 
@@ -67,7 +69,7 @@ def from_name(source_clip: str, dirs: dict[str, Path]) -> Origin | None:
     if not m:
         return None
     tag, a, b = m.group(1).lower(), float(m.group(2)), float(m.group(3))
-    d = dirs.get(tag) or dirs.get(f"pilluvittu{tag}")
+    d = dirs.get(tag) or dirs.get(f"session{tag}")
     return Origin(d, a, b, "name") if d else None
 
 

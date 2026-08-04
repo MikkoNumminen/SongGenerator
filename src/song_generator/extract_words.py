@@ -1,6 +1,6 @@
-"""Cut individual sung word clips out of a source scene, ready for the bank.
+﻿"""Cut individual sung word clips out of a source scene, ready for the bank.
 
-    python -m song_generator.extract_words D:\\path\\scene.mp4
+    python -m song_generator.extract_words sources/session.mp4
 
 Separates the vocal first (any music under the singing would otherwise ride
 along into every clip), finds the sung regions, counts each one's syllable
@@ -10,8 +10,8 @@ carry everything needed to label them by ear:
     c03__2syl__F3__1.42-1.98.wav
 
 The syllable count does most of the work: the bank splits cleanly into
-2-syllable words (paska, perse, pillu) and 4-syllable ones (pornolehti,
-paviaani), so a candidate's count already halves the possibilities. Rename the
+2-syllable words (bravo, tango, delta) and 4-syllable ones (kilometer,
+calculator), so a candidate's count already halves the possibilities. Rename the
 keepers to `<word>.wav` or `<word>_<variant>.wav` and drop them in words/.
 
 Deliberately does not try to recognise which word was sung. Speech recognition
@@ -263,8 +263,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {c.i:>3}  {c.start_s:6.2f} {c.end_s:6.2f} {c.dur_s * 1000:5.0f}ms "
               f"{c.n_syllables:>3}   {c.note:<5} {c.rms_db:6.1f}  {guesses}")
 
-    print(f"\n  {two} two-syllable (paska / perse / pillu), "
-          f"{four} four-syllable (pornolehti / paviaani), "
+    print(f"\n  {two} two-syllable (bravo / tango / delta), "
+          f"{four} four-syllable (kilometer / calculator), "
           f"{len(candidates) - two - four} other")
 
     labels = write_labels(args.out.parent / "labels.tsv", candidates)
@@ -272,7 +272,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"\n  Next: open {args.out} and play through the clips.")
     print("    - delete the ones that are junk or unusable")
     print("    - rename the keepers after the word you hear:")
-    print("        paska1.wav   perse2.wav   paviaani_low.wav")
+    print("        bravo1.wav   tango2.wav   calculator_low.wav")
     print("      (a bare word, a trailing number, or _anything all work)")
     print("    - leave anything you are unsure about alone; unnamed clips are ignored")
     print("\n  Then:  python -m song_generator.build_bank")

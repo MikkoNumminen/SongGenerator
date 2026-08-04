@@ -100,7 +100,7 @@ DETECT_HOP_S = 0.02
 WORD_SILENCE_DB = -24.0
 
 # Silences shorter than this do not split a word. Finnish double consonants
-# (the "kk" in a sung paska, the "ll" in pillu) contain a real stop, so this
+# (the "kk" in a sung bravo, the "ll" in delta) contain a real stop, so this
 # has to exceed a plosive gap or single words get cut in half.
 #
 # Swept against the source scene: no value cleanly separates words there,
@@ -128,25 +128,25 @@ SYLLABLE_SMOOTH_S = 0.04
 # The bank, and how many syllables each word has. Used to guess which word a
 # candidate might be, and by stage 3's mapping rule.
 WORD_SYLLABLES = {
-    "paska": 2,
-    "perse": 2,
-    "pillu": 2,
-    "pornolehti": 4,
-    "paviaani": 4,
-    # The held shout, as in the "eee" that leads into paviaani. It is THE
+    "bravo": 2,
+    "tango": 2,
+    "delta": 2,
+    "kilometer": 4,
+    "calculator": 4,
+    # The held shout, as in the "aah" that leads into calculator. It is THE
     # shout -- there is no separate generic yell. One syllable, and the only
     # odd-length unit in the bank, which makes it the natural filler for the
     # single leftover slot an odd phrase produces.
-    "eee": 1,
+    "aah": 1,
 }
 
 # Units that are shouts rather than words. Kept separate so the mapper can be
 # told to use them for punctuation rather than treating them as vocabulary.
-SHOUT_WORDS = ("eee",)
+SHOUT_WORDS = ("aah",)
 
 # Whether a lone syllable may be sung on its own.
 #
-# Off. The point is to hear paska, perse, pillu, pornolehti and eee paviaani --
+# Off. The point is to hear bravo, tango, delta, kilometer and aah calculator --
 # actual words. A bank full of single syllables will happily fill every slot
 # with "pas", "per", "ka", which fits the melody perfectly and says nothing.
 #
@@ -166,24 +166,24 @@ PLACE_BARE_SYLLABLES = False
 # track breathes and the words land as events rather than as a texture.
 PHRASE_FILL = 0.78
 
-# Cap on how much of the track may be bare shouts. "eee" on its own is
+# Cap on how much of the track may be bare shouts. "aah" on its own is
 # punctuation: excellent once a verse, wearing every few seconds. Without a cap
 # it wins constantly, being the only unit that fits a single leftover slot.
 #
-# Raised from 0.12: at that level paska, pillu and pornolehti dominated while
-# eee barely registered, because a shout could only ever land in a leftover slot
+# Raised from 0.12: at that level bravo, delta and kilometer dominated while
+# aah barely registered, because a shout could only ever land in a leftover slot
 # and most phrases had none.
 SHOUT_MAX_SHARE = 0.28
 
 # Chance that a unit is introduced by a shout in the slot before it.
 #
 # This is where a shout stops being filler and becomes a gesture. In this genre
-# it is *expected* before paviaani -- that pairing is the whole joke -- so a
-# recorded eee+paviaani clip is always preferred when one fits, since it carries
+# it is *expected* before calculator -- that pairing is the whole joke -- so a
+# recorded aah+calculator clip is always preferred when one fits, since it carries
 # the real transition into the word.
 #
 # But a lead-in that only ever precedes one word is a rule rather than a joke.
-# Letting it occasionally announce paska or pornolehti instead produces the
+# Letting it occasionally announce bravo or kilometer instead produces the
 # unexpected combination, which is funnier precisely because the ear was set up
 # for something else.
 SHOUT_LEAD_IN_CHANCE = 0.30
@@ -200,28 +200,28 @@ SHOUT_LEAD_IN_CLIMAX_BIAS = 2.5
 # away. Run through WORLD it comes out as a smeared, melted vowel: technically
 # on the right pitch, and no longer a shout at all.
 #
-# So a shout is dropped in as recorded. Inside a mixed unit like eee+paviaani
+# So a shout is dropped in as recorded. Inside a mixed unit like aah+calculator
 # only the shout syllable is spared; the word after it still follows the melody.
 SHOUT_KEEP_RAW = True
 
 
 # ---------------------------------------------------------------------------
-# CLIMAXES -- where eee and paviaani are allowed to happen
+# CLIMAXES -- where aah and calculator are allowed to happen
 # ---------------------------------------------------------------------------
 # These two are not ordinary vocabulary. They belong together, and they land
 # only when they are rare: a payoff saved for the peaks of the song, while
-# paska, perse, pillu and pornolehti carry everything else. Used freely they
+# bravo, tango, delta and kilometer carry everything else. Used freely they
 # stop being a payoff and become the texture.
 
 # Words reserved for the song's peaks. A unit containing any of these is
-# refused everywhere else, whatever else it also contains -- so "eee+paviaani"
-# is climax-only while "paska+perse+pornolehti" is not.
+# refused everywhere else, whatever else it also contains -- so "aah+calculator"
+# is climax-only while "bravo+tango+kilometer" is not.
 #
-# Only paviaani. A bare "eee" is already rationed by SHOUT_MAX_SHARE, and
+# Only calculator. A bare "aah" is already rationed by SHOUT_MAX_SHARE, and
 # listing it here made it compete for the same budget: being one syllable it
-# fitted anywhere, so it took the climax slot and the paviaani it was supposed
+# fitted anywhere, so it took the climax slot and the calculator it was supposed
 # to introduce never arrived.
-CLIMAX_WORDS = ("paviaani",)
+CLIMAX_WORDS = ("calculator",)
 
 # Fraction of phrases that count as peaks. Small on purpose: the point is
 # scarcity, and a climax that recurs every few seconds is not a climax.
@@ -229,7 +229,7 @@ CLIMAX_PHRASE_SHARE = 0.18
 
 # Floor, because a share collapses on a short song. A 41-second track with six
 # phrases got 14% of 6 = one peak, then a 25% chance of skipping even that, and
-# duly produced no paviaani at all. A proportion is the wrong tool when the
+# duly produced no calculator at all. A proportion is the wrong tool when the
 # count is small.
 CLIMAX_MIN_PEAKS = 2
 
@@ -261,19 +261,32 @@ PREFER_LONGER_UNITS = 0.45
 # A melody slot holds exactly one syllable and a syllable clip fills exactly
 # one slot, so a bank of syllables maps onto a tune 1:1 -- no counting, no
 # leftover slot to fudge. It also means any word can be spelled from parts:
-# paviaani needs no intact recording, only pa + vi + aa + ni.
+# calculator needs no intact recording, only pa + vi + aa + ni.
 #
 # Whole-word and multi-word clips are still preferred wherever they exist,
 # because they carry the singer's own transitions between syllables, and a
 # transition cannot be rebuilt by butting two recordings together. Spelling is
 # the fallback that makes a small bank go a very long way.
 WORD_SPELLING = {
-    "paska": ("pas", "ka"),
-    "perse": ("per", "se"),
-    "pillu": ("pil", "lu"),
-    "pornolehti": ("por", "no", "leh", "ti"),
-    "paviaani": ("pa", "vi", "aa", "ni"),
+    "bravo": ("bra", "vo"),
+    "tango": ("tan", "go"),
+    "delta": ("del", "ta"),
+    "kilometer": ("ki", "lo", "me", "ter"),
+    "calculator": ("cal", "cu", "la", "tor"),
 }
+
+# Letters a held shout may be spelled with. A shout has no canonical spelling:
+# someone naming clips by ear writes what they heard, so aah, aaah, ahh and
+# aaahh all have to read as the same gesture. Any run of these letters does.
+#
+# No bank word begins with one of them, which is what keeps the rule from
+# eating the start of a real word.
+SHOUT_CHARS = "ah"
+
+# Stripped from the front of a source folder name when shortening it for a
+# clip filename. Source files often share a common prefix, which carries no
+# information and makes every candidate name longer. Empty means strip nothing.
+SOURCE_NAME_PREFIX = ""
 
 # How many spellings to build per word when several takes of a syllable exist.
 # Every combination would be thousands of units for no musical gain.
@@ -356,8 +369,8 @@ TARGET_SYLLABLE_S = 0.30
 MAX_SLOT_SPLIT = 4
 
 # What to do with the leftover slot when a phrase has an odd number of slots.
-# Note that every word in the bank has an even syllable count (paska/perse/
-# pillu = 2, pornolehti/paviaani = 4), so the remainder is always exactly 0 or
+# Note that every word in the bank has an even syllable count (bravo/tango/
+# delta = 2, kilometer/calculator = 4), so the remainder is always exactly 0 or
 # 1 -- there is no other case to handle.
 #
 # "merge_last" - the last word's final syllable is held across the last two
@@ -530,7 +543,7 @@ INSTRUMENTAL_LUFS = -16.0
 # Every bank clip is levelled to this before anything else, in dBFS RMS.
 #
 # The clips come from dozens of sources at wildly different levels: a shouted
-# eee and a muttered syllable are not remotely the same loudness, and matching
+# aah and a muttered syllable are not remotely the same loudness, and matching
 # only the finished word bus leaves that unevenness intact inside it. RMS rather
 # than LUFS because most clips are far shorter than the 400 ms LUFS gating
 # window and would simply fail to measure.
@@ -541,3 +554,32 @@ CLIP_PEAK_CEILING = 0.95
 
 # Final limiter ceiling in dBFS, applied to the sum.
 OUTPUT_PEAK_CEILING_DB = -1.0
+
+
+# ---------------------------------------------------------------------------
+# LOCAL OVERRIDES
+# ---------------------------------------------------------------------------
+# The vocabulary above is an example, not a fixture. Any set of short sung
+# clips works, so the words a particular bank uses are a local matter.
+#
+# Dropping a vocabulary_local.py beside this file lets it replace any setting
+# here, so a private word bank does not require editing a published file and a
+# clone does not inherit somebody else's vocabulary. The file is gitignored.
+#
+#     # src/song_generator/vocabulary_local.py
+#     WORD_SYLLABLES = {"foo": 2, "barbaz": 4, "ooh": 1}
+#     WORD_SPELLING = {"foo": ("f", "oo"), "barbaz": ("bar", "b", "a", "z")}
+#     SHOUT_WORDS = ("ooh",)
+#     CLIMAX_WORDS = ("barbaz",)
+#     SHOUT_CHARS = "oh"
+# SONG_GENERATOR_NO_LOCAL_VOCAB disables the override. The test suite sets it,
+# so tests exercise the shipped example vocabulary and pass or fail the same way
+# on every machine, rather than depending on whichever words happen to be
+# installed locally.
+import os as _os
+
+if not _os.environ.get("SONG_GENERATOR_NO_LOCAL_VOCAB"):
+    try:  # pragma: no cover - presence depends on the machine, not the code
+        from .vocabulary_local import *  # noqa: F401,F403
+    except ImportError:
+        pass

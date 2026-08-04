@@ -1,8 +1,8 @@
-# Working on SongGenerator
+﻿# Working on SongGenerator
 
-Replaces a song's vocals with sung Finnish word clips, timed and pitched to the
+Replaces a song's vocals with short sung word clips, timed and pitched to the
 original melody. Everything runs locally on one GPU. No cloud, no paid services,
-no vocal synthesis — the words are real recordings and the tool only separates,
+no vocal synthesis. The words are real recordings and the tool only separates,
 analyses, re-pitches, re-times and mixes them.
 
 ## Run things this way
@@ -12,7 +12,7 @@ there and must not leak into other projects). Always use it explicitly:
 
 ```powershell
 .\.venv\Scripts\song-generator.exe input\song.mp4              # full run, 7 variants
-.\.venv\Scripts\python.exe -m pytest tests\ -q                        # 191 tests, ~10s
+.\.venv\Scripts\python.exe -m pytest tests\ -q                        # 192 tests, ~10s
 .\.venv\Scripts\python.exe -m song_generator.build_bank        # rebuild the word bank
 .\.venv\Scripts\python.exe -m song_generator.doctor            # diagnose anything
 ```
@@ -35,7 +35,7 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   yourself typing a number into logic, it belongs there instead.
 - **Never trust speech recognition on this material.** It was tried three ways
   (whole-source, clip-by-clip, shape-ranked shortlist) and was wrong nearly
-  every time on shouted, sung Finnish. It is kept only as a labelling *hint*.
+  every time on shouted singing. It is kept only as a labelling *hint*.
   Identification is done by ear.
 - **Never re-separate needlessly.** Stems are cached under `work/<song>/`.
   Separation is by far the slowest stage; everything else is seconds.
@@ -43,7 +43,7 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
 ## Where the traps are
 
 - **Filenames end up on Windows.** A clip's measured note goes into its name,
-  and an unpitched clip once wrote a literal `?`, which is illegal — the write
+  and an unpitched clip once wrote a literal `?`, which is illegal, the write
   threw and an entire source was silently abandoned. Sanitise anything derived
   from measurements before it becomes a path.
 - **A clip name is a contract.** `parse_phrase` in `build_bank.py` reads word
@@ -58,12 +58,12 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
 
 ## Reading order
 
-1. `docs/GLOSSARY.md` — what slot, unit, phrase, mimicry and fold mean here.
+1. `docs/GLOSSARY.md`. What slot, unit, phrase, mimicry and fold mean here.
    These are load-bearing terms; guessing at them will mislead you.
-2. `docs/ARCHITECTURE.md` — the pipeline, module by module.
-3. `src/song_generator/config.py` — every decision that can be tuned, and why.
-4. `docs/WORKFLOWS.md` — the recipes for common jobs.
-5. `docs/TODO.md` — what is deliberately unfinished, including Mode B.
+2. `docs/ARCHITECTURE.md`. The pipeline, module by module.
+3. `src/song_generator/config.py`. Every decision that can be tuned, and why.
+4. `docs/WORKFLOWS.md`. The recipes for common jobs.
+5. `docs/TODO.md`. What is deliberately unfinished, including Mode B.
 
 ## Verifying a change
 
@@ -80,7 +80,7 @@ what you intended. `doctor` explains anything that looks wrong.
 ## The one thing to understand
 
 The tool works because it **steals every musical decision from the original
-singer** — when each syllable starts, how long it lasts, what note it lands on —
+singer**, when each syllable starts, how long it lasts, what note it lands on
 rather than inventing any of them. That is what makes Mode A tractable and Mode B
 (a song with no vocals) hard enough to be deliberately refused. Any change that
 starts inventing musical decisions is going the wrong way.

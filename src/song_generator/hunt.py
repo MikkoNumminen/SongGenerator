@@ -35,7 +35,7 @@ HOP = 256
 
 # Spellings that all mean the same held shout. Kept here rather than in the
 # bank because they are one sound, however it gets written down.
-SHOUT_SPELLINGS = ("heei", "heeei", "eeei", "eei", "hei", "eee", "ee")
+SHOUT_SPELLINGS = ("heei", "heeei", "aaah", "eei", "hei", "aah", "ee")
 
 
 @dataclass
@@ -121,7 +121,7 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     p.add_argument("--folder", type=Path, default=Path("words/candidates"))
-    p.add_argument("--word", default="paviaani", help="the word expected after the shout")
+    p.add_argument("--word", default="calculator", help="the word expected after the shout")
     p.add_argument("--syllables", type=int, default=None,
                    help="syllables in that word [default: from the bank]")
     p.add_argument("--top", type=int, default=60, help="how many to transcribe")
@@ -166,7 +166,7 @@ def main(argv: list[str] | None = None) -> int:
                 result = model.transcribe(
                     str(hit.path), language="fi", temperature=0.0,
                     condition_on_previous_text=False,
-                    initial_prompt=f"{args.word}, hei, eee",
+                    initial_prompt=f"{args.word}, hei, aah",
                 )
                 hit.heard = result.get("text", "").strip()
             except Exception as exc:
@@ -179,7 +179,7 @@ def main(argv: list[str] | None = None) -> int:
     renamed = 0
     for hit in shortlist:
         matched = hit in confirmed
-        label = f"eee-{args.word}" if matched else f"shout{want}"
+        label = f"aah-{args.word}" if matched else f"shout{want}"
         stem = hit.path.stem
         for prefix in ("AI_", "TODO_"):
             if stem.startswith(prefix):
@@ -208,7 +208,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"    {hit.summary}   {hit.path.name}")
 
     print(f"\n  AI_eee-{args.word}__* are the likely hits. Rename one to confirm it:")
-    print(f"      ->  eee{args.word}1.wav      (kept whole, shout and word together)")
+    print(f"      ->  aah{args.word}1.wav      (kept whole, shout and word together)")
     print(f"  Keeping the shout attached is worth it: the clip then carries the")
     print(f"  real transition into the word, which cannot be rebuilt by splicing.")
     return 0

@@ -1,11 +1,11 @@
-"""Cut what comes straight after a shout: the EEE PAVIAANI problem.
+"""Cut what comes straight after a shout: the AAH CALCULATOR problem.
 
     python -m song_generator.successors
 
 A shout and the word it introduces are one gesture, but silence-based cutting
 splits them, because there IS a gap between the held vowel and the word. That
-is why paviaani was so hard to find: every take of it had been severed from the
-"eee" that announces it, exactly as pornolehti was severed into por + nolehti.
+is why calculator was so hard to find: every take of it had been severed from the
+"aah" that announces it, exactly as kilometer was severed into por + nolehti.
 
 Rather than hunt for the word across hundreds of clips, this takes every
 shout-shaped clip and re-cuts the source around it:
@@ -49,7 +49,7 @@ class Shout:
 
 def find_work_vocal(source: str, work_root: Path) -> Path | None:
     """Map a clip's short source tag back to its separated vocal."""
-    for candidate in (f"pilluvittu{source}", source, f"pilluvittu{source.lower()}"):
+    for candidate in (f"session{source}", source, f"session{source.lower()}"):
         vocal = work_root / candidate.lower() / "vocal.wav"
         if vocal.is_file():
             return vocal
@@ -72,7 +72,7 @@ def parse_clip(path: Path) -> Shout | None:
 
 def is_shout_named(name: str) -> bool:
     low = name.lower()
-    return "shout" in low or "__eee" in low or low.startswith("eee")
+    return "shout" in low or "__eee" in low or low.startswith("aah")
 
 
 def fade(clip: np.ndarray, sr: int) -> np.ndarray:
@@ -152,8 +152,8 @@ def main(argv: list[str] | None = None) -> int:
     print("  THEN_*       only what follows, if the pair is not usable whole.")
     print()
     print("  If you hear it, keep the pair whole and name it:")
-    print("      EEE_then__26__12.30-15.10.wav   ->   eeepaviaani1.wav")
-    print("  eeepaviaani parses as eee + paviaani, five slots in one clip, with")
+    print("      EEE_then__26__12.30-15.10.wav   ->   eeecalculator1.wav")
+    print("  eeecalculator parses as aah + calculator, five slots in one clip, with")
     print("  the real transition into the word intact. Splicing a separate shout")
     print("  onto a separate word cannot reproduce that.")
     return 0

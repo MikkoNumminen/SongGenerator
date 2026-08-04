@@ -1,6 +1,6 @@
-"""Re-separate sources with Mel-Band Roformer, alongside the Demucs stems.
+﻿"""Re-separate sources with Mel-Band Roformer, alongside the Demucs stems.
 
-    python -m song_generator.separate_hq "D:/kuvat/kuvat/pilluvittu*.mp4"
+    python -m song_generator.separate_hq "sources/*.mp4"
     python -m song_generator.separate_hq --for-bank
 
 Writes `vocal_hq.wav` into each source's existing work directory, leaving the

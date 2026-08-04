@@ -99,3 +99,7 @@ desktop.ini
 
 # ---------------------------------------------------------------------------
 # ---------------------------------------------------------------------------
+
+# Local vocabulary. The published example vocabulary in config.py is generic;
+# whatever words a particular bank uses are a local matter.
+src/song_generator/vocabulary_local.py

@@ -1,7 +1,7 @@
-# SongGenerator
+﻿# SongGenerator
 
-Takes a song, throws away the singer, and puts a small bank of sung Finnish
-words back in their place — on the same notes, at the same moments.
+Takes a song, throws away the singer, and puts a small bank of sung word clips
+back in their place, on the same notes, at the same moments.
 
 Runs entirely locally on one GPU. No cloud, no paid services, no vocal
 synthesis: the words are real recordings, and the tool only separates,
@@ -20,7 +20,7 @@ The trick is to **steal every musical decision from the original singer** rather
 than invent any:
 
 1. **Separate** the song into vocal and instrumental (Demucs).
-2. **Analyse the original vocal before discarding it** — the melody, and where
+2. **Analyse the original vocal before discarding it**. The melody, and where
    each sung syllable starts and ends.
 3. **Map word clips onto those same slots**, pitch-shifted to the notes the
    singer hit, formant-corrected so they still sound like a person.
@@ -53,7 +53,7 @@ py -3.11 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e .
 ```
 
-The venv is deliberately its own island — this pulls in torch, demucs and a pile
+The venv is deliberately its own island. This pulls in torch, demucs and a pile
 of heavy audio dependencies, and none of it should be near another project.
 
 Optional extras: `audio-separator[gpu]` for the better separator,
@@ -61,7 +61,7 @@ Optional extras: `audio-separator[gpu]` for the better separator,
 
 ## The dial that matters
 
-**Mimicry** — how much of the original melody survives in the result, 0 to 1.
+**Mimicry**, how much of the original melody survives in the result, 0 to 1.
 
 It is not the same as how many words get shifted. A word too far from its target
 is moved by whole octaves instead of stretched, so it sings the right note *name*
@@ -69,7 +69,7 @@ in the wrong octave: recognisably the tune, still audibly wrong. Such a syllable
 counts for part of a mimicry point, not a whole one.
 
 That is why every song has a **ceiling**. One whose melody ranges far above the
-bank's own register cannot sound fully sung however hard it is pushed — and
+bank's own register cannot sound fully sung however hard it is pushed, and
 that ceiling is reported on every run. It is also why the same setting sounds
 different on two songs, and why the tool solves for whatever shift a particular
 song needs to reach the mimicry you asked for.
@@ -80,9 +80,8 @@ have do not.
 ## Bring your own audio
 
 **No audio ships with this repo, by design.** The clips it was built against
-are excerpts of someone else's film and the test songs are commercial
-recordings — fine to hold locally for a personal project, not fine to publish.
-`.gitignore` excludes all of it.
+are someone else's recordings and the test songs are commercial releases. Fine
+to hold locally, not fine to redistribute. `.gitignore` excludes all of it.
 
 So a fresh clone has the tool and none of the material. To use it you supply:
 
@@ -90,28 +89,44 @@ So a fresh clone has the tool and none of the material. To use it you supply:
 - **source video or audio** to cut word clips from, anywhere on disk
 
 Then follow [docs/WORKFLOWS.md](docs/WORKFLOWS.md) to build a bank. Nothing
-about the pipeline is specific to these particular words — `WORD_SPELLING` and
+about the pipeline is specific to these particular words, `WORD_SPELLING` and
 `WORD_SYLLABLES` in `config.py` define the vocabulary, and any set of short
 sung clips will work.
 
 ## The word bank
 
-Individually recorded sung clips in `words/`, lifted from a Finnish film's
-singing scene: *paska*, *perse*, *pillu*, *pornolehti*, *paviaani*, plus the
-shout *eee*.
+A bank is a folder of short sung clips plus an index describing each one. The
+vocabulary is entirely yours: `WORD_SYLLABLES` and `WORD_SPELLING` in
+`config.py` define it, and the pipeline knows nothing else about the words.
+
+The example vocabulary shipped in `config.py` is `bravo`, `tango`, `delta`,
+`kilometer`, `calculator` and the shout `aah`. It exists to make the worked
+examples in these docs concrete. Replace it with whatever you record. Two and
+four syllable words plus a one syllable shout is a useful shape, because an even
+syllable count fills a phrase of slots exactly and the odd shout fills whatever
+is left over.
 
 Multi-word clips are worth more than their parts. A clip holding two words also
 holds the singer's own transition between them, and a transition cannot be
 rebuilt by butting two recordings together.
 
-Two words are special. **`eee`** is never pitch-shifted or stretched — a vocoder
-smooths away exactly the crack and attack that make a shout a shout.
-**`paviaani`** is refused everywhere except the song's peaks, so it stays a
-payoff instead of becoming the texture.
+Two clips get special handling, and both are worth understanding before you
+change them.
+
+**A shout is never pitch-shifted, time-stretched or resynthesised.** Its
+character is the attack and the strain, which is exactly what a vocoder smooths
+away. Processed like a sung note it comes back on the right pitch and no longer
+sounds like a shout. In the example vocabulary that is `aah`; the setting is
+`SHOUT_WORDS`.
+
+**One word is allowed only at the song's peaks.** Phrases are ranked by pitch
+and loudness together, and this word is refused everywhere else, so it stays a
+payoff rather than becoming the texture. In the example vocabulary that is
+`calculator`; the setting is `CLIMAX_WORDS`.
 
 ## Status
 
 All four build stages are done: separation and mode detection, melody and timing
-extraction, word mapping, and formant-corrected pitch shifting. 191 tests.
+extraction, word mapping, and formant-corrected pitch shifting. 192 tests.
 
 Mode B remains deliberately unimplemented.

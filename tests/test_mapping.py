@@ -23,10 +23,10 @@ def _unit(words, syllables, dur=0.5, name=None):
 @pytest.fixture
 def bank():
     return [
-        _unit(["paska"], 2, 0.45),
-        _unit(["perse", "pillu"], 4, 0.9),
-        _unit(["perse", "pillu", "perse"], 6, 1.5),
-        _unit(["paska", "perse", "pornolehti"], 8, 1.8),
+        _unit(["bravo"], 2, 0.45),
+        _unit(["tango", "delta"], 4, 0.9),
+        _unit(["tango", "delta", "tango"], 6, 1.5),
+        _unit(["bravo", "tango", "kilometer"], 8, 1.8),
     ]
 
 
