@@ -509,6 +509,105 @@ def standardise_bank(source: Path, out: Path, mode: str,
 
 
 # ---------------------------------------------------------------------------
+# Check
+# ---------------------------------------------------------------------------
+
+@dataclass
+class Status:
+    """Whether a tier on disk still matches the clips it was made from."""
+    drifted: bool = False
+    stale: list[str] = field(default_factory=list)
+    missing: list[str] = field(default_factory=list)
+    new: list[str] = field(default_factory=list)
+    gone: list[str] = field(default_factory=list)
+    ok: list[str] = field(default_factory=list)
+
+    @property
+    def current(self) -> bool:
+        return not (self.drifted or self.stale or self.missing
+                    or self.new or self.gone)
+
+
+def check_tier(source: Path, out: Path, mode: str) -> Status:
+    """Compare a tier against its sources, by content.
+
+    Four ways a tier goes wrong, and they need telling apart because they call
+    for different things:
+
+      drifted  the parameters changed, so every derivative is wrong at once
+      stale    a source was re-recorded or re-cut since its derivative
+      new      a source has no derivative yet
+      missing  a derivative the manifest claims is on disk is not
+      gone     a derivative whose source no longer exists, now an orphan
+
+    Never decided by name or timestamp. A clip re-cut to the same length under
+    the same name is exactly the case a naming convention cannot see.
+    """
+    source, out = Path(source), Path(out)
+    manifest = read_manifest(out)
+    if not manifest:
+        raise StandardizeError(
+            f"no {config.STD_MANIFEST} in {out}. Nothing has been standardised "
+            "there yet:\n    python -m song_generator.standardize"
+        )
+
+    index_path = source / "words.json"
+    if not index_path.is_file():
+        raise StandardizeError(f"{index_path} not found.")
+    entries = json.loads(index_path.read_text(encoding="utf-8"))
+
+    status = Status(drifted=manifest.get("params_sha256") != params_fingerprint(mode))
+    clips = manifest.get("clips", {})
+
+    for name in entries:
+        path = source / name
+        if not path.is_file():
+            continue
+        record = clips.get(name)
+        if record is None:
+            status.new.append(name)
+        elif not (out / name).is_file():
+            status.missing.append(name)
+        elif record.get("source_sha256") != sha256_file(path):
+            status.stale.append(name)
+        else:
+            status.ok.append(name)
+
+    for name in clips:
+        if name not in entries or not (source / name).is_file():
+            status.gone.append(name)
+
+    return status
+
+
+def report_status(status: Status, source: Path, out: Path) -> None:
+    print(f"  source    {source}")
+    print(f"  tier      {out}")
+    print()
+    if status.drifted:
+        print(f"  DRIFTED   the standardisation parameters changed since this tier "
+              f"was built.\n            All {len(status.ok) + len(status.stale)} "
+              f"derivatives are out of date, whatever their sources say.")
+    for label, names, why in (
+        ("STALE", status.stale, "source changed since the derivative was made"),
+        ("NEW", status.new, "source has no derivative yet"),
+        ("MISSING", status.missing, "manifest claims a derivative that is not on disk"),
+        ("ORPHAN", status.gone, "derivative whose source is gone"),
+    ):
+        if names:
+            print(f"  {label:<9} {len(names):>3}  ({why})")
+            for name in names[:6]:
+                print(f"              {name}")
+            if len(names) > 6:
+                print(f"              ... and {len(names) - 6} more")
+    print(f"  current   {len(status.ok)} derivatives match their sources")
+    if status.current:
+        print("\n  Up to date.")
+    else:
+        print("\n  Rebuild:  python -m song_generator.standardize")
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -531,6 +630,9 @@ def build_parser() -> argparse.ArgumentParser:
                         "or not levelled at all")
     p.add_argument("--force", action="store_true",
                    help="rebuild every derivative even when nothing changed")
+    p.add_argument("--check", action="store_true",
+                   help="report whether the tier still matches its sources and "
+                        "change nothing; exits non-zero when it does not")
     return p
 
 
@@ -539,6 +641,15 @@ def main(argv: list[str] | None = None) -> int:
     source = args.words_dir or Path(config.BANKS[args.bank])
     out = args.out or source.with_name(source.name + config.STD_SUFFIX)
     mode = args.shouts.replace("-", "_")
+
+    if args.check:
+        try:
+            status = check_tier(source, out, mode)
+        except StandardizeError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        report_status(status, source, out)
+        return 0 if status.current else 1
 
     try:
         report = standardise_bank(source, out, mode, force=args.force)

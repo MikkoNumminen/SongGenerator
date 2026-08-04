@@ -14,9 +14,9 @@ import pytest
 
 from song_generator import audio_io, config
 from song_generator.standardize import (
-    StandardizeError, apply_trim, check_destination, clip_lufs, find_trim,
-    level, params_fingerprint, sha256_file, shift_bounds, standardise_bank,
-    target_lufs, write_derivative,
+    StandardizeError, apply_trim, check_destination, check_tier, clip_lufs,
+    find_trim, level, main, params_fingerprint, sha256_file, shift_bounds,
+    standardise_bank, target_lufs, write_derivative,
 )
 
 SR = config.SAMPLE_RATE
@@ -468,3 +468,92 @@ def test_an_unbuilt_bank_is_refused_with_the_command_to_run(built, tmp_path):
 def test_the_pass_refuses_to_target_its_own_source(built):
     with pytest.raises(StandardizeError):
         standardise_bank(built, built, "offset")
+
+
+# ---------------------------------------------------------------------------
+# Check
+# ---------------------------------------------------------------------------
+
+def test_a_fresh_tier_reports_current(built):
+    out = _out(built)
+    standardise_bank(built, out, "offset")
+    status = check_tier(built, out, "offset")
+    assert status.current
+    assert len(status.ok) == 3
+    assert main(["--words-dir", str(built), "--out", str(out), "--check"]) == 0
+
+
+def test_a_re_cut_source_reads_stale_even_at_the_same_length(built):
+    """The case a naming convention cannot see: same name, same length."""
+    out = _out(built)
+    standardise_bank(built, out, "offset")
+    original = audio_io.read_wav(built / "bravo_1.wav")
+    audio_io.write_wav(built / "bravo_1.wav", original * 0.5)
+
+    status = check_tier(built, out, "offset")
+    assert status.stale == ["bravo_1.wav"]
+    assert not status.current
+    assert main(["--words-dir", str(built), "--out", str(out), "--check"]) == 1
+
+
+def test_a_new_source_reads_new(built):
+    out = _out(built)
+    standardise_bank(built, out, "offset")
+    audio_io.write_wav(built / "delta_1.wav", _clip())
+    index = json.loads((built / "words.json").read_text(encoding="utf-8"))
+    index["delta_1.wav"] = {"words": ["delta"], "syllables": 2, "duration_s": 0.5,
+                            "midi": 53.0, "syllable_bounds_s": [0.25]}
+    (built / "words.json").write_text(json.dumps(index), encoding="utf-8")
+
+    status = check_tier(built, out, "offset")
+    assert status.new == ["delta_1.wav"]
+    assert not status.current
+
+
+def test_a_deleted_derivative_reads_missing(built):
+    out = _out(built)
+    standardise_bank(built, out, "offset")
+    (out / "bravo_1.wav").unlink()
+
+    status = check_tier(built, out, "offset")
+    assert status.missing == ["bravo_1.wav"]
+    assert not status.current
+
+
+def test_a_removed_source_leaves_an_orphan(built):
+    out = _out(built)
+    standardise_bank(built, out, "offset")
+    (built / "aah_1.wav").unlink()
+
+    status = check_tier(built, out, "offset")
+    assert status.gone == ["aah_1.wav"]
+    assert not status.current
+
+
+def test_changing_a_parameter_drifts_the_whole_tier(built, monkeypatch):
+    out = _out(built)
+    standardise_bank(built, out, "offset")
+    monkeypatch.setattr(config, "STD_DEAD_AIR_DB", -50.0)
+
+    status = check_tier(built, out, "offset")
+    assert status.drifted
+    assert not status.current
+
+
+def test_checking_the_other_shout_mode_drifts_too(built):
+    out = _out(built)
+    standardise_bank(built, out, "offset")
+    assert check_tier(built, out, "as_recorded").drifted
+
+
+def test_check_refuses_when_nothing_was_ever_standardised(built, tmp_path):
+    with pytest.raises(StandardizeError, match="standardize"):
+        check_tier(built, tmp_path / "never", "offset")
+
+
+def test_check_writes_nothing(built):
+    out = _out(built)
+    standardise_bank(built, out, "offset")
+    stamps = {p: p.stat().st_mtime_ns for p in out.iterdir()}
+    check_tier(built, out, "offset")
+    assert {p: p.stat().st_mtime_ns for p in out.iterdir()} == stamps
