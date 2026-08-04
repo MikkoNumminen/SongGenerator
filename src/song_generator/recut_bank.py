@@ -74,9 +74,21 @@ def from_name(source_clip: str, dirs: dict[str, Path]) -> Origin | None:
 
 
 def _decimate(mono: np.ndarray, sr: int) -> np.ndarray:
-    """Cheap stand-in for the signal, good enough to locate a slice in it."""
+    """Band-limited downsample, so a slice matches wherever it was taken from.
+
+    Taking every Nth sample instead would make the result depend on the phase
+    of the starting index: a stem sampled from 0 and a clip sampled from its own
+    0 land on different samples unless the offset happens to be a multiple of N,
+    and the two then fail to correlate at all.
+
+    Real music survives that because it is smooth at this rate and neighbouring
+    samples are similar, which is why the naive version appeared to work. It was
+    still costing precision, and it fails outright on anything less smooth.
+    """
+    from scipy.signal import resample_poly
+
     step = max(1, sr // PROBE_SR)
-    x = mono[::step].astype(np.float64)
+    x = resample_poly(np.asarray(mono, dtype=np.float64), 1, step)
     return x - x.mean()
 
 

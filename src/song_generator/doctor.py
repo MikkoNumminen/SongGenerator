@@ -53,6 +53,22 @@ def report_environment() -> None:
         print(f"  bank '{name}': {mark}{star}")
 
 
+def report_vocabulary() -> None:
+    """Check the active vocabulary before anything that depends on it."""
+    problems = config.validate_vocabulary()
+    print("\nVOCABULARY")
+    print(f"  words:  {', '.join(sorted(config.WORD_SYLLABLES))}")
+    print(f"  shout:  {', '.join(config.SHOUT_WORDS)}  "
+          f"(spelled with any run of {config.SHOUT_CHARS!r})")
+    print(f"  climax: {', '.join(config.CLIMAX_WORDS)}")
+    if problems:
+        print(f"\n  {len(problems)} PROBLEMS. Each of these fails silently:")
+        for p in problems:
+            print(f"    - {p}")
+    else:
+        print("  consistent")
+
+
 def report_bank(bank_name: str) -> list | None:
     print(f"\nBANK '{bank_name}'")
     try:
@@ -187,6 +203,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     report_environment()
+    report_vocabulary()
     units = report_bank(args.bank)
     if args.song:
         report_song(args.song, units)
