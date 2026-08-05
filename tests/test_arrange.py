@@ -430,3 +430,15 @@ def test_off_does_not_chant(bank, slots):
     from song_generator.arrange import level_params
 
     assert level_params("off")["chant_chance"] == 0.0
+
+
+def test_the_opening_is_never_thinned_away(bank, slots):
+    """Density may not answer "does this have words in it" with no.
+
+    Whatever the fill setting, a track that stays instrumental through its
+    first phrase has already told the listener it is instrumental.
+    """
+    for level in ("conservative", "wild"):
+        for i in range(10):
+            plan, _, _ = build(slots, bank, level, 2200 + i)
+            assert plan.placements[0].onset_s <= slots[0].onset_s + 1e-6

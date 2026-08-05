@@ -544,7 +544,11 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None,
     # Peaks are exempt: thinning at random was silently discarding the very
     # phrases reserved for calculator, so the payoff never arrived at all.
     fill = float(play.get("phrase_fill", config.PHRASE_FILL)) if play else config.PHRASE_FILL
-    keep = {id(g) for i, g in enumerate(groups) if i in climaxes}
+    # The opening is never thinned away. Whatever the density setting, the
+    # first thing a listener decides is whether this song has words in it, and
+    # a track that stays instrumental through its first phrase has answered no
+    # by the time it starts. Peaks are exempt for the same kind of reason.
+    keep = {id(g) for i, g in enumerate(groups) if i in climaxes or i == 0}
     if fill >= 1.0:
         keep = {id(g) for g in groups}
     else:
