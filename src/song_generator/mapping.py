@@ -393,7 +393,9 @@ def find_climaxes(groups: list[list[Slot]], min_slots: int = 1) -> set[int]:
 def _choose(units: list[Unit], remaining: int, span_s: float,
             rng: random.Random, last: str | None,
             allow_shouts: bool = True, allow_climax: bool = False,
-            targets: list[float] | None = None) -> Unit | None:
+            targets: list[float] | None = None,
+            play: dict | None = None,
+            used: dict[str, int] | None = None) -> Unit | None:
     """Pick a unit that fits the slots left.
 
     Three things compete: how naturally the clip fills the time it is given, a
@@ -438,6 +440,22 @@ def _choose(units: list[Unit], remaining: int, span_s: float,
             cost += config.FOLD_PENALTY
         return config.PITCH_FIT_WEIGHT * cost
 
+    def variety_cost(u: Unit) -> float:
+        """What it costs to say the same thing again.
+
+        The bank holds fourteen recorded phrases, so without this one clip that
+        happens to fit the song's typical slot wins most of them and the track
+        becomes a loop. Charged per label rather than per clip, since hearing
+        the same words in a different take is the same repetition to a
+        listener.
+        """
+        if not play or used is None:
+            return 0.0
+        seen = used.get(u.label, 0)
+        if seen == 0:
+            return -float(play.get("unused_bonus", 0.0))
+        return float(play.get("repeat_penalty", 0.0)) * np.log1p(seen)
+
     def mismatch(u: Unit) -> float:
         allotted = span_s * (u.syllables / remaining) if remaining else span_s
         if allotted <= 0:
@@ -445,20 +463,30 @@ def _choose(units: list[Unit], remaining: int, span_s: float,
         # Longer units are preferred at equal fit: fewer, longer placements
         # read as singing, while many short ones read as chatter.
         length_bonus = config.PREFER_LONGER_UNITS * np.log(u.syllables + 1)
-        return abs(np.log(u.duration_s / allotted)) - length_bonus + pitch_cost(u)
+        return (abs(np.log(u.duration_s / allotted)) - length_bonus
+                + pitch_cost(u) + variety_cost(u))
 
+    band = float(play.get("tie_band", 0.35)) if play else 0.35
     ranked = sorted(pool, key=mismatch)
-    top = [u for u in ranked if mismatch(u) <= mismatch(ranked[0]) + 0.35] or ranked[:1]
+    top = [u for u in ranked if mismatch(u) <= mismatch(ranked[0]) + band] or ranked[:1]
     return rng.choice(top)
 
 
-def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) -> Plan:
+def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None,
+               play: dict | None = None) -> Plan:
+    """Lay units onto slots. With `play`, vary what gets said and how often.
+
+    `play` is a parameter set from config.PLAY_LEVELS. Passing None keeps the
+    behaviour this had before playfulness existed, which is what the tests for
+    everything else depend on.
+    """
     rng = random.Random(config.WORD_ROTATION_SEED if seed is None else seed)
     forced = config.WORD_SEQUENCE
     plan = Plan(slots_total=len(slots))
 
     by_label = {u.label: u for u in units}
     forced_queue = list(forced) if forced else []
+    used: dict[str, int] = {}
 
     groups = group_phrases(slots)
     smallest_climax = min((u.syllables for u in units if u.is_climax), default=1)
@@ -469,7 +497,7 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
     #
     # Peaks are exempt: thinning at random was silently discarding the very
     # phrases reserved for calculator, so the payoff never arrived at all.
-    fill = config.PHRASE_FILL
+    fill = float(play.get("phrase_fill", config.PHRASE_FILL)) if play else config.PHRASE_FILL
     keep = {id(g) for i, g in enumerate(groups) if i in climaxes}
     if fill >= 1.0:
         keep = {id(g) for g in groups}
@@ -522,7 +550,7 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
                 if shouts_used < shout_budget and climax_left > 0:
                     filler = _choose([u for u in units if u.syllables == 1],
                                       1, span_s, rng, last, allow_climax=True,
-                                      targets=targets)
+                                      targets=targets, play=play, used=used)
                 if filler is not None:
                     shouts_used += 1
                     covered = group[i:i + 1]
@@ -536,6 +564,7 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
                         slots=list(covered),
                     ))
                     plan.slots_used += 1
+                    used[filler.label] = used.get(filler.label, 0) + 1
                     break
 
                 if config.ODD_SLOT_POLICY == "merge_last" and plan.placements:
@@ -558,12 +587,13 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
             if unit is None and climax_left > 0:
                 unit = _choose([u for u in units if u.is_climax],
                                remaining, span_s, rng, last, allow_climax=True,
-                               targets=targets)
+                               targets=targets, play=play, used=used)
 
             if unit is None:
                 unit = _choose(units, remaining, span_s, rng, last,
                                allow_shouts=shouts_used < shout_budget,
-                               allow_climax=False, targets=targets)
+                               allow_climax=False, targets=targets,
+                               play=play, used=used)
             if unit is not None and unit.is_bare_shout:
                 shouts_used += 1
             if unit is not None and unit.is_climax:
@@ -579,14 +609,14 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
             # carries the singer's own transition and cannot be bettered by
             # butting two clips together.
             if (not unit.is_bare_shout
-                    and not unit.words[:1] == ["aah"]
+                    and not (unit.words[:1] and unit.words[0] in config.SHOUT_WORDS)
                     and shouts_used < shout_budget
                     and remaining > unit.syllables):
                 bias = config.SHOUT_LEAD_IN_CLIMAX_BIAS if unit.is_climax else 1.0
                 if rng.random() < min(0.95, config.SHOUT_LEAD_IN_CHANCE * bias):
                     lead = _choose([u for u in units if u.is_bare_shout],
                                    1, group[i].dur_s, rng, last, allow_climax=True,
-                                   targets=targets)
+                                   targets=targets, play=play, used=used)
                     if lead is not None:
                         plan.placements.append(Placement(
                             unit=lead,
@@ -599,8 +629,18 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
                         ))
                         plan.slots_used += 1
                         shouts_used += 1
+                        used[lead.label] = used.get(lead.label, 0) + 1
                         i += 1
                         remaining -= 1
+
+                        # Rarely, nothing follows. The ear has been set up for
+                        # filth and gets silence instead, which is funny once
+                        # and tiresome the third time, so it stays rare and the
+                        # rest of the phrase is abandoned to make the gap real.
+                        if play and rng.random() < float(play.get("bare_shout", 0.0)):
+                            plan.slots_dropped += len(group) - i
+                            break
+
                         if remaining < unit.syllables:
                             last = lead.name
                             continue
@@ -618,6 +658,7 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
                 slots=list(covered),
             ))
             plan.slots_used += unit.syllables
+            used[unit.label] = used.get(unit.label, 0) + 1
             last = unit.name
             i += unit.syllables
 

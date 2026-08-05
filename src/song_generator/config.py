@@ -497,6 +497,89 @@ BEAT_SUBDIVISION = 4
 
 
 # ---------------------------------------------------------------------------
+# PLAYFULNESS -- how the automation plays with the words
+# ---------------------------------------------------------------------------
+# The bank is recorded phrases, not words, so left alone the tool can only
+# repeat sequences somebody once sang. arrange.py cuts the words back out of
+# those phrases using the boundaries build_bank already measured, which lets
+# the automation ask for orders that were never recorded.
+#
+# One level is chosen per run. It produces ONE arrangement, and that single
+# arrangement is then rendered across the mimicry ladder exactly as before.
+# Playfulness and mimicry are different questions and do not multiply.
+
+# Words that must appear somewhere in every song. None means every word in
+# WORD_SYLLABLES. A bank with a word that is deliberately occasional should
+# name the required ones in vocabulary_local.py instead of changing this.
+PLAY_REQUIRED_WORDS = None
+
+# How many times to redraw an arrangement that failed the coverage rule before
+# repairing it by hand. Each retry is a fresh seed derived from the first, so
+# the run stays reproducible from the seed it reports.
+PLAY_COVERAGE_TRIES = 12
+
+PLAY_DEFAULT_LEVEL = "conservative"
+
+# The two levels, as parameter sets.
+#
+#   invent_combos    how many word orders to build that were never recorded.
+#                    They compete with the real clips on fit and mostly lose,
+#                    which is intended: a recorded phrase carries the singer's
+#                    own transition and a crossfade does not.
+#   slice_words      whether single words cut out of phrases may be sung alone.
+#   repeat_penalty   cost added for reusing the label just used. The bank is
+#                    small and without this one clip wins a whole song.
+#   unused_bonus     bonus for a label not yet heard in this song, which is
+#                    what spreads the vocabulary out.
+#   tie_band         how far below the best a candidate may score and still be
+#                    drawn at random. The one knob that really trades fit for
+#                    surprise.
+#   bare_shout       chance that a placed shout is left with nothing after it.
+#                    Rare on purpose. The joke is that the ear is set up for
+#                    a word and does not get one, and it dies if it recurs.
+#   phrase_fill      how many phrases get words at all. Lower leaves more of
+#                    the song instrumental, so the words land as events.
+PLAY_LEVELS = {
+    # Recognisable and tidy. Keeps close to what was recorded, and mostly
+    # varies which take of a phrase is used rather than inventing orders.
+    "conservative": {
+        "invent_combos": 10,
+        "slice_words": True,
+        "repeat_penalty": 0.85,
+        "unused_bonus": 0.25,
+        "tie_band": 0.35,
+        "bare_shout": 0.05,
+        "phrase_fill": 0.78,
+    },
+    # Less predictable. Invents more orders, spreads the vocabulary harder,
+    # chooses from a wider band so fit steers less, and leaves more air.
+    "wild": {
+        "invent_combos": 34,
+        "slice_words": True,
+        "repeat_penalty": 0.60,
+        "unused_bonus": 0.70,
+        "tie_band": 0.60,
+        "bare_shout": 0.12,
+        "phrase_fill": 0.66,
+    },
+    # Today's behaviour, for comparing against.
+    "off": {
+        "invent_combos": 0,
+        "slice_words": False,
+        "repeat_penalty": 0.0,
+        "unused_bonus": 0.0,
+        "tie_band": 0.35,
+        "bare_shout": 0.0,
+        "phrase_fill": PHRASE_FILL,
+    },
+}
+
+# Where arrangements are written, under the song's work directory. Appended to,
+# never overwritten, so an older arrangement stays reproducible.
+PLAY_LOG_DIR = "arrangements"
+
+
+# ---------------------------------------------------------------------------
 # STAGE 4 -- PITCH SHIFTING                    (built in commit 4)
 # ---------------------------------------------------------------------------
 
