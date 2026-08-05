@@ -601,3 +601,44 @@ def test_an_arrangement_without_a_span_still_replays(bank, slots):
     plan = realise(parse_text(text), slots, bank)
     assert [p.unit.words for p in plan.placements] == [["delta", "bravo"]]
     assert plan.placements[0].slot_span_s > 0
+
+
+class TestHandEditingIsGuarded:
+    """Hand-editable means hand-mistakeable.
+
+    Each of these once produced a placement that played and was wrong, which is
+    worse than a stop: the file says one thing and the audio does another, and
+    nothing reports it.
+    """
+
+    def _realise(self, bank, slots, body):
+        return realise(parse_text("# song t\n# seed 1\nphrase 0\n" + body), slots, bank)
+
+    def test_a_placement_covering_no_slots_is_refused(self, bank, slots):
+        for count in ("x0", "x-3"):
+            with pytest.raises(ArrangementError, match="covers no slots"):
+                self._realise(bank, slots, f"  0:00.00  {count}  delta\n")
+
+    def test_a_negative_onset_is_refused(self, bank, slots):
+        with pytest.raises(ArrangementError, match="before the song starts"):
+            self._realise(bank, slots, "  -0:05.00  x2  delta\n")
+
+    def test_a_span_that_gives_no_time_is_refused(self, bank, slots):
+        for span in ("=0", "=-5.0"):
+            with pytest.raises(ArrangementError, match="no time to sound"):
+                self._realise(bank, slots, f"  0:00.00  x2 {span}  delta\n")
+
+    def test_a_take_that_is_gone_is_refused_not_substituted(self, bank, slots):
+        """Falling through to the best fit is right when no take was asked for,
+        and wrong when one was: the arrangement then plays a different clip
+        while claiming to be that take."""
+        with pytest.raises(ArrangementError, match="no clip named"):
+            self._realise(bank, slots, "  0:00.00  x2  delta  [nosuch.wav]\n")
+
+    def test_a_minus_zero_minute_still_reads_as_negative(self):
+        """int("-0") is 0, so the sign vanished and -0:05 read as +5s."""
+        from song_generator.arrange import unclock
+
+        assert unclock("-0:05.00") == pytest.approx(-5.0)
+        assert unclock("-1:30.00") == pytest.approx(-90.0)
+        assert unclock("2:07.53") == pytest.approx(127.53)

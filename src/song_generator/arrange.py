@@ -339,8 +339,15 @@ def clock(seconds: float) -> str:
 
 
 def unclock(text: str) -> float:
-    minutes, _, seconds = text.partition(":")
-    return int(minutes) * 60 + float(seconds)
+    """Seconds from m:ss.ss. Signed, because int("-0") is 0.
+
+    A leading minus on a zero minute vanished, so "-0:05.00" read as +5s and a
+    line meant to be before the song silently landed five seconds into it.
+    """
+    text = text.strip()
+    sign = -1.0 if text.startswith("-") else 1.0
+    minutes, _, seconds = text.lstrip("+-").partition(":")
+    return sign * (int(minutes or 0) * 60 + float(seconds or 0))
 
 
 def describe(plan, song: str, bank: str, level: str, seed: int) -> Arrangement:
@@ -440,6 +447,16 @@ def parse_text(text: str) -> Arrangement:
         except ValueError as exc:
             raise ArrangementError(f"line {number}: {exc} in {raw!r}") from exc
 
+        # Hand-editable means hand-mistakeable. Each of these produces a
+        # placement that plays and is wrong, which is worse than a stop.
+        if n_slots < 1:
+            raise ArrangementError(
+                f"line {number}: x{n_slots} covers no slots. A placement needs "
+                "at least one.")
+        if onset_s < 0:
+            raise ArrangementError(
+                f"line {number}: {clock(onset_s)} is before the song starts.")
+
         rest_fields = fields[2:]
         span_s = None
         if rest_fields and rest_fields[0].startswith("="):
@@ -448,6 +465,10 @@ def parse_text(text: str) -> Arrangement:
             except ValueError as exc:
                 raise ArrangementError(
                     f"line {number}: cannot read the span in {raw!r}") from exc
+            if span_s <= 0:
+                raise ArrangementError(
+                    f"line {number}: a span of {span_s} gives the words no time "
+                    "to sound. Omit it and the slots decide.")
             rest_fields = rest_fields[1:]
 
         words = rest_fields
@@ -482,6 +503,13 @@ def unit_for(words: list[str], pool: list[Unit], by_word: dict[str, list[Unit]],
         for u in pool:
             if u.name == take:
                 return u
+        # Falling through to the best fit is right when no take was asked for,
+        # and wrong when one was and is gone: the arrangement then plays a
+        # different clip while claiming to be that take.
+        raise ArrangementError(
+            f"no clip named {take!r} in this bank."
+            " Delete the [take] from that line to let the best fit be"
+            " chosen, or check the bank is the one the arrangement names.")
     wanted = label_of(words)
     exact = [u for u in pool if u.label == wanted]
     if exact:
