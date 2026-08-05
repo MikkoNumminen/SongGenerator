@@ -739,10 +739,32 @@ SHIFT_ENGINE = "world"
 FORMANT_SCALE = 1.0
 
 # Hard cap on how far a clip may be shifted, in semitones. Beyond this the
-# shift is folded by whole octaves toward the target instead -- the word lands
-# in a different octave from the original melody but keeps its own character,
-# which sounds far better than a 14-semitone stretch.
-SHIFT_CAP_SEMITONES = 7.0
+# shift is folded by whole octaves toward the target instead: the word lands in
+# a different octave from the original melody but keeps its own character.
+#
+# Was 7.0, on the assumption that a bigger stretch would sound worse than
+# landing an octave out. Measured and then listened to, and the assumption was
+# wrong on this material.
+#
+# Sweeping the engine from 0 to 16 semitones against each clip's own unshifted
+# self: formants never drift by more than 4%, so the chipmunk this cap was
+# protecting against does not happen at any distance the tool would ask for.
+# What does change past 9 is harmonicity, +3.3 dB at 12 against +0.8 at 7, and
+# the loudness envelope, drifting twice as far. Read as a cost, that suggested
+# 9 as the free option and 12 as a trade.
+#
+# It is not a trade. At 12 both test songs sound better, judged by ear on whole
+# renders at mimicry 1.00, which is where a bad shift has nowhere to hide. What
+# the numbers called smoothing reads as the words being sung rather than
+# approximated, and it is swamped by what folding stops costing: on cardib_up
+# the median shift goes from 2.1 to 7.6 semitones, so most of the song lands on
+# the note the singer actually hit, and its ceiling goes from 0.68 to 0.96.
+#
+# Ceilings at 12 against 7: cardib_up 0.96 from 0.68, musichyva 0.86 from 0.75,
+# rocketman 0.99 from 0.87, musickorea 0.60 from 0.51.
+#
+# Beyond 12 is untested by ear. 15 measures worse again and buys little.
+SHIFT_CAP_SEMITONES = 12.0
 
 # Prefer the take whose recorded pitch is nearest the note it has to land on,
 # so it is shifted as little as possible.

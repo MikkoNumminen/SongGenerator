@@ -101,50 +101,65 @@ never see. Resolve it on a real vocal.
 
 ## Open items
 
-- **Record word takes at higher pitches. This is the biggest remaining win, and
-  it is not a code problem.**
+- **Record word takes at higher pitches. Still the way to reach the last of
+  it, but much less urgent than it was.**
 
-  Every song so far is heavily octave-folded, 52% of syllables on musicHyva,
-  31% on Juna Turkuun. A folded syllable lands on the right note *name* in the
-  wrong register, so it carries the tune only in part, and that is what caps
-  each song's mimicry ceiling (0.70 and 0.78 respectively).
+  The cap was the larger part of this. It sat at 7 semitones on the assumption
+  that a bigger stretch sounds worse than landing an octave out, and on this
+  material it does not: at 12 both test songs sound better by ear, and the mean
+  ceiling across fourteen songs went from 0.78 to 0.90. See
+  SHIFT_CAP_SEMITONES for the measurement and the listening result.
 
-  The bank looks like it has range and does not. Of 54 units:
+  What remains is the songs that still fold heavily, which are the ones sitting
+  furthest above the bank: musickorea at 0.60 with 75% still folded, music8 at
+  0.81, music46 and music45 at 0.82. Those are a range problem and no cap
+  setting reaches them.
+
+  A folded syllable lands on the right note *name* in the wrong register, so it
+  carries the tune only in part, and that is what caps a song's ceiling.
+
+  The bank looks like it has range and does not. Of 37 units, the spread that
+  matters is narrower than the total:
 
   | category | units | spread | shiftable? |
   |---|---|---|---|
-  | bare shouts | 34 | E3–B4, 19.4 st | never shifted at all |
-  | climax-only | 9 | B3–C#5, 14.0 st | peaks only |
-  | **ordinary. What actually places** | **11** | **F3–C4, 6.6 st** | yes |
+  | bare shouts | 2 | one pitch | never shifted at all |
+  | climax-only | 7 | A#3-E4, 6.0 st | peaks only |
+  | **ordinary. What actually places** | **28** | **E3-B4, 19.3 st** | yes |
 
-  Ten of those eleven sit at F3 or F#3. Against melodies covering A3–A#5,
-  folding is unavoidable: selection cannot invent a pitch the bank does not
-  hold. Wiring up `PREFER_NEAREST_SOURCE_PITCH` moved folding only 54% → 52%
-  for exactly this reason. An earlier estimate of 1% was made by measuring the
-  whole bank, shouts included, and was simply wrong.
+  The ordinary spread reads wide and is not: 25 of those 28 sit below MIDI 55,
+  so the top of the range is a handful of outliers. Against melodies whose
+  median sits 5 to 14 semitones above the bank, selection cannot invent a pitch
+  the bank does not hold, and wiring up `PREFER_NEAREST_SOURCE_PITCH` moved
+  folding only a couple of points for exactly that reason. An earlier estimate
+  of 1% was made by measuring the whole bank, shouts included, and was wrong.
 
-  What would move it: **more takes of `bravo`, `tango`, `delta`, `kilometer`
-  and `calculator` sung noticeably higher, around C4–F4.** A handful would do it.
+  What would move it: **more takes of the ordinary words sung noticeably
+  higher.** A handful would do it.
 
   What would *not* move it: more shouts (never shifted, so their spread is
-  decorative), more takes at F3 (already ten), or any further tuning of
-  selection weights.
+  decorative), more takes at the pitch the bank already has, or any further
+  tuning of selection weights.
 
   `python -m song_generator.doctor` reports this breakdown per bank.
 
-  **Measured again on the current bank, 37 clips, 14 songs.** The ceiling
-  tracks one number almost exactly: how far the melody sits above the bank.
+  **Measured on the current bank, 37 clips, 14 songs.** The ceiling tracks one
+  number almost exactly: how far the melody sits above the bank. The middle
+  column is what this looked like before the cap was raised, kept because it is
+  what the range problem costs when nothing else absorbs it.
 
-  | song | melody | above bank | over 7 st | ceiling |
+  | song | melody | above bank | ceiling at cap 7 | at cap 12 |
   |---|---|---|---|---|
-  | musickorea | 67.9 | +14.4 | 90% | 0.51 |
-  | cardib_up | 63.4 | +9.9 | 58% | 0.68 |
-  | musichyva | 62.2 | +8.6 | 52% | 0.75 |
-  | rocketman_bluegrass | 58.7 | +5.1 | 19% | 0.87 |
-  | paskaperse | 53.5 | 0.0 | 6% | 0.95 |
+  | musickorea | 67.9 | +14.4 | 0.51 | 0.60 |
+  | music8 | 63.7 | +10.1 | 0.62 | 0.81 |
+  | musichyva | 62.2 | +8.6 | 0.75 | 0.86 |
+  | cardib_up | 63.4 | +9.9 | 0.68 | 0.96 |
+  | rocketman_bluegrass | 58.7 | +5.1 | 0.87 | 0.99 |
+  | paskaperse | 53.5 | 0.0 | 0.95 | 1.00 |
 
-  Mean ceiling 0.78. The bank sits at MIDI 53.6 with a 10-90 percentile span
-  of 53.3 to 61.0, so it has almost no register at all.
+  Mean 0.78 then, 0.90 now. The bank sits at MIDI 53.6 with a 10-90 percentile
+  span of 53.3 to 61.0, so it has almost no register of its own, and the songs
+  that still fold are simply the ones furthest from it.
 
   **If higher takes cannot be recorded, the same range can be generated once,
   offline, per clip.** Simulated over all 14 songs, assuming a variant that
@@ -152,10 +167,10 @@ never see. Resolve it on a real vocal.
 
   | variants held per clip | mean ceiling | worst song | songs at 1.00 |
   |---|---|---|---|
-  | none, today | 0.78 | 0.51 | 0 of 14 |
-  | +12 | 0.95 | 0.75 | 3 of 14 |
-  | +12, +24 | 0.96 | 0.75 | 5 of 14 |
-  | -12, +12, +24 | **0.99** | **0.91** | **11 of 14** |
+  | none, today | 0.90 | 0.60 | 1 of 14 |
+  | +12 | 0.97 | 0.82 | 6 of 14 |
+  | +12, +24 | 0.98 | 0.82 | 9 of 14 |
+  | -12, +12, +24 | **1.00** | **1.00** | **14 of 14** |
 
   A single octave up captures most of it. That the grid is this coarse is not
   luck: `fold_shift` already reduces any shift to a residual within +/-6
@@ -181,7 +196,7 @@ never see. Resolve it on a real vocal.
   | **12 st** | 0.986 | +3.3 | 0.126 |
   | 14 st | 1.034 | +3.6 | 0.080 |
 
-  Formants never drift: WORLD holds the vocal tract within 3% of its own size
+  Formants never drift: WORLD holds the vocal tract within 4% of its own size
   at every shift out to 16 semitones, so the chipmunk the cap exists to
   prevent does not happen at any distance the tool would ask for.
 
