@@ -688,3 +688,31 @@ def test_recorded_clips_are_still_levelled_on_load(built):
     units = {u.name: u for u in load_bank(built, prefer_standardised=False)}
     on_disk = audio_io.read_wav(built / "bravo_1.wav")
     assert not np.allclose(units["bravo_1.wav"].audio, on_disk, atol=1e-6)
+
+
+def test_bounds_survive_rounding_to_four_decimals():
+    """Two boundaries a fraction apart must not round onto the same value.
+
+    The guard was 1e-4 and the output is rounded to 4 decimals, so neighbours
+    separated by exactly the guard collapsed after rounding. Equal boundaries
+    are a syllable of zero length: it renders as silence and takes the end off
+    the word, and nothing reports it.
+    """
+    out = shift_bounds([0.1] * 8, 0.05, 0.2)
+    assert len(out) == 8
+    assert all(b > a for a, b in zip(out, out[1:])), out
+    assert out == [round(b, 4) for b in out]
+
+
+def test_a_bound_never_lands_on_the_edges_of_the_clip():
+    """0.0 and duration_s are edges, not boundaries: either makes an empty span."""
+    for bounds, head, dur in (([0.5], 0.0, 0.5), ([0.5], 0.6, 1.0), ([-0.5, 0.2], 0.0, 1.0)):
+        out = shift_bounds(bounds, head, dur)
+        assert all(0.0 < b < dur for b in out), (bounds, head, dur, out)
+
+
+def test_a_clip_too_short_for_its_bounds_still_gets_real_spans():
+    """Nowhere legal left to put them is answered with wrong, not degenerate."""
+    out = shift_bounds([0.9, 1.1, 1.3, 1.5], 0.0, 1.0)
+    edges = [0.0] + out + [1.0]
+    assert all(b > a for a, b in zip(edges, edges[1:])), edges
