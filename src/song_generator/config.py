@@ -560,6 +560,13 @@ PLAY_DEFAULT_LEVEL = "conservative"
 #   climax_share     how many phrases count as peaks, and so how often the
 #                    payoff is allowed to land.
 #   climax_wildcard  chance an ordinary phrase takes the payoff anyway.
+#   chant_chance     chance that whatever was just sung gets said again, and
+#                    again. Repetition is funny when it is obviously on
+#                    purpose, which is why it is a decision here rather than
+#                    something repeat_penalty is simply relaxed into. That knob
+#                    still stops the other kind of repetition, where one clip
+#                    quietly wins every slot because it fits best.
+#   chant_max        how many extra times, at most.
 PLAY_LEVELS = {
     # Recognisable and tidy. Keeps close to what was recorded, and mostly
     # varies which take of a phrase is used rather than inventing orders.
@@ -575,6 +582,8 @@ PLAY_LEVELS = {
         "shout_share": 0.45,
         "climax_share": 0.40,
         "climax_wildcard": 0.15,
+        "chant_chance": 0.14,
+        "chant_max": 2,
     },
     # Less predictable. Invents more orders, spreads the vocabulary harder,
     # chooses from a wider band so fit steers less, and leaves more air.
@@ -593,6 +602,8 @@ PLAY_LEVELS = {
         "shout_share": 0.55,
         "climax_share": 0.50,
         "climax_wildcard": 0.25,
+        "chant_chance": 0.30,
+        "chant_max": 4,
     },
     # Today's behaviour, for comparing against.
     "off": {
@@ -607,6 +618,8 @@ PLAY_LEVELS = {
         "shout_share": SHOUT_MAX_SHARE,
         "climax_share": CLIMAX_PHRASE_SHARE,
         "climax_wildcard": CLIMAX_WILDCARD_CHANCE,
+        "chant_chance": 0.0,
+        "chant_max": 0,
     },
 }
 

@@ -233,24 +233,25 @@ def test_wild_is_not_emptier_than_conservative(bank, slots):
     assert filled["wild"] >= filled["conservative"] * 0.9
 
 
-def test_wild_is_never_less_varied_than_conservative(bank, slots):
-    """Only an inequality, because this fixture saturates.
+def test_playing_says_more_different_things_than_not_playing(bank, slots):
+    """Compared against off, which is the comparison that stays decidable.
 
-    Four words exhaust their own combination space within a few seeds, so both
-    levels reach the same ceiling here and a strict > would be testing the
-    fixture rather than the code. That wild reaches further is visible on a real
-    bank, where it says 34 distinct things against conservative's 22.
-    test_wild_invents_more_than_conservative pins the part that is decidable
-    without a bank: how much each level generates.
+    Conservative against wild is not testable on this fixture: four words
+    exhaust their own combination space in a few seeds, and chanting spends
+    some of what is left, so the two levels trade places depending on the seed.
+    On a real bank wild reaches further, and the part that can be decided
+    without a bank is how much each level generates, which
+    test_wild_invents_more_than_conservative pins.
     """
     variety = {}
-    for level in ("conservative", "wild"):
+    for level in ("off", "conservative", "wild"):
         seen = set()
         for i in range(6):
             plan, _, _ = build(slots, bank, level, 700 + i)
             seen.update(p.unit.label for p in plan.placements)
         variety[level] = len(seen)
-    assert variety["wild"] >= variety["conservative"]
+    assert variety["conservative"] > variety["off"]
+    assert variety["wild"] > variety["off"]
 
 
 def test_words_start_near_the_top_of_the_song(bank, slots):
@@ -392,3 +393,40 @@ def test_a_bank_with_no_pairing_is_not_asked_for_one(slots):
     _, arrangement, tries = build(slots, thin, "conservative", 12)
     assert not arrangement.has_pairing()
     assert tries == 1
+
+
+def test_saying_the_same_thing_twice_running_is_allowed(bank, slots):
+    """Repetition is a joke when it is obviously deliberate.
+
+    The planner also carries a repeat penalty, but that exists to stop a
+    different thing: one clip quietly winning every slot because it happens to
+    fit best. A chant is chosen, bounded, and ends.
+    """
+    import itertools
+
+    runs = []
+    for i in range(8):
+        plan, _, _ = build(slots, bank, "wild", 800 + i)
+        labels = [p.unit.label for p in plan.placements]
+        runs.append(max((len(list(g)) for _, g in itertools.groupby(labels)), default=0))
+    assert max(runs) >= 2
+
+
+def test_a_chant_is_bounded(bank, slots):
+    """It has to end, or it is not a joke, it is the whole song."""
+    import itertools
+
+    from song_generator.arrange import level_params
+
+    longest = level_params("wild")["chant_max"] + 1
+    for i in range(8):
+        plan, _, _ = build(slots, bank, "wild", 850 + i)
+        labels = [p.unit.label for p in plan.placements]
+        for _, group in itertools.groupby(labels):
+            assert len(list(group)) <= longest + 1
+
+
+def test_off_does_not_chant(bank, slots):
+    from song_generator.arrange import level_params
+
+    assert level_params("off")["chant_chance"] == 0.0

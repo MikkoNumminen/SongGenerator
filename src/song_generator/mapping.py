@@ -570,6 +570,13 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None,
     shout_budget = max(1, int(round(len(groups) * shout_share)))
     shouts_used = 0
 
+    # A chant: the same thing said several times running, on purpose. Not the
+    # same as the monotony repeat_penalty exists to stop, which is one clip
+    # quietly winning every slot because it happens to fit best. This is chosen,
+    # it is bounded, and it ends.
+    chant_label: str | None = None
+    chant_left = 0
+
     for index, group in enumerate(groups):
         if id(group) not in keep:
             plan.slots_dropped += len(group)
@@ -648,6 +655,19 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None,
                                allow_climax=True, targets=targets,
                                play=play, used=used)
 
+            if unit is None and chant_left > 0 and chant_label:
+                again = [u for u in units
+                         if u.label == chant_label and u.syllables <= remaining]
+                if again:
+                    # Inside a chant the repeat penalty is exactly wrong, so the
+                    # pool is narrowed to the chanted label and it cannot fire.
+                    unit = _choose(again, remaining, span_s, rng, None,
+                                   allow_shouts=True, allow_climax=True,
+                                   targets=targets, play=play, used=None)
+                    chant_left -= 1
+                else:
+                    chant_left = 0
+
             if unit is None:
                 unit = _choose(units, remaining, span_s, rng, last,
                                allow_shouts=shouts_used < shout_budget,
@@ -725,6 +745,12 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None,
             used[unit.label] = used.get(unit.label, 0) + 1
             last = unit.name
             i += unit.syllables
+
+            # Say it again. Started after a placement rather than before one, so
+            # a chant is always a repeat of something the song just said.
+            if play and chant_left <= 0 and rng.random() < float(play.get("chant_chance", 0.0)):
+                chant_label = unit.label
+                chant_left = rng.randint(1, max(1, int(play.get("chant_max", 2))))
 
     # Nothing may run into whatever comes next.
     for a, b in zip(plan.placements, plan.placements[1:]):
