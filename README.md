@@ -11,10 +11,10 @@ analyses, re-pitches, re-times and mixes them.
 .\.venv\Scripts\song-generator.exe input\song.mp4
 ```
 
-One command writes fourteen versions. Two arrangements of the words, one tidy
-and one that mixes them up harder, and each rendered from words that ignore
-the tune completely through to words that sing it as closely as the song
-allows. Pick by ear; the right one varies by song.
+One command writes fourteen versions into `output/<song>/`. Two arrangements
+of the words, one tidy and one that mixes them up harder, and each rendered
+from words that ignore the tune completely through to words that sing it as
+closely as the song allows. Pick by ear; the right one varies by song.
 
 ## How it works
 

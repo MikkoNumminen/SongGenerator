@@ -16,9 +16,14 @@ seven mimicry settings from 0.00 (words ignore the tune entirely, clashing,
 and funny for it) to 1.00 (sings the melody as closely as the song allows).
 
 ```
-song.conservative.mim0p00.mp3 ... song.conservative.mim1p00.mp3
-song.wild.mim0p00.mp3         ... song.wild.mim1p00.mp3
+output/song/song.conservative.mim0p00.mp3 ... mim1p00.mp3
+output/song/song.wild.mim0p00.mp3         ... mim1p00.mp3
 ```
+
+Each song gets its own folder. Fourteen files a run across a dozen songs is
+nearly two hundred in one directory, sorted by name, with every song's levels
+and rungs interleaved. The song name stays in the filename too, so a file
+dragged out of its folder still says what it is.
 
 Both levels every time, because which is funnier is a listening decision and a
 run that produced one of them has not finished the job. Pick by ear; there is
