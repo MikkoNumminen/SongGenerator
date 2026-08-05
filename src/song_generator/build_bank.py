@@ -166,10 +166,18 @@ def parse_phrase(stem: str) -> tuple[list[str], str] | None:
     # it every time.
     in_shout_tail = False
 
+    # Where a variant label could begin: just past a separator, with at least
+    # one whole word already read. Kept so a name that turns out to end in a
+    # fragment can fall back to reading the tail as a label instead of being
+    # refused outright.
+    label_from: tuple[int, int] | None = None
+
     while i < len(raw):
         if raw[i] in _SEPARATORS:
             i += 1
             after_separator = True
+            if any(w in config.WORD_SYLLABLES for w in words):
+                label_from = (len(words), i)
             continue
         # Longest wins, so "bravo" beats the syllable "pas", and a shout spelled
         # "aaah" beats the shorter canonical "aah" hiding inside it.
@@ -225,6 +233,15 @@ def parse_phrase(stem: str) -> tuple[list[str], str] | None:
 
     rest = raw[i:].strip(_SEPARATORS)
     if rest and not rest.isdigit() and not after_separator:
+        # A fragment, which normally means the name ends mid-word and must be
+        # refused. But a variant label can begin with something the bank knows:
+        # "calculator_low" reads "lo" as a syllable of kilometer and is left
+        # holding "w", so a name the tool's own instructions tell people to use
+        # was silently ignored. When a separator with whole words before it is
+        # available, the tail from there is the label.
+        if label_from is not None:
+            count, start = label_from
+            return words[:count], raw[start:].strip(_SEPARATORS)
         return None
     return words, rest
 

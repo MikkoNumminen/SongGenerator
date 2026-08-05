@@ -156,7 +156,9 @@ listening. It is the one part that cannot be automated.
 .\.venv\Scripts\python.exe -m song_generator.build_bank
 ```
 
-**Naming.** All of these parse: `bravo`, `bravo1`, `bravo_2`, `bravo_low`,
+**Naming.** A variant label may begin with something the bank knows: `_low`
+starts with the syllable `lo`, and the name is still read as one word plus a
+label. All of these parse: `bravo`, `bravo1`, `bravo_2`, `bravo_low`,
 `BRAVO3`. Multi-word clips keep the singer's own transitions and are worth more
 than their parts, name them as sequences: `tangodelta`, `aahcalculator`. A shout
 can be spelled however it sounded: `aah`, `aaah`, `ahh`, `aaahh`.

@@ -202,3 +202,62 @@ class TestShoutTails:
         words, rest = parse_phrase("aaah")
         assert words == ["aah"]
         assert rest == ""
+
+
+class TestTheParserDoesNotDriftSilently:
+    """A corpus of names and what each must mean.
+
+    parse_phrase is the only thing that knows what a clip says, so a change to
+    it silently changes what every bank contains. Changing this table is
+    allowed; changing it by accident is what this catches.
+    """
+
+    CORPUS = {
+        # plain words and takes
+        "bravo": ["bravo"],
+        "bravo1": ["bravo"],
+        "bravo_2": ["bravo"],
+        "calculator_low": ["calculator"],
+        # several words in one clip, which is what the bank mostly holds
+        "bravotango": ["bravo", "tango"],
+        "bravo-tango": ["bravo", "tango"],
+        "bravo tango delta": ["bravo", "tango", "delta"],
+        "tango-delta_2": ["tango", "delta"],
+        # the shout, spelled however it was heard
+        "aah": ["aah"],
+        "aaah": ["aah"],
+        "ahh": ["aah"],
+        "aahcalculator": ["aah", "calculator"],
+        # a stuttered shout written out is content, not a take label
+        "calculator-aah_ah-a-a-ah": ["calculator"] + ["aah"] * 5,
+        # a take label is not content
+        "delta_hah": ["delta"],
+        "bravo-haze": ["bravo"],
+        # syllables, which spell words rather than being sung
+        "bra": ["bra"],
+        "bra-vo": ["bra", "vo"],
+        "me ter": ["me", "ter"],
+        # punctuation people actually type
+        "bravo, tango": ["bravo", "tango"],
+        "bravo; delta": ["bravo", "delta"],
+    }
+
+    REFUSED = [
+        "bravotangopor",   # ends mid-word
+        "banana",          # nothing in the vocabulary
+        "",                # nothing at all
+    ]
+
+    def test_every_name_still_means_what_it_meant(self):
+        wrong = {}
+        for stem, expected in self.CORPUS.items():
+            parsed = parse_phrase(stem)
+            got = parsed[0] if parsed else None
+            if got != expected:
+                wrong[stem] = (expected, got)
+        assert not wrong, f"the parser changed meaning: {wrong}"
+
+    def test_names_that_must_stay_refused(self):
+        for stem in self.REFUSED:
+            parsed = parse_phrase(stem)
+            assert parsed is None or parsed[0] == [], f"{stem!r} should not parse"
