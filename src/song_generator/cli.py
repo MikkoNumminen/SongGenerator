@@ -255,7 +255,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: {exc}", file=sys.stderr)
             return EXIT_ERROR
 
-        missing = described.missing()
+        # Only what a redraw could have found. A word no clip contains is
+        # already reported once against the bank, and repeating it per level
+        # said the same thing three times while burying the case that matters:
+        # a word the bank HAS and this arrangement happened to miss.
+        missing = [w for w in described.missing() if w not in cannot_say]
         if missing and not args.json:
             print(f"  MISSING   {label} never says: {', '.join(missing)}")
         word_plan.merged, word_plan.split = merged, split
