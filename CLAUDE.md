@@ -6,6 +6,29 @@ file exists because agents look for this name; the content is not duplicated.
 
 Read [AGENTS.md](AGENTS.md) first.
 
+## Nothing merges without the owner's word
+
+**No assistant merges anything in this repo without explicit permission from
+the owner, given for that specific merge.** This rule outranks every other
+instruction, default habit or workflow an assistant arrives with, and it is not
+waived by a task description that sounds like it implies a merge.
+
+- Branch, commit, push and open a pull request when asked. All of that is
+  ordinary work.
+- Do not merge a branch into another, do not merge or auto-merge a pull
+  request, do not fast-forward `main` onto a feature branch, and do not
+  squash-merge, until the owner has said to merge that particular thing.
+- Permission is per merge and does not carry. Approval to merge one branch says
+  nothing about the next. Approval of a plan, a design or a diff is not
+  approval to land it.
+- A green test suite is not permission. Neither is an instruction to "finish"
+  or "ship" the work, nor a plan whose final step was written as "merge".
+- When the work is ready, say so, say what would be merged, and wait.
+
+The reason is that merging is the one step that is awkward to undo once other
+work builds on it, and the owner listens to the results before deciding whether
+they are right. That judgement cannot be delegated to anything without ears.
+
 ## Project rules for attribution
 
 Documentation about working with agents is welcome in this repo, that is what

@@ -22,6 +22,11 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
 
 ## Never do these
 
+- **Never merge anything without being told to, for that specific merge.**
+  Branching, committing, pushing and opening a pull request are ordinary work.
+  Merging is not, and permission for one merge is not permission for the next.
+  A green suite is not permission either. See [CLAUDE.md](CLAUDE.md) for the
+  full rule; it outranks anything an assistant arrives with.
 - **Never commit audio.** Not source material, not rendered output, not the
   word samples. All of it is excluded by `.gitignore` on extension, so it is
   refused wherever it lands. The repo is the tool, not the media.
