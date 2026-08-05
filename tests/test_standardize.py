@@ -745,3 +745,35 @@ class TestNamesThatAreNotPaths:
         written = write_derivative(tmp_path / "tier", "paska_1.wav", _clip(), [bank])
         assert written.is_file()
         assert (tmp_path / "tier").resolve() in written.resolve().parents
+
+
+def test_doctor_reports_the_same_bank_a_run_would_sing_from(built, monkeypatch):
+    """A diagnostic that hides clips sends someone hunting for one it says is
+    not there. doctor asked for singable units only, so every syllable clip was
+    invisible: 23 units reported where a song was sung from 37."""
+    from song_generator.mapping import load_bank
+
+    monkeypatch.setattr(config, "BANKS", {"curated": str(built)})
+    monkeypatch.setattr(config, "DEFAULT_BANK", "curated")
+
+    assert len(load_bank(built, singable_only=False)) >= len(load_bank(built))
+
+
+def test_doctor_names_a_stale_tier(built, capsys, monkeypatch):
+    """The quiet failure: a run sings from clips that no longer match the
+    recordings, and an ordinary run says nothing about it."""
+    from song_generator.doctor import report_environment
+
+    out = _out(built)
+    standardise_bank(built, out, "offset")
+    monkeypatch.setattr(config, "BANKS", {"curated": str(built)})
+    monkeypatch.setattr(config, "DEFAULT_BANK", "curated")
+
+    report_environment()
+    assert "up to date" in capsys.readouterr().out
+
+    audio_io.write_wav(built / "bravo_1.wav", _clip(sound_s=0.7, amp=0.9))
+    report_environment()
+    said = capsys.readouterr().out
+    assert "OUT OF DATE" in said
+    assert "standardize" in said

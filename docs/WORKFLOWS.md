@@ -103,6 +103,19 @@ a knob to 0 will not remove a required word from a song.
 
 ---
 
+## Check the bank is the one being sung from
+
+```powershell
+.\.venv\Scripts\python.exe -m song_generator.doctor
+```
+
+The environment section names, per bank, the directory a run would actually
+sing from and whether its standardised tier still matches the recordings. A
+stale tier is the quiet failure: the song is sung from clips that no longer
+reflect what is on disk, and an ordinary run says nothing about it.
+
+---
+
 ## Work out why something sounds wrong
 
 ```powershell
