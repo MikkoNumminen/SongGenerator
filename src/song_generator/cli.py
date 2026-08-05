@@ -273,7 +273,11 @@ def main(argv: list[str] | None = None) -> int:
                 decide_shifts(word_plan, mode=args.mix_mode, seed=args.seed,
                               target_mimicry=target)
                 tag = f"{target:.2f}".replace(".", "p")
-                path = output.with_name(f"{output.stem}.{label}.mim{tag}{output.suffix}")
+                # The level goes in the name only when there is more than one
+                # to tell apart. Appending it unconditionally doubled it onto
+                # an --output that already named a level.
+                stem = f"{output.stem}.{label}" if len(levels) > 1 else output.stem
+                path = output.with_name(f"{stem}.mim{tag}{output.suffix}")
 
             word_bus = render(word_plan, stems.instrumental.shape[1], config.SAMPLE_RATE,
                               shift=not args.no_shift, engine=args.engine, cache=cache)
