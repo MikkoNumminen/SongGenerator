@@ -218,3 +218,25 @@ def test_every_command_a_tool_prints_can_actually_be_run():
                 problems.append(f"song_generator.{module} has no {flag}")
 
     assert not problems, "instructions nobody can follow: " + "; ".join(problems)
+
+
+def test_a_constant_a_level_overrides_says_so():
+    """Four constants stopped governing an ordinary run when the playfulness
+    levels started setting their own, and their comments still read as though
+    they decided the behaviour. Somebody tuning one would have changed nothing
+    and had no way to tell."""
+    source = (ROOT / "src" / "song_generator" / "config.py").read_text(encoding="utf-8")
+
+    overridden = {
+        "PHRASE_FILL": "phrase_fill",
+        "SHOUT_MAX_SHARE": "shout_share",
+        "CLIMAX_PHRASE_SHARE": "climax_share",
+        "CLIMAX_WILDCARD_CHANCE": "climax_wildcard",
+    }
+    for constant, knob in overridden.items():
+        assert any(knob in level for level in config.PLAY_LEVELS.values()), \
+            f"{knob} is claimed as an override and no level sets it"
+        before = source.split(f"\n{constant} =")[0]
+        recent = before[-700:]
+        assert "PLAY_LEVELS" in recent, \
+            f"{constant} is overridden by every level and does not say so"

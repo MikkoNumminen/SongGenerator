@@ -164,6 +164,10 @@ PLACE_BARE_SYLLABLES = False
 
 # Fraction of phrases that get words. The rest are left instrumental, so the
 # track breathes and the words land as events rather than as a texture.
+#
+# The playfulness levels each set their own; this is what 'off' uses and
+# what the levels were tuned against. Changing it moves nothing on an
+# ordinary run. See PLAY_LEVELS.
 PHRASE_FILL = 0.78
 
 # Cap on how much of the track may be bare shouts. "aah" on its own is
@@ -173,6 +177,10 @@ PHRASE_FILL = 0.78
 # Raised from 0.12: at that level bravo, delta and kilometer dominated while
 # aah barely registered, because a shout could only ever land in a leftover slot
 # and most phrases had none.
+#
+# The playfulness levels each set their own; this is what 'off' uses and
+# what the levels were tuned against. Changing it moves nothing on an
+# ordinary run. See PLAY_LEVELS.
 SHOUT_MAX_SHARE = 0.28
 
 # Chance that a unit is introduced by a shout in the slot before it.
@@ -225,6 +233,10 @@ CLIMAX_WORDS = ("calculator",)
 
 # Fraction of phrases that count as peaks. Small on purpose: the point is
 # scarcity, and a climax that recurs every few seconds is not a climax.
+#
+# The playfulness levels each set their own; this is what 'off' uses and
+# what the levels were tuned against. Changing it moves nothing on an
+# ordinary run. See PLAY_LEVELS.
 CLIMAX_PHRASE_SHARE = 0.18
 
 # Floor, because a share collapses on a short song. A 41-second track with six
@@ -240,6 +252,10 @@ CLIMAX_USE_CHANCE = 0.9
 
 # Chance that an ordinary phrase gets one anyway, purely as a joke. Rare on
 # purpose: an unexpected one is funny, a predictable one is a pattern.
+#
+# The playfulness levels each set their own; this is what 'off' uses and
+# what the levels were tuned against. Changing it moves nothing on an
+# ordinary run. See PLAY_LEVELS.
 CLIMAX_WILDCARD_CHANCE = 0.05
 
 # How a peak is recognised. Climaxes tend to be both higher and louder than the
