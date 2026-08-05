@@ -351,6 +351,34 @@ def clean_slots(notes: list[dict]) -> tuple[list[Slot], int, int]:
     return final, merged, split
 
 
+def _split_long(group: list[Slot]) -> list[list[Slot]]:
+    """Break a phrase that runs longer than a phrase should, at its widest gap.
+
+    Silence alone cannot find the ends of continuous delivery. Rapped verses do
+    not pause, so gap detection returned one 25-second phrase on a test song,
+    and since density is decided per phrase, dropping that one phrase left the
+    first quarter of the track wordless while the original was singing from 4s.
+
+    Splitting at the widest internal gap is not musical analysis, it is the
+    least arbitrary cut available: whatever the smallest breath in the run is,
+    that is where a listener is most likely to hear a join anyway.
+    """
+    span = group[-1].offset_s - group[0].onset_s
+    if span <= config.PHRASE_MAX_S or len(group) < 4:
+        return [group]
+
+    gaps = [(b.onset_s - a.offset_s, i + 1)
+            for i, (a, b) in enumerate(zip(group, group[1:]))]
+    # Keep the cut away from the very ends, so a split never leaves a stub.
+    margin = max(1, len(group) // 8)
+    inner = [g for g in gaps if margin <= g[1] <= len(group) - margin]
+    if not inner:
+        return [group]
+
+    _, at = max(inner)
+    return _split_long(group[:at]) + _split_long(group[at:])
+
+
 def group_phrases(slots: list[Slot]) -> list[list[Slot]]:
     """Re-derive phrases after cleanup, so groups match the slots being filled."""
     groups: list[list[Slot]] = []
@@ -359,14 +387,19 @@ def group_phrases(slots: list[Slot]) -> list[list[Slot]]:
             groups[-1].append(slot)
         else:
             groups.append([slot])
-    return groups
+
+    out: list[list[Slot]] = []
+    for group in groups:
+        out.extend(_split_long(group))
+    return out
 
 
 # ---------------------------------------------------------------------------
 # Planning
 # ---------------------------------------------------------------------------
 
-def find_climaxes(groups: list[list[Slot]], min_slots: int = 1) -> set[int]:
+def find_climaxes(groups: list[list[Slot]], min_slots: int = 1,
+                  share: float | None = None) -> set[int]:
     """Which phrases are the song's peaks.
 
     Ranked on pitch and loudness together, since a climax is usually both
@@ -396,7 +429,8 @@ def find_climaxes(groups: list[list[Slot]], min_slots: int = 1) -> set[int]:
              + config.CLIMAX_LOUDNESS_WEIGHT * z(loud))
 
     how_many = max(config.CLIMAX_MIN_PEAKS,
-                   int(round(len(groups) * config.CLIMAX_PHRASE_SHARE)))
+                   int(round(len(groups) * (config.CLIMAX_PHRASE_SHARE
+                                            if share is None else share))))
     ranked = [eligible[j] for j in np.argsort(-score)]
     return set(ranked[:how_many])
 
@@ -501,7 +535,8 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None,
 
     groups = group_phrases(slots)
     smallest_climax = min((u.syllables for u in units if u.is_climax), default=1)
-    climaxes = find_climaxes(groups, min_slots=smallest_climax)
+    climax_share = float(play.get("climax_share", config.CLIMAX_PHRASE_SHARE)) if play         else config.CLIMAX_PHRASE_SHARE
+    climaxes = find_climaxes(groups, min_slots=smallest_climax, share=climax_share)
 
     # Leave some phrases instrumental. Filling every one makes the words a
     # texture rather than events, which buries them on a smooth song.
@@ -531,7 +566,8 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None,
 
         keep |= {id(groups[i]) for i in ordinary if i not in dropped}
 
-    shout_budget = max(1, int(round(len(groups) * config.SHOUT_MAX_SHARE)))
+    shout_share = float(play.get("shout_share", config.SHOUT_MAX_SHARE)) if play         else config.SHOUT_MAX_SHARE
+    shout_budget = max(1, int(round(len(groups) * shout_share)))
     shouts_used = 0
 
     for index, group in enumerate(groups):
@@ -542,7 +578,8 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None,
         # A peak may take one; anywhere else it is an occasional joke, which
         # only works while it stays unexpected.
         at_peak = index in climaxes and rng.random() < config.CLIMAX_USE_CHANCE
-        wildcard = index not in climaxes and rng.random() < config.CLIMAX_WILDCARD_CHANCE
+        wildcard_chance = float(play.get("climax_wildcard", config.CLIMAX_WILDCARD_CHANCE))             if play else config.CLIMAX_WILDCARD_CHANCE
+        wildcard = index not in climaxes and rng.random() < wildcard_chance
         climax_left = 1 if (at_peak or wildcard) else 0
 
         i = 0

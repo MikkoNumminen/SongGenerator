@@ -429,6 +429,17 @@ BOUNDARY_MERGE_S = 0.05
 # the melody into a new phrase. Words never straddle a phrase boundary.
 PHRASE_GAP_S = 0.35
 
+# A phrase may not run longer than this. A gap alone does not find phrase ends
+# in continuous delivery: a rapped verse never stops for 0.35s, so a whole
+# 25-second section came out as ONE phrase on a test song. That matters because
+# density is decided per phrase, so dropping one such phrase silenced a quarter
+# of the song and the words did not start until 25s in while the original
+# started at 4s.
+#
+# A phrase over the cap is split at its widest internal gap, which is the most
+# phrase-like boundary available even when it is not a real pause.
+PHRASE_MAX_S = 6.0
+
 # Slots shorter than this are extractor blips: merged into whichever neighbour
 # is closer in pitch rather than being given a syllable of their own.
 MIN_SYLLABLE_S = 0.09
@@ -544,6 +555,11 @@ PLAY_DEFAULT_LEVEL = "conservative"
 #                    the whole bank is built around.
 #   phrase_fill      how many phrases get words at all. Lower leaves more of
 #                    the song instrumental, so the words land as events.
+#   shout_share      how much of the song may be shouts. The base setting keeps
+#                    the shout as punctuation; these levels want it as a voice.
+#   climax_share     how many phrases count as peaks, and so how often the
+#                    payoff is allowed to land.
+#   climax_wildcard  chance an ordinary phrase takes the payoff anyway.
 PLAY_LEVELS = {
     # Recognisable and tidy. Keeps close to what was recorded, and mostly
     # varies which take of a phrase is used rather than inventing orders.
@@ -556,6 +572,9 @@ PLAY_LEVELS = {
         "bare_shout": 0.05,
         "detach_pairing": 0.15,
         "phrase_fill": 0.78,
+        "shout_share": 0.45,
+        "climax_share": 0.40,
+        "climax_wildcard": 0.15,
     },
     # Less predictable. Invents more orders, spreads the vocabulary harder,
     # chooses from a wider band so fit steers less, and leaves more air.
@@ -571,6 +590,9 @@ PLAY_LEVELS = {
         "bare_shout": 0.07,
         "detach_pairing": 0.45,
         "phrase_fill": 0.80,
+        "shout_share": 0.55,
+        "climax_share": 0.50,
+        "climax_wildcard": 0.25,
     },
     # Today's behaviour, for comparing against.
     "off": {
@@ -582,6 +604,9 @@ PLAY_LEVELS = {
         "bare_shout": 0.0,
         "detach_pairing": 1.0,
         "phrase_fill": PHRASE_FILL,
+        "shout_share": SHOUT_MAX_SHARE,
+        "climax_share": CLIMAX_PHRASE_SHARE,
+        "climax_wildcard": CLIMAX_WILDCARD_CHANCE,
     },
 }
 

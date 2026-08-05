@@ -260,3 +260,42 @@ class TestMimicry:
 
 def test_report_on_an_empty_plan():
     assert "nothing placed" in report(Plan(), [])
+
+
+def test_a_long_run_is_split_into_phrase_sized_pieces():
+    """Continuous delivery has no gaps, so a cap has to find the ends.
+
+    A rapped verse never pauses for PHRASE_GAP_S, which made a 25-second run
+    read as one phrase on a real song. Density is decided per phrase, so
+    dropping that one phrase silenced the first quarter of the track.
+    """
+    from song_generator import config
+    from song_generator.mapping import Slot, group_phrases
+
+    slots, at = [], 0.0
+    for _ in range(120):
+        slots.append(Slot(at, at + 0.2, 60.0, phrase=0))
+        at += 0.21          # never opens a PHRASE_GAP_S gap
+    groups = group_phrases(slots)
+
+    assert len(groups) > 1
+    for group in groups:
+        assert group[-1].offset_s - group[0].onset_s <= config.PHRASE_MAX_S
+
+
+def test_splitting_keeps_every_slot_exactly_once():
+    from song_generator.mapping import Slot, group_phrases
+
+    slots, at = [], 0.0
+    for _ in range(90):
+        slots.append(Slot(at, at + 0.2, 60.0, phrase=0))
+        at += 0.22
+    flat = [s for group in group_phrases(slots) for s in group]
+    assert flat == slots
+
+
+def test_a_short_phrase_is_left_alone():
+    from song_generator.mapping import Slot, group_phrases
+
+    slots = [Slot(i * 0.3, i * 0.3 + 0.25, 60.0, phrase=0) for i in range(6)]
+    assert group_phrases(slots) == [slots]
