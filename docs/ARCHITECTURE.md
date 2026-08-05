@@ -84,6 +84,7 @@ These do not run during a song. They turn source videos into reviewed clips.
 | `separate_hq.py` | Re-separate sources with Mel-Band Roformer into `vocal_hq.wav` |
 | `recut_bank.py` | Re-cut the bank from those stems, keeping every label |
 | `standardize.py` | Trim, fade and level a bank into a derivative tier beside it |
+| `arrange.py` | Cut words out of recorded phrases; build and replay arrangements |
 
 These are deliberately scripts rather than anything cleverer. Their inputs are
 enumerable and their work is deterministic, so there is no judgement to
@@ -94,6 +95,28 @@ good, cannot be made by anything without ears.
 offset by cross-correlation. Filenames are not reliable evidence of where audio
 starts: clips written by `successors.py` are padded 50 ms earlier than the
 timestamp they record, and trusting the name cut the attack off 34 shouts.
+
+`arrange.py` exists because the bank is recorded *phrases*, not words. Most
+clips hold two or three words at once, which is why the result sounds like a
+person rather than a sampler, and also why the automation could only repeat
+sequences somebody had already sung. `build_bank` already measured where each
+word starts inside each clip, so the same numbers cut a phrase back into its
+words. A single word is a slice; a new order is slices crossfaded together.
+
+Recorded clips always win where one exists, because a real recording carries
+the singer's own transition between two words and a crossfade does not. The
+slices are what let the tool say something that was never recorded.
+
+One run picks one playfulness level, which produces one arrangement, which is
+then rendered across the whole mimicry ladder. Playfulness and mimicry are
+different questions and deliberately do not multiply.
+
+Every arrangement is written to `work/<song>/arrangements/` as a file a person
+can read and edit, and `--arrangement` plays one back. Replay rebuilds the
+placements from the file rather than replanning, so an edited file produces
+what it says. That format is also the one a "supply your own lyrics" mode would
+consume, which is why `unit_for` will assemble any word order out of slices
+rather than only recognising the ones the tool generated.
 
 `standardize.py` works in tiers. The recorded clips are the source of truth and
 are never written to; the pass reads them and produces new files in a sibling

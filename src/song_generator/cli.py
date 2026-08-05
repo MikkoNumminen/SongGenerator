@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 import sys
 import time
 from pathlib import Path
 
 import numpy as np
 
-from . import __version__, audio_io, config
+from . import __version__, arrange, audio_io, config
 from .analysis import analyse, report as analysis_report
 from .detect import detect_vocal
 from .mapping import (
@@ -74,7 +75,14 @@ def build_parser() -> argparse.ArgumentParser:
                    help="let lone syllables be sung on their own, not just used to "
                         "spell words (the pre-words-only behaviour)")
     p.add_argument("--seed", type=int, default=None,
-                   help="word choice seed [default: WORD_ROTATION_SEED in config.py]")
+                   help="arrangement seed [default: a new one each run, so every "
+                        "run plays differently; it is printed and logged]")
+    p.add_argument("--play", default=config.PLAY_DEFAULT_LEVEL,
+                   choices=sorted(config.PLAY_LEVELS),
+                   help="how freely the words are rearranged")
+    p.add_argument("--arrangement", type=Path, default=None,
+                   help="replay an arrangement from a log file instead of "
+                        "making a new one; edit the file to change what is sung")
     p.add_argument("--no-words", action="store_true",
                    help="stop after analysis and write only the instrumental")
     p.add_argument("--no-shift", action="store_true",
@@ -202,7 +210,30 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_ERROR
 
     slots, merged, split = clean_slots([n.__dict__ for n in analysis.notes])
-    word_plan = plan_words(slots, units, seed=args.seed)
+
+    try:
+        if args.arrangement:
+            described = arrange.load(args.arrangement)
+            word_plan = arrange.realise(described, slots, units)
+            if not args.json:
+                print(f"  arrangement replayed from {args.arrangement}")
+        else:
+            seed = args.seed if args.seed is not None else random.randrange(1, 1_000_000)
+            word_plan, described, tries = arrange.build(
+                slots, units, args.play, seed,
+                song=args.input.stem, bank=str(words_dir))
+            saved = arrange.save(described, work)
+            if not args.json:
+                redrawn = "" if tries == 1 else f", redrawn {tries - 1}x for coverage"
+                print(f"  play      {args.play}, seed {described.seed}{redrawn}")
+                print(f"  words     {saved}")
+    except arrange.ArrangementError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_ERROR
+
+    missing = described.missing()
+    if missing and not args.json:
+        print(f"  MISSING   this song never says: {', '.join(missing)}")
     word_plan.merged, word_plan.split = merged, split
 
     single = args.no_shift or args.mix is not None or args.mimicry is not None
