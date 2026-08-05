@@ -18,7 +18,7 @@ from song_generator import config
 from song_generator.arrange import (
     Arrangement, ArrangementError, Line, build, describe, enrich, index_by_word,
     join_words, level_params, parse_text, realise, render_text, required_words,
-    slice_words, unit_for, word_spans,
+    load, save, slice_words, unit_for, word_spans,
 )
 from song_generator.mapping import Slot, Unit, plan_words
 
@@ -708,3 +708,75 @@ def test_every_origin_the_pool_produces_is_priced(bank):
 
     seen = {unit_origin(u) for u in enrich(bank, "wild", random.Random(1))}
     assert seen <= set(ORIGIN_COSTS), f"unpriced origins: {seen - set(ORIGIN_COSTS)}"
+
+
+class TestTheLogOnDisk:
+    """save and load had no tests, and they are the whole point of the log.
+
+    Everything else was exercised through render_text and parse_text in
+    memory. What a person actually does is run a song, keep the file, and come
+    back to it later, and none of that path was covered.
+    """
+
+    def test_a_saved_arrangement_loads_back_identically(self, bank, slots, tmp_path):
+        _, arrangement, _ = build(slots, bank, "wild", 606, song="s", bank="b")
+        path = save(arrangement, tmp_path)
+
+        back = load(path)
+        assert [(l.words, l.take, l.n_slots) for l in back.lines] == \
+               [(l.words, l.take, l.n_slots) for l in arrangement.lines]
+        assert back.seed == arrangement.seed
+        assert back.level == arrangement.level
+
+    def test_the_filename_carries_the_seed_and_the_level(self, bank, slots, tmp_path):
+        _, arrangement, _ = build(slots, bank, "conservative", 909)
+        path = save(arrangement, tmp_path)
+        assert path.name == "909-conservative.arr"
+        assert path.parent.name == config.PLAY_LOG_DIR
+
+    def test_both_levels_of_one_run_keep_separate_files(self, bank, slots, tmp_path):
+        """A run writes two. One overwriting the other would lose a take."""
+        saved = set()
+        for level in ("conservative", "wild"):
+            _, arrangement, _ = build(slots, bank, level, 4242)
+            saved.add(save(arrangement, tmp_path).name)
+        assert len(saved) == 2
+
+    def test_saving_twice_is_stable(self, bank, slots, tmp_path):
+        _, arrangement, _ = build(slots, bank, "wild", 77)
+        first = save(arrangement, tmp_path).read_text(encoding="utf-8")
+        assert save(arrangement, tmp_path).read_text(encoding="utf-8") == first
+
+    def test_loading_something_that_is_not_there_says_so(self, tmp_path):
+        with pytest.raises(ArrangementError, match="not found"):
+            load(tmp_path / "1-wild.arr")
+
+    def test_a_replay_of_a_saved_file_reproduces_the_plan(self, bank, slots, tmp_path):
+        """The whole promise: keep the file, get the take back."""
+        plan, arrangement, _ = build(slots, bank, "wild", 313)
+        replayed = realise(load(save(arrangement, tmp_path)), slots, bank)
+        assert [(p.unit.name, round(p.onset_s, 3)) for p in replayed.placements] == \
+               [(p.unit.name, round(p.onset_s, 3)) for p in plan.placements]
+
+
+class TestMalformedLinesAreRefusedByNumber:
+    """Every one of these is something a person could type into the file."""
+
+    def test_an_unreadable_phrase_number(self):
+        with pytest.raises(ArrangementError, match="phrase number"):
+            parse_text("phrase two\n  0:00.00  x2  delta\n")
+
+    def test_an_unreadable_slot_count(self):
+        with pytest.raises(ArrangementError, match="line 2"):
+            parse_text("phrase 0\n  0:00.00  xmany  delta\n")
+
+    def test_an_unreadable_time(self):
+        with pytest.raises(ArrangementError, match="line 2"):
+            parse_text("phrase 0\n  soon  x2  delta\n")
+
+    def test_an_unreadable_seed_does_not_stop_the_file_loading(self):
+        """The seed is provenance, not instruction. A bad one must not throw
+        away an otherwise good arrangement."""
+        arrangement = parse_text("# seed    later\nphrase 0\n  0:00.00  x2  delta\n")
+        assert arrangement.seed == 0
+        assert len(arrangement.lines) == 1
