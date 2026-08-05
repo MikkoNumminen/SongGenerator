@@ -46,11 +46,44 @@ def report_environment() -> None:
     import shutil
     print(f"  ffmpeg: {'found' if shutil.which('ffmpeg') else 'MISSING -- winget install Gyan.FFmpeg'}")
 
+    from .mapping import resolve_bank
+    from .standardize import StandardizeError, check_tier
+
     for name, path in config.BANKS.items():
         exists = (Path(path) / "words.json").is_file()
         mark = "ok" if exists else "not built"
         star = " (default)" if name == config.DEFAULT_BANK else ""
         print(f"  bank '{name}': {mark}{star}")
+        if not exists:
+            continue
+
+        # Which audio a run would actually sing from, and whether it still
+        # matches the recordings. A stale tier is the quiet failure here: the
+        # song is sung from clips that no longer reflect what is on disk, and
+        # nothing in an ordinary run says so.
+        singing_from, standardised = resolve_bank(Path(path))
+        if not standardised:
+            print(f"           sings from {singing_from} as recorded, "
+                  f"no standardised tier")
+            continue
+        try:
+            status = check_tier(Path(path), singing_from, config.SHOUT_LEVEL_MODE)
+        except StandardizeError as exc:
+            print(f"           tier {singing_from}: unreadable ({exc})")
+            continue
+        if status.current:
+            print(f"           sings from {singing_from}, up to date")
+        else:
+            counts = ", ".join(
+                f"{len(group)} {label}" for label, group in
+                (("stale", status.stale), ("new", status.new),
+                 ("missing", status.missing), ("orphaned", status.gone))
+                if group)
+            drift = "parameters changed; " if status.drifted else ""
+            print(f"           tier {singing_from}: OUT OF DATE "
+                  f"({drift}{counts or 'no clip matches'})")
+            print(f"           rebuild: python -m song_generator.standardize "
+                  f"--words-dir {path}")
 
 
 def report_vocabulary() -> None:
@@ -72,7 +105,11 @@ def report_vocabulary() -> None:
 def report_bank(bank_name: str) -> list | None:
     print(f"\nBANK '{bank_name}'")
     try:
-        units = load_bank(Path(config.BANKS[bank_name]))
+        # The same view the runtime takes. Asking for singable units only hid
+        # every syllable clip, so doctor reported 23 units where a song was
+        # actually sung from 37, and a clip somebody had just cut looked as
+        # though it had never arrived.
+        units = load_bank(Path(config.BANKS[bank_name]), singable_only=False)
     except BankError as exc:
         print(f"  {exc}")
         return None
@@ -80,9 +117,15 @@ def report_bank(bank_name: str) -> list | None:
     singable = [u for u in units if not u.is_climax]
     climax = [u for u in units if u.is_climax]
     shouts = [u for u in units if u.is_bare_shout]
+    material = [u for u in units if not u.is_word_like]
 
     print(f"  {len(units)} units: {len(singable)} ordinary, {len(climax)} climax-only, "
           f"{len(shouts)} bare shouts")
+    if material:
+        # Not sung on their own. They are cut into syllables and spelled into
+        # whole words, which is invisible from a unit count alone.
+        print(f"  {len(material)} of those are syllable clips, used to spell "
+              f"words rather than sung as they are")
 
     words = Counter(w for u in units for w in u.words)
     print("  words:   " + ", ".join(f"{w} x{n}" for w, n in words.most_common()))

@@ -164,6 +164,10 @@ PLACE_BARE_SYLLABLES = False
 
 # Fraction of phrases that get words. The rest are left instrumental, so the
 # track breathes and the words land as events rather than as a texture.
+#
+# The playfulness levels each set their own; this is what 'off' uses and
+# what the levels were tuned against. Changing it moves nothing on an
+# ordinary run. See PLAY_LEVELS.
 PHRASE_FILL = 0.78
 
 # Cap on how much of the track may be bare shouts. "aah" on its own is
@@ -173,6 +177,10 @@ PHRASE_FILL = 0.78
 # Raised from 0.12: at that level bravo, delta and kilometer dominated while
 # aah barely registered, because a shout could only ever land in a leftover slot
 # and most phrases had none.
+#
+# The playfulness levels each set their own; this is what 'off' uses and
+# what the levels were tuned against. Changing it moves nothing on an
+# ordinary run. See PLAY_LEVELS.
 SHOUT_MAX_SHARE = 0.28
 
 # Chance that a unit is introduced by a shout in the slot before it.
@@ -225,6 +233,10 @@ CLIMAX_WORDS = ("calculator",)
 
 # Fraction of phrases that count as peaks. Small on purpose: the point is
 # scarcity, and a climax that recurs every few seconds is not a climax.
+#
+# The playfulness levels each set their own; this is what 'off' uses and
+# what the levels were tuned against. Changing it moves nothing on an
+# ordinary run. See PLAY_LEVELS.
 CLIMAX_PHRASE_SHARE = 0.18
 
 # Floor, because a share collapses on a short song. A 41-second track with six
@@ -240,6 +252,10 @@ CLIMAX_USE_CHANCE = 0.9
 
 # Chance that an ordinary phrase gets one anyway, purely as a joke. Rare on
 # purpose: an unexpected one is funny, a predictable one is a pattern.
+#
+# The playfulness levels each set their own; this is what 'off' uses and
+# what the levels were tuned against. Changing it moves nothing on an
+# ordinary run. See PLAY_LEVELS.
 CLIMAX_WILDCARD_CHANCE = 0.05
 
 # How a peak is recognised. Climaxes tend to be both higher and louder than the
@@ -274,6 +290,14 @@ WORD_SPELLING = {
     "kilometer": ("ki", "lo", "me", "ter"),
     "calculator": ("cal", "cu", "la", "tor"),
 }
+
+# Extra syllable fragments a clip name may use, beyond the ones that appear in
+# WORD_SPELLING. Somebody naming by ear writes what they hear, and a sung
+# stutter ("pi pillu", "pe perse") is a real thing in the recordings that no
+# canonical spelling contains. Listing them here lets those names parse instead
+# of being refused, which is the difference between a clip being usable and
+# sitting on disk. They are fragments, never sung alone.
+EXTRA_SYLLABLES = ()
 
 # Letters a held shout may be spelled with. A shout has no canonical spelling:
 # someone naming clips by ear writes what they heard, so aah, aaah, ahh and
@@ -429,6 +453,17 @@ BOUNDARY_MERGE_S = 0.05
 # the melody into a new phrase. Words never straddle a phrase boundary.
 PHRASE_GAP_S = 0.35
 
+# A phrase may not run longer than this. A gap alone does not find phrase ends
+# in continuous delivery: a rapped verse never stops for 0.35s, so a whole
+# 25-second section came out as ONE phrase on a test song. That matters because
+# density is decided per phrase, so dropping one such phrase silenced a quarter
+# of the song and the words did not start until 25s in while the original
+# started at 4s.
+#
+# A phrase over the cap is split at its widest internal gap, which is the most
+# phrase-like boundary available even when it is not a real pause.
+PHRASE_MAX_S = 6.0
+
 # Slots shorter than this are extractor blips: merged into whichever neighbour
 # is closer in pitch rather than being given a syllable of their own.
 MIN_SYLLABLE_S = 0.09
@@ -497,6 +532,186 @@ BEAT_SUBDIVISION = 4
 
 
 # ---------------------------------------------------------------------------
+# PLAYFULNESS -- how the automation plays with the words
+# ---------------------------------------------------------------------------
+# The bank is recorded phrases, not words, so left alone the tool can only
+# repeat sequences somebody once sang. arrange.py cuts the words back out of
+# those phrases using the boundaries build_bank already measured, which lets
+# the automation ask for orders that were never recorded.
+#
+# One level is chosen per run. It produces ONE arrangement, and that single
+# arrangement is then rendered across the mimicry ladder exactly as before.
+# Playfulness and mimicry are different questions and do not multiply.
+
+# Words that must appear somewhere in every song. None means every word in
+# WORD_SYLLABLES. A bank with a word that is deliberately occasional should
+# name the required ones in vocabulary_local.py instead of changing this.
+PLAY_REQUIRED_WORDS = None
+
+# The words a song is mostly made of. None means every short word that is
+# neither the shout nor the payoff. A bank whose core is narrower than that
+# should name it in vocabulary_local.py.
+PLAY_CORE_WORDS = None
+
+# How many times to redraw an arrangement that failed the coverage rule before
+# repairing it by hand. Each retry is a fresh seed derived from the first, so
+# the run stays reproducible from the seed it reports.
+PLAY_COVERAGE_TRIES = 12
+
+PLAY_DEFAULT_LEVEL = "conservative"
+
+# Levels rendered when no single one is asked for. Both, always: which is
+# funnier is decided by ear, and a run that produced one and offered the other
+# had not finished. Each is its own arrangement with its own seed and its own
+# log, so either can be brought back alone.
+PLAY_BOTH_LEVELS = ("conservative", "wild")
+
+# The two levels, as parameter sets.
+#
+#   invent_combos    how many word orders to build that were never recorded.
+#                    They compete with the real clips on fit and mostly lose,
+#                    which is intended: a recorded phrase carries the singer's
+#                    own transition and a crossfade does not.
+#   slice_words      whether single words cut out of phrases may be sung alone.
+#   repeat_penalty   cost added for reusing the label just used. The bank is
+#                    small and without this one clip wins a whole song.
+#   unused_bonus     bonus for a label not yet heard in this song, which is
+#                    what spreads the vocabulary out.
+#   tie_band         how far below the best a candidate may score and still be
+#                    drawn at random. The one knob that really trades fit for
+#                    surprise.
+#   bare_shout       chance that a placed shout is left with nothing after it.
+#                    Rare on purpose. The joke is that the ear is set up for
+#                    a word and does not get one, and it dies if it recurs.
+#                    Only the next unit is dropped, never the whole phrase.
+#   detach_pairing   chance the shout and the payoff are allowed to go their
+#                    separate ways at a peak. They travel together by default,
+#                    because the recording of them together is the one clip
+#                    the whole bank is built around.
+#   phrase_fill      how many phrases get words at all. Lower leaves more of
+#                    the song instrumental, so the words land as events.
+#   max_gap_s        longest stretch a run may leave wordless by thinning.
+#                    phrase_fill alone is a proportion of PHRASES, which stopped
+#                    meaning a proportion of TIME once phrases were capped in
+#                    length, so the holes have to be bounded directly.
+#   shout_share      how much of the song may be shouts. The base setting keeps
+#                    the shout as punctuation; these levels want it as a voice.
+#   climax_share     how many phrases count as peaks, and so how often the
+#                    payoff is allowed to land.
+#   climax_wildcard  chance an ordinary phrase takes the payoff anyway.
+#   chant_chance     chance that whatever was just sung gets said again, and
+#                    again. Repetition is funny when it is obviously on
+#                    purpose, which is why it is a decision here rather than
+#                    something repeat_penalty is simply relaxed into. That knob
+#                    still stops the other kind of repetition, where one clip
+#                    quietly wins every slot because it fits best.
+#   chant_max        how many extra times, at most.
+#   core_bonus       how strongly the words that carry the song are preferred.
+#                    Without this the shout wins on fit alone, being a third of
+#                    the recordings and short enough for any slot, and the
+#                    result is a song of shouting with words in the gaps.
+#   crown_cost       what including a long word costs. It is rarer than the
+#                    core on purpose and finishes a combination rather than
+#                    carrying one.
+#   shout_cost       what including the shout costs, on top of its budget.
+#   slice_cost       what using a word cut out of a clip costs, against a clip
+#                    the singer actually sang whole.
+#   joined_cost      what an order nobody sang costs. Real words, but the
+#                    movement between them is a crossfade.
+#   spelled_cost     what a word assembled from syllable fragments costs.
+#                    Charged hardest: whole words almost every time, and a
+#                    spelling only when nothing recorded will do.
+#   extra_cost       what a word that is none of the above costs. A bank
+#                    accumulates words the song is not really about, and
+#                    unused_bonus rewards them for sounding new. Charged
+#                    heavily: these are a garnish that should surprise when it
+#                    turns up, not part of the regular vocabulary.
+PLAY_LEVELS = {
+    # Recognisable and tidy. Keeps close to what was recorded, and mostly
+    # varies which take of a phrase is used rather than inventing orders.
+    "conservative": {
+        "slice_cost": 0.20,
+        "joined_cost": 0.55,
+        "spelled_cost": 1.10,
+        "extra_cost": 1.60,
+        "core_bonus": 0.9,
+        "crown_cost": 0.22,
+        "shout_cost": 0.55,
+        "invent_combos": 10,
+        "slice_words": True,
+        "repeat_penalty": 0.85,
+        "unused_bonus": 0.25,
+        "tie_band": 0.35,
+        "bare_shout": 0.05,
+        "detach_pairing": 0.15,
+        "phrase_fill": 0.88,
+        "max_gap_s": 3.0,
+        "shout_share": 0.22,
+        "climax_share": 0.18,
+        "climax_wildcard": 0.06,
+        "chant_chance": 0.14,
+        "chant_max": 2,
+    },
+    # Less predictable. Invents more orders, spreads the vocabulary harder,
+    # chooses from a wider band so fit steers less, and leaves more air.
+    # Less predictable, NOT emptier. An earlier pass thinned the song as well
+    # as scrambling it and the result had almost no words in it, which is a
+    # different thing from being unpredictable.
+    "wild": {
+        "slice_cost": 0.10,
+        "joined_cost": 0.32,
+        "spelled_cost": 0.80,
+        "extra_cost": 1.25,
+        "core_bonus": 0.8,
+        "crown_cost": 0.2,
+        "shout_cost": 0.3,
+        "invent_combos": 34,
+        "slice_words": True,
+        "repeat_penalty": 0.60,
+        "unused_bonus": 0.70,
+        "tie_band": 0.50,
+        "bare_shout": 0.07,
+        "detach_pairing": 0.45,
+        "phrase_fill": 0.85,
+        "max_gap_s": 3.5,
+        "shout_share": 0.34,
+        "climax_share": 0.30,
+        "climax_wildcard": 0.12,
+        "chant_chance": 0.30,
+        "chant_max": 4,
+    },
+    # Today's behaviour, for comparing against.
+    "off": {
+        "slice_cost": 0.0,
+        "joined_cost": 0.0,
+        "spelled_cost": 0.0,
+        "extra_cost": 0.0,
+        "core_bonus": 0.0,
+        "crown_cost": 0.0,
+        "shout_cost": 0.0,
+        "invent_combos": 0,
+        "slice_words": False,
+        "repeat_penalty": 0.0,
+        "unused_bonus": 0.0,
+        "tie_band": 0.35,
+        "bare_shout": 0.0,
+        "detach_pairing": 1.0,
+        "phrase_fill": PHRASE_FILL,
+        "max_gap_s": 0.0,
+        "shout_share": SHOUT_MAX_SHARE,
+        "climax_share": CLIMAX_PHRASE_SHARE,
+        "climax_wildcard": CLIMAX_WILDCARD_CHANCE,
+        "chant_chance": 0.0,
+        "chant_max": 0,
+    },
+}
+
+# Where arrangements are written, under the song's work directory. Appended to,
+# never overwritten, so an older arrangement stays reproducible.
+PLAY_LOG_DIR = "arrangements"
+
+
+# ---------------------------------------------------------------------------
 # STAGE 4 -- PITCH SHIFTING                    (built in commit 4)
 # ---------------------------------------------------------------------------
 
@@ -510,9 +725,17 @@ BEAT_SUBDIVISION = 4
 #                large shifts, where WORLD starts to sound vocoded.
 SHIFT_ENGINE = "world"
 
-# Formant handling. 1.0 = formants held exactly where they were, which is what
-# keeps a shifted clip sounding like the same singer rather than a chipmunk.
-# Values above 1.0 deliberately brighten; below 1.0 darken.
+# Formant handling for the rubberband engine. WORLD does not use this: it
+# preserves the envelope by construction, leaving it untouched while F0 is
+# replaced.
+#
+# 1.0 = formants held exactly where they were, which is what keeps a shifted
+# clip sounding like the same singer rather than a chipmunk. Values above 1.0
+# deliberately brighten; below 1.0 darken.
+#
+# Note this is the TOOL's convention, not Rubber Band's, which reads 1.0 as
+# "do not scale the envelope" and so produces exactly the chipmunk 1.0 is meant
+# to avoid. pitchshift translates.
 FORMANT_SCALE = 1.0
 
 # Hard cap on how far a clip may be shifted, in semitones. Beyond this the

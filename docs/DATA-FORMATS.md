@@ -90,6 +90,65 @@ their targets.
 
 ---
 
+## `work/<song>/arrangements/<seed>-<level>.arr`
+
+What gets sung where, for one run. Written by `arrange.py` on every render,
+never overwritten, so an older arrangement stays reproducible.
+
+```
+# SongGenerator arrangement
+#   song    rocketman_bluegrass
+#   bank    words_hq3.std
+#   level   wild
+#   seed    543686
+#
+#   at      when it starts. The song decides the slots; this locates the line.
+#   x<n>    how many melody slots it covers.
+#   =<s>    how long it is given, in seconds. Optional.
+#   words   what is sung there, in order. This is the part to edit.
+#   [take]  which recording. Delete it and the best fit is chosen for you, or
+#           the words are built out of slices if nothing recorded says them.
+
+phrase 1
+   0:02.57  x8  =2.37  pillu paska pornolehti   [pillu-paska-pornolehti_1.wav]
+   0:04.94  x6  =1.96  perse pillu perse        [perse-pillu-perse_1.wav]
+   0:07.26  x1  =0.35  eee                      [eee_then__muumit__50.76.wav]
+```
+
+`phrase N` counts the phrases the mapper sings to, which are the detector's
+phrases after cleanup has merged blips, split held notes and capped anything
+too long to be one phrase. They do not line up with the `phrase` field on a
+note in `analysis.json`, and neither is wrong: that file records what was
+heard, this one records what the tool sang to.
+
+The span is written because it cannot always be derived: a word may be held
+across a leftover slot, which widens what it is given without adding a note to
+land on. Omit it in a hand-written file and the slots decide.
+
+**Two-way on purpose.** The tool writes it and a person can edit it and feed
+it back:
+
+```powershell
+.\.venv\Scripts\song-generator.exe input\song.mp3 --arrangement <path>
+```
+
+Replay rebuilds the placements from the file rather than replanning, so an
+edited file produces what it says and nothing else. Change the words on a
+line, delete a line, or delete a `[take]` to let the tool pick the recording.
+A sequence nobody recorded is assembled from slices on demand, so any order of
+the bank's words can be asked for, whether the generator would have chosen it
+or not. That is what makes this the format a "supply your own lyrics" mode
+would read, without that mode existing yet.
+
+Refused rather than guessed: a word the vocabulary does not have, a line that
+cannot be anchored to a slot, and a sequence the bank cannot say. A silently
+misaligned or dropped word would still play, which is why none of them are
+tolerated.
+
+Each level of a run writes its own file, so a run produces two.
+
+---
+
 ## `words_hq.std/standardized.json`
 
 How each derivative was made, and what it was made from. Written by

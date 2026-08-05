@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 import sys
 import time
 from pathlib import Path
 
 import numpy as np
 
-from . import __version__, audio_io, config
+from . import __version__, arrange, audio_io, config
 from .analysis import analyse, report as analysis_report
 from .detect import detect_vocal
 from .mapping import (
@@ -52,7 +53,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("input", type=Path, help="input song (mp3, or anything ffmpeg reads)")
     p.add_argument("-o", "--output", type=Path, default=None,
-                   help="output mp3 [default: output/<input stem>.song_generator.mp3]")
+                   help="base name for the output. The level and the mimicry "
+                        "setting are added to it, so one run writes "
+                        "<name>.<level>.mim<N>.mp3 "
+                        "[default: output/<input stem>.song_generator.mp3]")
     p.add_argument("--separator", choices=["demucs", "roformer"], default=config.SEPARATOR,
                    help="source separation backend")
     p.add_argument("--device", default=None, help="torch device, e.g. cuda or cpu [default: autodetect]")
@@ -74,7 +78,14 @@ def build_parser() -> argparse.ArgumentParser:
                    help="let lone syllables be sung on their own, not just used to "
                         "spell words (the pre-words-only behaviour)")
     p.add_argument("--seed", type=int, default=None,
-                   help="word choice seed [default: WORD_ROTATION_SEED in config.py]")
+                   help="arrangement seed [default: a new one each run, so every "
+                        "run plays differently; it is printed and logged]")
+    p.add_argument("--play", default=None, choices=sorted(config.PLAY_LEVELS),
+                   help="render only this level [default: every level in "
+                        "PLAY_BOTH_LEVELS, so both are there to choose between]")
+    p.add_argument("--arrangement", type=Path, default=None,
+                   help="replay an arrangement from a log file instead of "
+                        "making a new one; edit the file to change what is sung")
     p.add_argument("--no-words", action="store_true",
                    help="stop after analysis and write only the instrumental")
     p.add_argument("--no-shift", action="store_true",
@@ -190,11 +201,12 @@ def main(argv: list[str] | None = None) -> int:
     words_dir = args.words_dir or Path(config.BANKS[args.bank])
     if args.bare_syllables:
         config.PLACE_BARE_SYLLABLES = True
+    singing_from, standardised = resolve_bank(
+        words_dir, prefer_standardised=not args.raw_clips)
     try:
-        units = load_bank(words_dir, prefer_standardised=not args.raw_clips)
+        units = load_bank(words_dir, prefer_standardised=not args.raw_clips,
+                          singable_only=False)
         if not args.json:
-            singing_from, standardised = resolve_bank(
-                words_dir, prefer_standardised=not args.raw_clips)
             how = "standardised" if standardised else "as recorded"
             print(f"  bank      {args.bank} ({singing_from}, {how})")
     except BankError as exc:
@@ -202,52 +214,105 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_ERROR
 
     slots, merged, split = clean_slots([n.__dict__ for n in analysis.notes])
-    word_plan = plan_words(slots, units, seed=args.seed)
-    word_plan.merged, word_plan.split = merged, split
+
+    cannot_say = arrange.unreachable_words(units)
+    if cannot_say and not args.json:
+        print(f"  BANK      holds no clip saying: {', '.join(cannot_say)}")
+
+    # Both levels, every time. Which one is funnier is a listening decision, so
+    # a run that produced one of them and offered the other had not finished
+    # the job. They are separate arrangements with separate seeds, and each
+    # writes its own log, so either can be brought back on its own.
+    if args.arrangement:
+        levels = [None]
+    elif args.play:
+        levels = [args.play]
+    else:
+        levels = list(config.PLAY_BOTH_LEVELS)
 
     single = args.no_shift or args.mix is not None or args.mimicry is not None
     targets = [None] if single else list(config.MIMICRY_VARIANTS)
+    written: list[tuple[Path, str, float, int]] = []
+    last_plan = None
 
-    # The resynthesis is shared: which units a variant shifts is only a
-    # selection over the same shifted set, so the whole sweep costs barely
-    # more than one render.
-    cache = None if args.no_shift else precompute_shifted(
-        word_plan, config.SAMPLE_RATE, args.engine)
+    for level in levels:
+        try:
+            if level is None:
+                described = arrange.load(args.arrangement)
+                word_plan = arrange.realise(described, slots, units)
+                label = described.level or "replay"
+                if not args.json:
+                    print(f"  arrangement replayed from {args.arrangement}")
+            else:
+                seed = args.seed if args.seed is not None else random.randrange(1, 1_000_000)
+                word_plan, described, tries = arrange.build(
+                    slots, units, level, seed,
+                    song=args.input.stem, bank=str(singing_from))
+                saved = arrange.save(described, work)
+                label = level
+                if not args.json:
+                    redrawn = "" if tries == 1 else f", redrawn {tries - 1}x for coverage"
+                    print(f"  play      {level}, seed {described.seed}{redrawn}")
+                    print(f"  words     {saved}")
+        except arrange.ArrangementError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return EXIT_ERROR
 
-    written: list[tuple[Path, float, int]] = []
-    for target in targets:
-        if single:
-            decide_shifts(word_plan, mix=0.0 if args.no_shift else args.mix,
-                          mode=args.mix_mode, seed=args.seed,
-                          target_mimicry=args.mimicry)
-            path = output
-        else:
-            decide_shifts(word_plan, mode=args.mix_mode, seed=args.seed,
-                          target_mimicry=target)
-            tag = f"{target:.2f}".replace(".", "p")
-            path = output.with_name(f"{output.stem}.mim{tag}{output.suffix}")
+        # Only what a redraw could have found. A word no clip contains is
+        # already reported once against the bank, and repeating it per level
+        # said the same thing three times while burying the case that matters:
+        # a word the bank HAS and this arrangement happened to miss.
+        missing = [w for w in described.missing() if w not in cannot_say]
+        if missing and not args.json:
+            print(f"  MISSING   {label} never says: {', '.join(missing)}")
+        word_plan.merged, word_plan.split = merged, split
+        last_plan = word_plan
 
-        word_bus = render(word_plan, stems.instrumental.shape[1], config.SAMPLE_RATE,
-                          shift=not args.no_shift, engine=args.engine, cache=cache)
-        audio_io.encode_mp3(path, mix_buses(word_bus, stems.instrumental,
-                                            config.SAMPLE_RATE))
-        written.append((path, mimicry(word_plan),
-                        sum(1 for p in word_plan.placements if p.do_shift)))
+        # The resynthesis is shared across the mimicry sweep: which units a
+        # variant shifts is only a selection over the same shifted set.
+        cache = None if args.no_shift else precompute_shifted(
+            word_plan, config.SAMPLE_RATE, args.engine)
 
-    mixed = None
+        for target in targets:
+            if single:
+                decide_shifts(word_plan, mix=0.0 if args.no_shift else args.mix,
+                              mode=args.mix_mode, seed=args.seed,
+                              target_mimicry=args.mimicry)
+                stem = f"{output.stem}.{label}" if len(levels) > 1 else output.stem
+                path = output.with_name(f"{stem}{output.suffix}")
+            else:
+                decide_shifts(word_plan, mode=args.mix_mode, seed=args.seed,
+                              target_mimicry=target)
+                tag = f"{target:.2f}".replace(".", "p")
+                # The level goes in the name only when there is more than one
+                # to tell apart. Appending it unconditionally doubled it onto
+                # an --output that already named a level.
+                stem = f"{output.stem}.{label}" if len(levels) > 1 else output.stem
+                path = output.with_name(f"{stem}.mim{tag}{output.suffix}")
+
+            word_bus = render(word_plan, stems.instrumental.shape[1], config.SAMPLE_RATE,
+                              shift=not args.no_shift, engine=args.engine, cache=cache)
+            audio_io.encode_mp3(path, mix_buses(word_bus, stems.instrumental,
+                                                config.SAMPLE_RATE))
+            written.append((path, label, mimicry(word_plan),
+                            sum(1 for p in word_plan.placements if p.do_shift)))
+
+        if not args.json:
+            print(mapping_report(word_plan, units))
+            print()
+
+    word_plan = last_plan
 
     if not args.json:
-        print(mapping_report(word_plan, units))
-        print()
         if len(written) == 1:
             print(f"  wrote     {written[0][0]}")
         else:
             print(f"  wrote {len(written)} versions to {output.parent.resolve()}")
             print()
-            print("    mimicry   units singing   file")
-            for path, got, singing in written:
+            print("    level         mimicry   units singing   file")
+            for path, label, got, singing in written:
                 note = "  <- ignores the tune" if got <= 0 else ""
-                print(f"      {got:.2f}      {singing:>3}/{len(word_plan.placements):<3}"
+                print(f"    {label:<12}   {got:.2f}      {singing:>3}"
                       f"      {path.name}{note}")
         print(f"  analysis  {work / 'analysis.json'}")
     return EXIT_OK

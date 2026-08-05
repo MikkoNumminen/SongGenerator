@@ -102,6 +102,15 @@ def write_derivative(root: Path, name: str, audio: np.ndarray,
     skipped by a later code path that forgot about it.
     """
     root_r = check_destination(root, sources)
+
+    # A clip name comes from a filename on disk and ends up as one again, so it
+    # is checked before it is used rather than after libsndfile fails with a
+    # system error nobody can read. Containment is checked below and catches
+    # traversal; this catches the names that are not paths at all.
+    if not name or name in (".", "..") or any(ord(c) < 32 for c in name):
+        raise StandardizeError(
+            f"refusing to write {name!r}: that is not a usable clip name.")
+
     dest = _resolved(root_r / name)
 
     if root_r not in dest.parents:
@@ -213,12 +222,28 @@ def shift_bounds(bounds: list[float], head_s: float, duration_s: float) -> list[
     if not bounds:
         return []
 
-    eps = 1e-4
+    # Wide enough that rounding to 4 decimals cannot collapse two neighbours
+    # onto the same value, which it did at 1e-4: a syllable of zero length
+    # renders as silence and takes the end off the word.
+    eps = 1e-3
     out: list[float] = []
     previous = 0.0
-    for b in bounds:
-        value = min(max(float(b) - head_s, previous + eps), max(duration_s - eps, eps))
-        out.append(round(value, 4))
+    for i, b in enumerate(bounds):
+        # Room is reserved for every boundary still to come, and for the end of
+        # the clip after the last of them. Capping each at the same value
+        # collapsed them all onto it whenever a tail trim pushed several past
+        # the new end.
+        ceiling = duration_s - eps * (len(bounds) - i)
+        value = min(max(float(b) - head_s, previous + eps), max(ceiling, previous + eps))
+        value = round(value, 4)
+        # Rounding can still land on the neighbour, and a clip too short to fit
+        # every boundary has nowhere legal left to put them. Both are better
+        # answered by a boundary that is merely wrong than by one that is
+        # degenerate, since the renderer treats equal edges as a silent
+        # syllable rather than reporting them.
+        if out and value <= out[-1]:
+            value = round(out[-1] + eps, 4)
+        out.append(value)
         previous = value
     return out
 

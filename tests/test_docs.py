@@ -80,10 +80,10 @@ def test_constants_named_in_docs_actually_exist(doc):
     known = set(dir(config))
     # Words that look like constants but are prose or JSON keys.
     allowed = {
-        "AGENTS", "README", "GLOSSARY", "ARCHITECTURE", "WORKFLOWS",
+        "AGENTS", "README", "GLOSSARY", "ARCHITECTURE", "WORKFLOWS", "CLAUDE",
         "DEMUCS", "WORLD", "PATH", "JSON", "LUFS", "PYTHONPATH", "GPU",
         "NVIDIA", "TSV", "BOM", "DENSITY", "CLIMAXES", "STAGE", "LISTEN",
-        "FIRST", "FORMATS", "BRAVO", "OTHER",
+        "FIRST", "FORMATS", "BRAVO", "OTHER", "PLAYFULNESS",
     }
     missing = sorted(_referenced_constants(read(ROOT / doc)) - known - allowed)
     assert not missing, f"{doc} names constants that do not exist: {missing}"
@@ -180,3 +180,77 @@ def test_every_cli_module_can_be_imported():
                  "mine_words", "set_aside", "successors", "hunt"):
         module = importlib.import_module(f"song_generator.{name}")
         assert hasattr(module, "main"), f"{name} is documented as runnable but has no main()"
+
+
+def test_every_command_a_tool_prints_can_actually_be_run():
+    """Instructions printed at a user are documentation that ships in the code.
+
+    calculator_low.wav was printed as an example of what to name a clip and
+    did not parse, so anyone following it lost that take silently. The same
+    shape of mistake applies to a command: a module that was renamed, or a flag
+    that never existed, is worse in a printed instruction than in a doc,
+    because it arrives at the moment somebody is trying to act on it.
+    """
+    import importlib
+    import re
+
+    text = "".join(p.read_text(encoding="utf-8")
+                   for p in (ROOT / "src" / "song_generator").glob("*.py"))
+    text += "".join(p.read_text(encoding="utf-8") for p in DOCS.glob("*.md"))
+
+    problems = []
+    # The lookahead keeps "song_generator.mp3" out: a name followed by a digit
+    # is an output file, not a module, and matching it captured a module "mp"
+    # that never existed.
+    pattern = r"song_generator\.([a-z_]+)(?![a-z0-9])((?:\s+--[a-z-]+)*)"
+    for module, flags in set(re.findall(pattern, text)):
+        try:
+            loaded = importlib.import_module(f"song_generator.{module}")
+        except ImportError:
+            problems.append(f"song_generator.{module} does not exist")
+            continue
+        if not hasattr(loaded, "build_parser"):
+            continue
+        known = {name for action in loaded.build_parser()._actions
+                 for name in action.option_strings}
+        for flag in re.findall(r"--[a-z-]+", flags):
+            if flag not in known:
+                problems.append(f"song_generator.{module} has no {flag}")
+
+    assert not problems, "instructions nobody can follow: " + "; ".join(problems)
+
+
+def test_a_constant_a_level_overrides_says_so():
+    """Four constants stopped governing an ordinary run when the playfulness
+    levels started setting their own, and their comments still read as though
+    they decided the behaviour. Somebody tuning one would have changed nothing
+    and had no way to tell."""
+    source = (ROOT / "src" / "song_generator" / "config.py").read_text(encoding="utf-8")
+
+    overridden = {
+        "PHRASE_FILL": "phrase_fill",
+        "SHOUT_MAX_SHARE": "shout_share",
+        "CLIMAX_PHRASE_SHARE": "climax_share",
+        "CLIMAX_WILDCARD_CHANCE": "climax_wildcard",
+    }
+    for constant, knob in overridden.items():
+        assert any(knob in level for level in config.PLAY_LEVELS.values()), \
+            f"{knob} is claimed as an override and no level sets it"
+        before = source.split(f"\n{constant} =")[0]
+        recent = before[-700:]
+        assert "PLAY_LEVELS" in recent, \
+            f"{constant} is overridden by every level and does not say so"
+
+
+def test_the_readme_describes_both_dials():
+    """It described mimicry alone while the tool had grown a second dial.
+
+    Playfulness decides what gets sung and mimicry decides how closely it
+    follows the tune. Someone reading only about mimicry would not know the
+    other existed, or why a run writes fourteen files rather than seven.
+    """
+    text = read(ROOT / "README.md").lower()
+    assert "mimicry" in text
+    assert "playfulness" in text
+    assert "conservative" in text and "wild" in text
+    assert "fourteen" in text or "14 " in text

@@ -99,3 +99,53 @@ class TestRenderUnit:
 
     def test_no_segments_yields_silence_not_a_crash(self):
         assert render_unit(_sung(), SR, [], 0.5, engine="world").size >= 0
+
+
+class TestRubberBandFormants:
+    """The setting has to mean what config.py says it means.
+
+    FORMANT_SCALE is documented as "1.0 = formants held exactly where they
+    were". Rubber Band reads 1.0 as "do not scale the preserved envelope" and,
+    without the preservation flag, does not preserve anything at all, so the
+    documented value produced exactly the chipmunk it claims to prevent.
+    """
+
+    def _centroid(self, x, sr):
+        """Where the formant energy sits. Rises with a chipmunk."""
+        import librosa
+
+        spec = np.abs(librosa.stft(np.ascontiguousarray(x, dtype=np.float32), n_fft=2048))
+        freqs = librosa.fft_frequencies(sr=sr, n_fft=2048)
+        band = (freqs >= 300) & (freqs <= 4000)
+        weight = spec[band].sum(axis=1)
+        return float((freqs[band] * weight).sum() / max(weight.sum(), 1e-9))
+
+    def _voice(self, sr, seconds=0.8, f0=140.0):
+        """A buzz with fixed formants: harmonics shaped by three resonances."""
+        t = np.arange(int(sr * seconds)) / sr
+        buzz = sum(np.sin(2 * np.pi * f0 * n * t) / n for n in range(1, 40))
+        # Shaped in the frequency domain, so the formants really are fixed
+        # resonances rather than something modulating over time.
+        spectrum = np.fft.rfft(buzz)
+        freqs = np.fft.rfftfreq(buzz.size, 1.0 / sr)
+        envelope = sum(gain * np.exp(-0.5 * ((freqs - centre) / 180.0) ** 2)
+                       for centre, gain in ((700.0, 1.0), (1200.0, 0.6), (2600.0, 0.35)))
+        return np.fft.irfft(spectrum * envelope, n=buzz.size).astype(np.float32)
+
+    def test_a_shifted_clip_does_not_become_a_chipmunk(self):
+        from song_generator import config
+        from song_generator.pitchshift import Segment, render_segments_rubberband
+
+        sr = config.SAMPLE_RATE
+        voice = self._voice(sr)
+        peak = float(np.abs(voice).max())
+        voice = voice / peak * 0.5
+
+        duration = voice.size / sr
+        shifted = render_segments_rubberband(
+            voice, sr, [Segment(0.0, duration, 0.0, duration, 12.0)], duration)
+
+        ratio = self._centroid(shifted, sr) / self._centroid(voice, sr)
+        # An octave up with no preservation lands near 2x in theory and 1.35x
+        # measured on real clips. Held formants stay near 1.
+        assert ratio < 1.15, f"formants rode up with the pitch: {ratio:.2f}x"

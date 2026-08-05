@@ -246,6 +246,31 @@ def test_bounds_stay_ordered_and_inside_the_clip():
     assert all(0.0 < b < 1.0 for b in out)
 
 
+def test_no_two_bounds_ever_land_on_the_same_moment():
+    """Equal boundaries are a syllable of zero length, which renders as silence.
+
+    Sorted is not enough to catch it: [0.9, 0.9] is sorted. This happened for
+    real when a tail trim pushed several boundaries past the new end and each
+    was capped at the same value.
+    """
+    for bounds, head, dur in (
+        ([0.9, 1.1, 1.3, 1.5], 0.0, 1.0),      # every bound past the end
+        ([1.2, 1.25, 1.3], 0.4, 0.9),          # head trim and a short clip
+        ([0.05, 0.06, 0.07], 0.2, 0.3),        # bounds before the head trim
+    ):
+        out = shift_bounds(bounds, head, dur)
+        assert len(out) == len(bounds)
+        assert all(b > a for a, b in zip(out, out[1:])), out
+        assert all(0.0 < b < dur for b in out), out
+
+
+def test_the_spans_a_trimmed_clip_implies_are_all_real():
+    """What Unit.syllable_spans builds must have no zero-length piece."""
+    bounds = shift_bounds([0.8, 1.0, 1.2, 1.4], 0.1, 1.05)
+    edges = [0.0] + bounds + [1.05]
+    assert all(b > a for a, b in zip(edges, edges[1:])), edges
+
+
 def test_bounds_survive_a_zero_trim_unchanged():
     assert shift_bounds([0.2, 0.4], 0.0, 1.0) == [0.2, 0.4]
 
@@ -663,3 +688,92 @@ def test_recorded_clips_are_still_levelled_on_load(built):
     units = {u.name: u for u in load_bank(built, prefer_standardised=False)}
     on_disk = audio_io.read_wav(built / "bravo_1.wav")
     assert not np.allclose(units["bravo_1.wav"].audio, on_disk, atol=1e-6)
+
+
+def test_bounds_survive_rounding_to_four_decimals():
+    """Two boundaries a fraction apart must not round onto the same value.
+
+    The guard was 1e-4 and the output is rounded to 4 decimals, so neighbours
+    separated by exactly the guard collapsed after rounding. Equal boundaries
+    are a syllable of zero length: it renders as silence and takes the end off
+    the word, and nothing reports it.
+    """
+    out = shift_bounds([0.1] * 8, 0.05, 0.2)
+    assert len(out) == 8
+    assert all(b > a for a, b in zip(out, out[1:])), out
+    assert out == [round(b, 4) for b in out]
+
+
+def test_a_bound_never_lands_on_the_edges_of_the_clip():
+    """0.0 and duration_s are edges, not boundaries: either makes an empty span."""
+    for bounds, head, dur in (([0.5], 0.0, 0.5), ([0.5], 0.6, 1.0), ([-0.5, 0.2], 0.0, 1.0)):
+        out = shift_bounds(bounds, head, dur)
+        assert all(0.0 < b < dur for b in out), (bounds, head, dur, out)
+
+
+def test_a_clip_too_short_for_its_bounds_still_gets_real_spans():
+    """Nowhere legal left to put them is answered with wrong, not degenerate."""
+    out = shift_bounds([0.9, 1.1, 1.3, 1.5], 0.0, 1.0)
+    edges = [0.0] + out + [1.0]
+    assert all(b > a for a, b in zip(edges, edges[1:])), edges
+
+
+class TestNamesThatAreNotPaths:
+    """A clip name comes from a filename and becomes one again.
+
+    Containment catches traversal. These are the names that are not paths at
+    all, which reached libsndfile and failed there with a system error nobody
+    can read, or would have been written somewhere unintended.
+    """
+
+    def test_an_absolute_or_unc_name_is_refused(self, bank, tmp_path):
+        for name in ("C:/Windows/evil.wav", "//server/share/evil.wav"):
+            with pytest.raises(StandardizeError):
+                write_derivative(tmp_path / "tier", name, _clip(), [bank])
+
+    def test_a_control_character_is_refused(self, bank, tmp_path):
+        for name in ("ok\nevil.wav", "ok\revil.wav", "ok\x00.wav"):
+            with pytest.raises(StandardizeError, match="not a usable clip name"):
+                write_derivative(tmp_path / "tier", name, _clip(), [bank])
+
+    def test_an_empty_or_dot_name_is_refused(self, bank, tmp_path):
+        for name in ("", ".", ".."):
+            with pytest.raises(StandardizeError, match="not a usable clip name"):
+                write_derivative(tmp_path / "tier", name, _clip(), [bank])
+
+    def test_an_ordinary_name_still_writes(self, bank, tmp_path):
+        written = write_derivative(tmp_path / "tier", "paska_1.wav", _clip(), [bank])
+        assert written.is_file()
+        assert (tmp_path / "tier").resolve() in written.resolve().parents
+
+
+def test_doctor_reports_the_same_bank_a_run_would_sing_from(built, monkeypatch):
+    """A diagnostic that hides clips sends someone hunting for one it says is
+    not there. doctor asked for singable units only, so every syllable clip was
+    invisible: 23 units reported where a song was sung from 37."""
+    from song_generator.mapping import load_bank
+
+    monkeypatch.setattr(config, "BANKS", {"curated": str(built)})
+    monkeypatch.setattr(config, "DEFAULT_BANK", "curated")
+
+    assert len(load_bank(built, singable_only=False)) >= len(load_bank(built))
+
+
+def test_doctor_names_a_stale_tier(built, capsys, monkeypatch):
+    """The quiet failure: a run sings from clips that no longer match the
+    recordings, and an ordinary run says nothing about it."""
+    from song_generator.doctor import report_environment
+
+    out = _out(built)
+    standardise_bank(built, out, "offset")
+    monkeypatch.setattr(config, "BANKS", {"curated": str(built)})
+    monkeypatch.setattr(config, "DEFAULT_BANK", "curated")
+
+    report_environment()
+    assert "up to date" in capsys.readouterr().out
+
+    audio_io.write_wav(built / "bravo_1.wav", _clip(sound_s=0.7, amp=0.9))
+    report_environment()
+    said = capsys.readouterr().out
+    assert "OUT OF DATE" in said
+    assert "standardize" in said

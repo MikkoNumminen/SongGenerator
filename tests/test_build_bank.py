@@ -172,3 +172,92 @@ class TestSyllableBoundaryCount:
 
     def test_single_syllable_has_no_boundaries(self):
         assert syllable_boundaries(_syllabic(3), SR, n_syllables=1) == []
+
+
+class TestShoutTails:
+    """A stuttered shout written out is content, not a take label.
+
+    The distinction is only decidable from the shape of the name: a single
+    unbroken run after a separator is a label ("delta_hah" is a take called
+    hah), while shout letters broken up by separators is somebody writing down
+    what they heard. Getting it wrong cost a 6.6 second clip six of its eleven
+    syllables, which put every syllable in it on the wrong note.
+    """
+
+    def test_a_stuttered_tail_is_read_as_shouts(self):
+        words, rest = parse_phrase("calculator-aah_ah-a-a-ah")
+        assert words[0] == "calculator"
+        assert words.count("aah") == 5
+        assert rest == ""
+
+    def test_an_unbroken_run_after_a_separator_is_still_a_label(self):
+        assert parse_phrase("delta_hah") == (["delta"], "hah")
+        assert parse_phrase("bravo-haze") == (["bravo"], "haze")
+
+    def test_a_label_with_a_non_shout_letter_survives_separators(self):
+        """Only ALL shout letters counts; one ordinary letter makes it a label."""
+        assert parse_phrase("bravo-ha-ze") == (["bravo"], "ha-ze")
+
+    def test_a_leading_run_is_unaffected(self):
+        words, rest = parse_phrase("aaah")
+        assert words == ["aah"]
+        assert rest == ""
+
+
+class TestTheParserDoesNotDriftSilently:
+    """A corpus of names and what each must mean.
+
+    parse_phrase is the only thing that knows what a clip says, so a change to
+    it silently changes what every bank contains. Changing this table is
+    allowed; changing it by accident is what this catches.
+    """
+
+    CORPUS = {
+        # plain words and takes
+        "bravo": ["bravo"],
+        "bravo1": ["bravo"],
+        "bravo_2": ["bravo"],
+        "calculator_low": ["calculator"],
+        # several words in one clip, which is what the bank mostly holds
+        "bravotango": ["bravo", "tango"],
+        "bravo-tango": ["bravo", "tango"],
+        "bravo tango delta": ["bravo", "tango", "delta"],
+        "tango-delta_2": ["tango", "delta"],
+        # the shout, spelled however it was heard
+        "aah": ["aah"],
+        "aaah": ["aah"],
+        "ahh": ["aah"],
+        "aahcalculator": ["aah", "calculator"],
+        # a stuttered shout written out is content, not a take label
+        "calculator-aah_ah-a-a-ah": ["calculator"] + ["aah"] * 5,
+        # a take label is not content
+        "delta_hah": ["delta"],
+        "bravo-haze": ["bravo"],
+        # syllables, which spell words rather than being sung
+        "bra": ["bra"],
+        "bra-vo": ["bra", "vo"],
+        "me ter": ["me", "ter"],
+        # punctuation people actually type
+        "bravo, tango": ["bravo", "tango"],
+        "bravo; delta": ["bravo", "delta"],
+    }
+
+    REFUSED = [
+        "bravotangopor",   # ends mid-word
+        "banana",          # nothing in the vocabulary
+        "",                # nothing at all
+    ]
+
+    def test_every_name_still_means_what_it_meant(self):
+        wrong = {}
+        for stem, expected in self.CORPUS.items():
+            parsed = parse_phrase(stem)
+            got = parsed[0] if parsed else None
+            if got != expected:
+                wrong[stem] = (expected, got)
+        assert not wrong, f"the parser changed meaning: {wrong}"
+
+    def test_names_that_must_stay_refused(self):
+        for stem in self.REFUSED:
+            parsed = parse_phrase(stem)
+            assert parsed is None or parsed[0] == [], f"{stem!r} should not parse"

@@ -11,8 +11,10 @@ analyses, re-pitches, re-times and mixes them.
 .\.venv\Scripts\song-generator.exe input\song.mp4
 ```
 
-One command writes seven versions, from words that ignore the tune completely
-to words that sing it as closely as the song allows. Pick by ear.
+One command writes fourteen versions. Two arrangements of the words, one tidy
+and one that mixes them up harder, and each rendered from words that ignore
+the tune completely through to words that sing it as closely as the song
+allows. Pick by ear; the right one varies by song.
 
 ## How it works
 
@@ -22,8 +24,10 @@ than invent any:
 1. **Separate** the song into vocal and instrumental (Demucs).
 2. **Analyse the original vocal before discarding it**. The melody, and where
    each sung syllable starts and ends.
-3. **Map word clips onto those same slots**, pitch-shifted to the notes the
-   singer hit, formant-corrected so they still sound like a person.
+3. **Arrange words onto those same slots**, pitch-shifted to the notes the
+   singer hit, formant-corrected so they still sound like a person. The bank is
+   recorded phrases rather than single words, so a phrase is cut back into its
+   words where a sequence nobody sang is wanted.
 4. **Mix** over the instrumental, level-matched, out as mp3.
 
 A song with no vocals is **Mode B**: detected and refused rather than botched,
@@ -76,6 +80,27 @@ song needs to reach the mimicry you asked for.
 
 More clips at *new pitches* raise the ceiling. More clips at pitches you already
 have do not.
+
+## The other dial
+
+**Playfulness**, how freely the words are rearranged. Separate from mimicry,
+and both are rendered every run: two arrangements across seven mimicry
+settings, fourteen files, pick by ear.
+
+`conservative` keeps close to what was recorded. `wild` invents more orders,
+repeats itself more, and leans harder on the shout. Neither is a quality
+setting; they are two different jokes.
+
+Every run draws a new arrangement, so running the same song three times gives
+three to choose between. Each is written to `work/<song>/arrangements/` as a
+file you can read against the song, edit, and feed back with `--arrangement`
+to get that take again or a changed one.
+
+Which words carry a song is a property of the recordings rather than of the
+tool, so the bank declares it. A handful of words carry it, a long word is
+rarer and finishes a combination, and the shout is seasoning. Left to compete
+on how well a clip fills the time, the shout wins constantly, because it is
+short enough for any slot.
 
 ## Bring your own audio
 

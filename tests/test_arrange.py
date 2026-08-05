@@ -1,0 +1,782 @@
+"""Cutting words out of phrases, and the arrangement that records the result.
+
+Whether an arrangement is funny is a listening question and there is no test
+for it. What is testable is that a slice lands on the word it claims, that the
+same seed gives the same arrangement, that every required word is there, and
+that a description read back produces the identical plan. The last one is the
+one that has to hold: the log is the only record of an arrangement, so a
+round trip that quietly drifts loses the take rather than reporting it.
+"""
+
+import collections
+import random
+
+import numpy as np
+import pytest
+
+from song_generator import config
+from song_generator.arrange import (
+    Arrangement, ArrangementError, Line, build, describe, enrich, index_by_word,
+    join_words, level_params, parse_text, realise, render_text, required_words,
+    load, save, slice_words, unit_for, word_spans,
+)
+from song_generator.mapping import Slot, Unit, plan_words
+
+SR = config.SAMPLE_RATE
+
+
+def _tone(seconds: float, freq: float = 220.0, amp: float = 0.4) -> np.ndarray:
+    t = np.arange(int(SR * seconds)) / SR
+    mono = (amp * np.sin(2 * np.pi * freq * t)).astype(np.float32)
+    return np.stack([mono, mono])
+
+
+def _unit(words, per_word=0.4, name=None) -> Unit:
+    """A clip holding the given words, with honest boundaries."""
+    syllables = [config.WORD_SYLLABLES[w] for w in words]
+    total = sum(syllables) * (per_word / 2)
+    audio = _tone(total)
+    bounds, at = [], 0.0
+    for n in sum(([w] * config.WORD_SYLLABLES[w] for w in words), []):
+        at += per_word / 2
+        bounds.append(round(at, 4))
+    return Unit(
+        name=name or ("-".join(words) + "_1.wav"),
+        words=list(words),
+        syllables=sum(syllables),
+        duration_s=audio.shape[1] / SR,
+        midi=53.0,
+        audio=audio,
+        bounds_s=bounds[:-1],
+        syllable_midi=[53.0] * sum(syllables),
+    )
+
+
+@pytest.fixture
+def bank():
+    """Two-word and three-word clips, as the real bank is shaped."""
+    return [
+        _unit(["tango", "bravo"]),
+        _unit(["delta"]),
+        _unit(["delta", "tango", "kilometer"]),
+        _unit(["aah", "calculator"]),
+    ]
+
+
+@pytest.fixture
+def slots():
+    out, at = [], 0.0
+    for i in range(48):
+        out.append(Slot(at, at + 0.25, 53.0 + (i % 5), phrase=i // 8))
+        at += 0.25
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Slicing
+# ---------------------------------------------------------------------------
+
+def test_a_two_word_clip_knows_where_its_words_are(bank):
+    spans = word_spans(bank[0])
+    assert [w for w, _, _ in spans] == ["tango", "bravo"]
+    assert spans[0][1] == 0.0
+    assert spans[0][2] == pytest.approx(spans[1][1])
+
+
+def test_a_single_word_clip_is_not_cut(bank):
+    assert word_spans(bank[1]) is None
+
+
+def test_slicing_yields_every_word_on_its_own(bank):
+    """Every word in an ordinary clip becomes available by itself."""
+    by = index_by_word(slice_words(bank))
+    assert set(by) == {"tango", "bravo", "delta", "kilometer"}
+
+
+def test_the_payoff_pairing_is_never_cut_apart(bank):
+    """Slicing it is what lost it: the halves outvoted the whole recording.
+
+    A dozen ways to say the payoff alone beat the one clip that says it the way
+    the singer did, so the pairing stopped appearing at all. It stays whole.
+    """
+    pairing = next(u for u in bank if u.words == ["aah", "calculator"])
+    assert pairing.is_shout_pairing
+    assert not any(s.name.startswith(pairing.name) for s in slice_words(bank))
+
+
+def test_the_pairing_survives_enrichment(bank):
+    for level in ("conservative", "wild"):
+        pool = enrich(bank, level, random.Random(2))
+        assert any(u.is_shout_pairing for u in pool)
+
+
+def test_a_slice_is_shorter_than_the_clip_it_came_from(bank):
+    for sliced in slice_words(bank):
+        parent = next(u for u in bank if u.name == sliced.name.split("#")[0])
+        assert sliced.duration_s < parent.duration_s
+
+
+def test_a_slice_says_exactly_one_word(bank):
+    for sliced in slice_words(bank):
+        assert len(sliced.words) == 1
+        assert sliced.syllables == config.WORD_SYLLABLES[sliced.words[0]]
+
+
+def test_a_slice_records_where_it_came_from(bank):
+    names = {u.name for u in slice_words(bank)}
+    assert any(n.startswith("tango-bravo_1.wav#") and n.endswith(":bravo") for n in names)
+
+
+def test_slicing_never_touches_the_source_audio(bank):
+    before = [u.audio.copy() for u in bank]
+    slice_words(bank)
+    assert all(np.array_equal(a, u.audio) for a, u in zip(before, bank))
+
+
+# ---------------------------------------------------------------------------
+# Joining
+# ---------------------------------------------------------------------------
+
+def test_joining_says_the_words_in_the_order_given(bank):
+    by = index_by_word(slice_words(bank))
+    joined = join_words([by["delta"][0], by["bravo"][0]])
+    assert joined.words == ["delta", "bravo"]
+
+
+def test_the_order_that_was_never_recorded_can_be_built(bank):
+    """delta bravo exists nowhere in the bank; it is the point of the module."""
+    assert not any(u.label == "delta+bravo" for u in bank)
+    by = index_by_word(slice_words(bank))
+    assert join_words([by["delta"][0], by["bravo"][0]]).label == "delta+bravo"
+
+
+def test_a_join_carries_a_boundary_between_each_syllable(bank):
+    by = index_by_word(slice_words(bank))
+    joined = join_words([by["delta"][0], by["bravo"][0]])
+    assert len(joined.bounds_s) == joined.syllables - 1
+    assert joined.bounds_s == sorted(joined.bounds_s)
+    assert all(0.0 < b < joined.duration_s for b in joined.bounds_s)
+
+
+def test_joining_one_thing_returns_it_unchanged(bank):
+    by = index_by_word(slice_words(bank))
+    only = by["delta"][0]
+    assert join_words([only]) is only
+
+
+def test_joining_nothing_is_nothing():
+    assert join_words([]) is None
+
+
+# ---------------------------------------------------------------------------
+# Levels
+# ---------------------------------------------------------------------------
+
+def test_off_adds_nothing(bank):
+    assert len(enrich(bank, "off", random.Random(1))) == len(bank)
+
+
+def test_a_level_only_ever_adds(bank):
+    for level in ("conservative", "wild"):
+        pool = enrich(bank, level, random.Random(1))
+        assert len(pool) > len(bank)
+        assert all(u in pool for u in bank)
+
+
+def test_wild_invents_more_than_conservative(bank):
+    counts = {}
+    for level in ("conservative", "wild"):
+        pool = enrich(bank, level, random.Random(3))
+        counts[level] = sum(1 for u in pool if u.name.startswith("invented:"))
+    assert counts["wild"] > counts["conservative"]
+
+
+def test_an_unknown_level_is_refused_by_name():
+    with pytest.raises(ValueError, match="unknown playfulness level"):
+        level_params("feral")
+
+
+def test_enrichment_is_reproducible_from_its_seed(bank):
+    a = enrich(bank, "wild", random.Random(11))
+    b = enrich(bank, "wild", random.Random(11))
+    assert [u.label for u in a] == [u.label for u in b]
+
+
+# ---------------------------------------------------------------------------
+# Seed and coverage
+# ---------------------------------------------------------------------------
+
+def test_the_same_seed_gives_the_same_arrangement(bank, slots):
+    _, first, _ = build(slots, bank, "wild", 4242)
+    _, second, _ = build(slots, bank, "wild", 4242)
+    assert [(l.words, l.n_slots, l.take) for l in first.lines] == \
+           [(l.words, l.n_slots, l.take) for l in second.lines]
+
+
+def test_different_seeds_give_different_arrangements(bank, slots):
+    _, a, _ = build(slots, bank, "wild", 1)
+    _, b, _ = build(slots, bank, "wild", 99)
+    assert [l.words for l in a.lines] != [l.words for l in b.lines]
+
+
+def test_every_required_word_is_present(bank, slots):
+    _, arrangement, _ = build(slots, bank, "conservative", 7)
+    assert arrangement.missing() == []
+    assert set(required_words()) <= arrangement.words_used()
+
+
+def test_wild_is_not_emptier_than_conservative(bank, slots):
+    """Unpredictable and sparse are different things, and wild was both."""
+    filled = {}
+    for level in ("conservative", "wild"):
+        runs = [build(slots, bank, level, 900 + i)[0].slots_used for i in range(6)]
+        filled[level] = sum(runs) / len(runs)
+    assert filled["wild"] >= filled["conservative"] * 0.9
+
+
+def test_playing_says_more_different_things_than_not_playing(bank, slots):
+    """Compared against off, which is the comparison that stays decidable.
+
+    Conservative against wild is not testable on this fixture: four words
+    exhaust their own combination space in a few seeds, and chanting spends
+    some of what is left, so the two levels trade places depending on the seed.
+    On a real bank wild reaches further, and the part that can be decided
+    without a bank is how much each level generates, which
+    test_wild_invents_more_than_conservative pins.
+    """
+    variety = {}
+    for level in ("off", "conservative", "wild"):
+        seen = set()
+        for i in range(6):
+            plan, _, _ = build(slots, bank, level, 700 + i)
+            seen.update(p.unit.label for p in plan.placements)
+        variety[level] = len(seen)
+    assert variety["conservative"] > variety["off"]
+    assert variety["wild"] > variety["off"]
+
+
+def test_words_start_near_the_top_of_the_song(bank, slots):
+    """A phrase is capped in length, so density cannot silence the opening.
+
+    Gap detection alone made a continuous 25-second run into one phrase, and
+    dropping that one phrase for density left a quarter of the song wordless
+    while the original was singing from four seconds in.
+    """
+    for level in ("conservative", "wild"):
+        plan, _, _ = build(slots, bank, level, 55)
+        assert plan.placements
+        assert plan.placements[0].onset_s <= slots[0].onset_s + 3.0
+
+
+def test_coverage_is_reported_when_it_cannot_be_met(slots):
+    """A bank that cannot say a required word must say so, not pretend."""
+    thin = [_unit(["delta"])]
+    _, arrangement, _ = build(slots, thin, "conservative", 5)
+    assert "kilometer" in arrangement.missing()
+
+
+# ---------------------------------------------------------------------------
+# The log, both ways
+# ---------------------------------------------------------------------------
+
+def test_a_description_reads_back_identically(bank, slots):
+    _, arrangement, _ = build(slots, bank, "wild", 20)
+    back = parse_text(render_text(arrangement))
+    assert [(l.words, l.n_slots, l.take) for l in back.lines] == \
+           [(l.words, l.n_slots, l.take) for l in arrangement.lines]
+    assert back.seed == arrangement.seed
+    assert back.level == arrangement.level
+
+
+def test_replaying_a_description_rebuilds_the_same_plan(bank, slots):
+    plan, arrangement, _ = build(slots, bank, "wild", 31)
+    replayed = realise(parse_text(render_text(arrangement)), slots, bank)
+    assert [(p.unit.words, p.n_slots, round(p.onset_s, 3)) for p in plan.placements] == \
+           [(p.unit.words, p.n_slots, round(p.onset_s, 3)) for p in replayed.placements]
+
+
+def test_a_hand_written_arrangement_is_honoured(bank, slots):
+    """The bridge to the guided mode: words nobody generated, assembled anyway."""
+    text = (
+        "# song    test\n"
+        "# seed    1\n"
+        "phrase 0\n"
+        "  0:00.00  x4  delta bravo\n"
+        "  0:01.00  x4  bravo delta\n"
+    )
+    plan = realise(parse_text(text), slots, bank)
+    assert [p.unit.words for p in plan.placements] == [
+        ["delta", "bravo"], ["bravo", "delta"]]
+
+
+def test_deleting_the_take_still_works(bank, slots):
+    _, arrangement, _ = build(slots, bank, "conservative", 8)
+    stripped = Arrangement(
+        arrangement.song, arrangement.bank, arrangement.level, arrangement.seed,
+        [Line(l.phrase, l.onset_s, l.n_slots, l.words, None) for l in arrangement.lines])
+    plan = realise(stripped, slots, bank)
+    assert [p.unit.words for p in plan.placements] == \
+           [l.words for l in arrangement.lines]
+
+
+def test_an_unknown_word_is_refused_rather_than_dropped():
+    with pytest.raises(ArrangementError, match="not words in this bank"):
+        parse_text("phrase 0\n  0:00.00  x2  banana\n")
+
+
+def test_a_malformed_line_is_refused_by_number():
+    with pytest.raises(ArrangementError, match="line 2"):
+        parse_text("phrase 0\n  nonsense here\n")
+
+
+def test_an_empty_arrangement_is_refused():
+    with pytest.raises(ArrangementError, match="no placements"):
+        parse_text("# song  nothing\n")
+
+
+def test_a_word_the_bank_cannot_say_is_refused(slots):
+    thin = [_unit(["delta"])]
+    text = "phrase 0\n  0:00.00  x4  delta kilometer\n"
+    with pytest.raises(ArrangementError, match="cannot say"):
+        realise(parse_text(text), slots, thin)
+
+
+def test_the_header_names_the_vocabulary_for_whoever_edits_it(bank, slots):
+    _, arrangement, _ = build(slots, bank, "conservative", 2)
+    text = render_text(arrangement)
+    for word in config.WORD_SYLLABLES:
+        assert word in text
+
+
+# ---------------------------------------------------------------------------
+# The ladder underneath
+# ---------------------------------------------------------------------------
+
+def test_playfulness_leaves_the_planner_alone_when_off(bank, slots):
+    """play=None must reproduce what the planner did before any of this."""
+    a = plan_words(slots, bank, seed=5)
+    b = plan_words(slots, bank, seed=5, play=None)
+    assert [(p.unit.name, p.onset_s) for p in a.placements] == \
+           [(p.unit.name, p.onset_s) for p in b.placements]
+
+
+def test_a_fixed_arrangement_gives_a_fixed_ladder(bank, slots):
+    """One arrangement, seven rungs, and they do not move between runs."""
+    from song_generator.mapping import decide_shifts, mimicry
+
+    plan, arrangement, _ = build(slots, bank, "wild", 64)
+    first = []
+    for target in config.MIMICRY_VARIANTS:
+        decide_shifts(plan, target_mimicry=target)
+        first.append(round(mimicry(plan), 4))
+
+    again = realise(parse_text(render_text(arrangement)), slots, bank)
+    second = []
+    for target in config.MIMICRY_VARIANTS:
+        decide_shifts(again, target_mimicry=target)
+        second.append(round(mimicry(again), 4))
+
+    assert first == second
+    assert first == sorted(first)
+
+
+def test_the_payoff_pairing_is_guaranteed_not_merely_likely(bank, slots):
+    """A song without it reads as missing its payoff, so it is coverage."""
+    for level in ("conservative", "wild"):
+        for i in range(8):
+            _, arrangement, _ = build(slots, bank, level, 4000 + i)
+            assert arrangement.has_pairing(), f"{level} seed {4000 + i} lost the pairing"
+
+
+def test_a_bank_with_no_pairing_is_not_asked_for_one(slots):
+    """The rule cannot demand something the recordings do not contain."""
+    thin = [_unit(["tango", "bravo"]), _unit(["delta"])]
+    _, arrangement, tries = build(slots, thin, "conservative", 12)
+    assert not arrangement.has_pairing()
+    assert tries == 1
+
+
+def test_saying_the_same_thing_twice_running_is_allowed(bank, slots):
+    """Repetition is a joke when it is obviously deliberate.
+
+    The planner also carries a repeat penalty, but that exists to stop a
+    different thing: one clip quietly winning every slot because it happens to
+    fit best. A chant is chosen, bounded, and ends.
+    """
+    import itertools
+
+    runs = []
+    for i in range(8):
+        plan, _, _ = build(slots, bank, "wild", 800 + i)
+        labels = [p.unit.label for p in plan.placements]
+        runs.append(max((len(list(g)) for _, g in itertools.groupby(labels)), default=0))
+    assert max(runs) >= 2
+
+
+def test_a_chant_is_bounded(bank, slots):
+    """It has to end, or it is not a joke, it is the whole song."""
+    import itertools
+
+    from song_generator.arrange import level_params
+
+    longest = level_params("wild")["chant_max"] + 1
+    for i in range(8):
+        plan, _, _ = build(slots, bank, "wild", 850 + i)
+        labels = [p.unit.label for p in plan.placements]
+        for _, group in itertools.groupby(labels):
+            assert len(list(group)) <= longest + 1
+
+
+def test_off_does_not_chant(bank, slots):
+    from song_generator.arrange import level_params
+
+    assert level_params("off")["chant_chance"] == 0.0
+
+
+def test_the_opening_is_never_thinned_away(bank, slots):
+    """Density may not answer "does this have words in it" with no.
+
+    Whatever the fill setting, a track that stays instrumental through its
+    first phrase has already told the listener it is instrumental.
+    """
+    for level in ("conservative", "wild"):
+        for i in range(10):
+            plan, _, _ = build(slots, bank, level, 2200 + i)
+            assert plan.placements[0].onset_s <= slots[0].onset_s + 1e-6
+
+
+def test_thinning_cannot_open_a_long_hole(bank, slots):
+    """A proportion of phrases is not a proportion of time.
+
+    phrase_fill drops whole phrases, which was tuned when phrases were long and
+    few. Capping phrase length turned eleven phrases into thirty on a real song,
+    so the same drop rate went from about two holes to seven and the track kept
+    falling silent while the original was still singing.
+    """
+    from song_generator.arrange import level_params
+
+    for level in ("conservative", "wild"):
+        allowed = level_params(level)["max_gap_s"]
+        for i in range(8):
+            plan, _, _ = build(slots, bank, level, 3300 + i)
+            sounding = sorted((p.onset_s, p.onset_s + min(p.play_s, p.unit.duration_s))
+                              for p in plan.placements)
+            prev, worst = slots[0].onset_s, 0.0
+            for start, end in sounding:
+                worst = max(worst, start - prev)
+                prev = max(prev, end)
+            # Generous: phrase boundaries and truncation contribute too, and
+            # only the thinning half is what this bounds.
+            assert worst <= allowed * 2.5
+
+
+def test_the_core_words_carry_the_song(bank, slots):
+    """The words a song is built on must outweigh the seasoning.
+
+    Left to compete on duration fit the shout wins constantly, being a third of
+    the recordings and short enough for any slot, and the result is a song of
+    shouting with words in the gaps.
+    """
+    from song_generator.mapping import core_words
+
+    core = core_words()
+    for level in ("conservative", "wild"):
+        counted = collections.Counter()
+        for i in range(6):
+            plan, _, _ = build(slots, bank, level, 5100 + i)
+            counted.update(w for p in plan.placements for w in p.unit.words)
+        total = sum(counted.values())
+        share = sum(n for w, n in counted.items() if w in core) / total
+        assert share > 0.4, f"{level}: core words only {share:.0%} of what is sung"
+
+
+def test_coverage_outranks_the_word_weights(bank, slots):
+    """A required word charged for being long must still get in.
+
+    The weights say how often each kind of word should be heard; coverage says
+    a song without one of them is invalid. When the weights are what is keeping
+    a word out, the weights are what gives way.
+    """
+    for level in ("conservative", "wild"):
+        for i in range(6):
+            _, arrangement, _ = build(slots, bank, level, 6100 + i)
+            assert arrangement.missing() == [], f"{level} seed {6100 + i}"
+
+
+def test_whole_words_are_preferred_over_stitched_ones(bank, slots):
+    """A word assembled from syllables carries a join where movement should be.
+
+    Slicing and spelling exist to reach what was never recorded, not to replace
+    what was. Ranked: a whole take, then a word cut out of one, then an order
+    nobody sang, then a word built out of fragments.
+    """
+    from song_generator.mapping import unit_origin
+
+    for level in ("conservative", "wild"):
+        counted = collections.Counter()
+        for i in range(6):
+            plan, _, _ = build(slots, bank, level, 7100 + i)
+            counted.update(unit_origin(p.unit) for p in plan.placements)
+        total = sum(counted.values())
+        assert counted["spelled"] / total < 0.05, "spelling should be a last resort"
+        assert counted["recorded"] >= counted["spelled"]
+
+
+class TestReplayIsFaithful:
+    """A replay must be the arrangement, not something close to it.
+
+    The log is the only record of a take somebody liked, so a replay that
+    substitutes a different clip or rings for a different length has lost the
+    thing it was meant to preserve, while still playing and sounding fine.
+    """
+
+    def _pairs(self, bank, slots, level, seed):
+        plan, arrangement, _ = build(slots, bank, level, seed)
+        replayed = realise(parse_text(render_text(arrangement)), slots, bank)
+        assert len(replayed.placements) == len(plan.placements)
+        return list(zip(plan.placements, replayed.placements))
+
+    def test_the_same_clips_come_back(self, bank, slots):
+        """Not merely the same words: invented and spelled units exist only
+        inside an enriched pool, and looking for one among the recordings alone
+        found nothing and quietly picked a different take."""
+        for level in ("conservative", "wild"):
+            for i in range(4):
+                for planned, replayed in self._pairs(bank, slots, level, 8100 + i):
+                    assert planned.unit.name == replayed.unit.name
+
+    def test_the_same_notes_come_back(self, bank, slots):
+        for level in ("conservative", "wild"):
+            for i in range(4):
+                for planned, replayed in self._pairs(bank, slots, level, 8200 + i):
+                    assert [s.midi for s in planned.slots] == \
+                           [s.midi for s in replayed.slots]
+
+    def test_the_same_lengths_come_back(self, bank, slots):
+        """Within the rounding the file itself carries."""
+        for level in ("conservative", "wild"):
+            for i in range(4):
+                for planned, replayed in self._pairs(bank, slots, level, 8300 + i):
+                    assert planned.play_s == pytest.approx(replayed.play_s, abs=0.02)
+                    assert planned.slot_span_s == pytest.approx(
+                        replayed.slot_span_s, abs=0.02)
+
+
+def test_nothing_rings_past_the_span_it_was_given(bank, slots):
+    """A clip longer than its slots was cut against the NEXT placement only, so
+    the last one in a phrase sounded for its whole length and rang straight
+    through the gap the original singer left."""
+    for level in ("conservative", "wild"):
+        for i in range(6):
+            plan, arrangement, _ = build(slots, bank, level, 8400 + i)
+            for placement in plan.placements:
+                assert placement.play_s <= placement.slot_span_s + 1e-6
+            replayed = realise(parse_text(render_text(arrangement)), slots, bank)
+            for placement in replayed.placements:
+                assert placement.play_s <= placement.slot_span_s + 1e-6
+
+
+def test_no_placement_spans_two_phrases(bank, slots):
+    """Words never straddle a phrase boundary. A slot keeps the phrase it was
+    detected in, and splitting a long run put slots from one detected phrase
+    into different groups, so the numbers had to be re-derived."""
+    for level in ("conservative", "wild"):
+        for i in range(6):
+            plan, arrangement, _ = build(slots, bank, level, 8500 + i)
+            replayed = realise(parse_text(render_text(arrangement)), slots, bank)
+            for plan_or_replay in (plan, replayed):
+                for placement in plan_or_replay.placements:
+                    phrases = {s.phrase for s in placement.slots}
+                    assert len(phrases) <= 1, f"{placement.unit.label} spans {phrases}"
+
+
+def test_an_arrangement_without_a_span_still_replays(bank, slots):
+    """The span is optional, so a hand-written file need not carry one."""
+    text = (
+        "# song    test\n"
+        "# seed    1\n"
+        "phrase 0\n"
+        "  0:00.00  x4  delta bravo\n"
+    )
+    plan = realise(parse_text(text), slots, bank)
+    assert [p.unit.words for p in plan.placements] == [["delta", "bravo"]]
+    assert plan.placements[0].slot_span_s > 0
+
+
+class TestHandEditingIsGuarded:
+    """Hand-editable means hand-mistakeable.
+
+    Each of these once produced a placement that played and was wrong, which is
+    worse than a stop: the file says one thing and the audio does another, and
+    nothing reports it.
+    """
+
+    def _realise(self, bank, slots, body):
+        return realise(parse_text("# song t\n# seed 1\nphrase 0\n" + body), slots, bank)
+
+    def test_a_placement_covering_no_slots_is_refused(self, bank, slots):
+        for count in ("x0", "x-3"):
+            with pytest.raises(ArrangementError, match="covers no slots"):
+                self._realise(bank, slots, f"  0:00.00  {count}  delta\n")
+
+    def test_a_negative_onset_is_refused(self, bank, slots):
+        with pytest.raises(ArrangementError, match="before the song starts"):
+            self._realise(bank, slots, "  -0:05.00  x2  delta\n")
+
+    def test_a_span_that_gives_no_time_is_refused(self, bank, slots):
+        for span in ("=0", "=-5.0"):
+            with pytest.raises(ArrangementError, match="no time to sound"):
+                self._realise(bank, slots, f"  0:00.00  x2 {span}  delta\n")
+
+    def test_a_take_that_is_gone_is_refused_not_substituted(self, bank, slots):
+        """Falling through to the best fit is right when no take was asked for,
+        and wrong when one was: the arrangement then plays a different clip
+        while claiming to be that take."""
+        with pytest.raises(ArrangementError, match="no clip named"):
+            self._realise(bank, slots, "  0:00.00  x2  delta  [nosuch.wav]\n")
+
+    def test_a_minus_zero_minute_still_reads_as_negative(self):
+        """int("-0") is 0, so the sign vanished and -0:05 read as +5s."""
+        from song_generator.arrange import unclock
+
+        assert unclock("-0:05.00") == pytest.approx(-5.0)
+        assert unclock("-1:30.00") == pytest.approx(-90.0)
+        assert unclock("2:07.53") == pytest.approx(127.53)
+
+
+def test_an_empty_bank_is_refused_rather_than_sung(slots):
+    """Nothing to sing is a broken setup, not a song with no words in it."""
+    with pytest.raises(ArrangementError, match="no usable clips"):
+        build(slots, [], "conservative", 7)
+
+
+def test_a_word_no_clip_says_is_reported_against_the_bank(bank, slots):
+    """No number of redraws finds a word that was never recorded.
+
+    Reporting it as missing from the arrangement makes a bank problem look
+    like bad luck, and spends the whole redraw budget hunting for something
+    unreachable while a word a redraw WOULD have found goes missing instead.
+    """
+    from song_generator.arrange import unreachable_words
+
+    thin = [u for u in bank if u.words == ["delta"]]
+    assert unreachable_words(thin) == sorted(set(required_words()) - {"delta"})
+    assert unreachable_words(bank) == []
+
+
+def test_the_redraw_budget_is_not_spent_on_the_unreachable(bank, slots):
+    """A bank missing a word still draws promptly, rather than retrying."""
+    thin = [u for u in bank if u.words == ["delta"]]
+    _, _, tries = build(slots, thin, "conservative", 7)
+    assert tries == 1
+
+
+def test_a_bare_syllable_is_never_placed(bank, slots):
+    """The reason set_aside exists no longer applies.
+
+    Syllables used to crowd out words because a clip of "bra" filled a slot as
+    neatly as one of "bravo" and said nothing. The pool is now filtered to
+    whole words, so they cannot be placed at all, and their job is spelling
+    words no recording contains.
+    """
+    for level in ("conservative", "wild"):
+        for i in range(4):
+            plan, _, _ = build(slots, bank, level, 9100 + i)
+            for placement in plan.placements:
+                assert placement.unit.is_word_like, placement.unit.label
+
+
+def test_every_origin_has_a_price_in_every_level():
+    """A knob looked up by a name built at runtime fails silently.
+
+    unit_origin's answer used to be interpolated into f"{origin}_cost", so a
+    renamed or newly added origin would price itself at zero and the whole
+    preference would vanish with nothing raised. The mapping is explicit now,
+    and this pins that it stays complete.
+    """
+    from song_generator.mapping import ORIGIN_COSTS
+
+    for level, params in config.PLAY_LEVELS.items():
+        for origin, knob in ORIGIN_COSTS.items():
+            if knob is None:
+                continue
+            assert knob in params, f"{level} prices no {origin}"
+
+
+def test_every_origin_the_pool_produces_is_priced(bank):
+    from song_generator.mapping import ORIGIN_COSTS, unit_origin
+
+    seen = {unit_origin(u) for u in enrich(bank, "wild", random.Random(1))}
+    assert seen <= set(ORIGIN_COSTS), f"unpriced origins: {seen - set(ORIGIN_COSTS)}"
+
+
+class TestTheLogOnDisk:
+    """save and load had no tests, and they are the whole point of the log.
+
+    Everything else was exercised through render_text and parse_text in
+    memory. What a person actually does is run a song, keep the file, and come
+    back to it later, and none of that path was covered.
+    """
+
+    def test_a_saved_arrangement_loads_back_identically(self, bank, slots, tmp_path):
+        _, arrangement, _ = build(slots, bank, "wild", 606, song="s", bank="b")
+        path = save(arrangement, tmp_path)
+
+        back = load(path)
+        assert [(l.words, l.take, l.n_slots) for l in back.lines] == \
+               [(l.words, l.take, l.n_slots) for l in arrangement.lines]
+        assert back.seed == arrangement.seed
+        assert back.level == arrangement.level
+
+    def test_the_filename_carries_the_seed_and_the_level(self, bank, slots, tmp_path):
+        _, arrangement, _ = build(slots, bank, "conservative", 909)
+        path = save(arrangement, tmp_path)
+        assert path.name == "909-conservative.arr"
+        assert path.parent.name == config.PLAY_LOG_DIR
+
+    def test_both_levels_of_one_run_keep_separate_files(self, bank, slots, tmp_path):
+        """A run writes two. One overwriting the other would lose a take."""
+        saved = set()
+        for level in ("conservative", "wild"):
+            _, arrangement, _ = build(slots, bank, level, 4242)
+            saved.add(save(arrangement, tmp_path).name)
+        assert len(saved) == 2
+
+    def test_saving_twice_is_stable(self, bank, slots, tmp_path):
+        _, arrangement, _ = build(slots, bank, "wild", 77)
+        first = save(arrangement, tmp_path).read_text(encoding="utf-8")
+        assert save(arrangement, tmp_path).read_text(encoding="utf-8") == first
+
+    def test_loading_something_that_is_not_there_says_so(self, tmp_path):
+        with pytest.raises(ArrangementError, match="not found"):
+            load(tmp_path / "1-wild.arr")
+
+    def test_a_replay_of_a_saved_file_reproduces_the_plan(self, bank, slots, tmp_path):
+        """The whole promise: keep the file, get the take back."""
+        plan, arrangement, _ = build(slots, bank, "wild", 313)
+        replayed = realise(load(save(arrangement, tmp_path)), slots, bank)
+        assert [(p.unit.name, round(p.onset_s, 3)) for p in replayed.placements] == \
+               [(p.unit.name, round(p.onset_s, 3)) for p in plan.placements]
+
+
+class TestMalformedLinesAreRefusedByNumber:
+    """Every one of these is something a person could type into the file."""
+
+    def test_an_unreadable_phrase_number(self):
+        with pytest.raises(ArrangementError, match="phrase number"):
+            parse_text("phrase two\n  0:00.00  x2  delta\n")
+
+    def test_an_unreadable_slot_count(self):
+        with pytest.raises(ArrangementError, match="line 2"):
+            parse_text("phrase 0\n  0:00.00  xmany  delta\n")
+
+    def test_an_unreadable_time(self):
+        with pytest.raises(ArrangementError, match="line 2"):
+            parse_text("phrase 0\n  soon  x2  delta\n")
+
+    def test_an_unreadable_seed_does_not_stop_the_file_loading(self):
+        """The seed is provenance, not instruction. A bad one must not throw
+        away an otherwise good arrangement."""
+        arrangement = parse_text("# seed    later\nphrase 0\n  0:00.00  x2  delta\n")
+        assert arrangement.seed == 0
+        assert len(arrangement.lines) == 1

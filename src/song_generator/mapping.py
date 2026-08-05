@@ -52,6 +52,17 @@ class Unit:
         return all(w in config.SHOUT_WORDS for w in self.words)
 
     @property
+    def is_shout_pairing(self) -> bool:
+        """A shout running straight into the payoff, as recorded.
+
+        This is the pairing the whole bank is built around, so it is protected
+        twice: it is never cut apart into its words, and at a peak it is
+        preferred over anything else that could go there.
+        """
+        return any(a in config.SHOUT_WORDS and b in config.CLIMAX_WORDS
+                   for a, b in zip(self.words, self.words[1:]))
+
+    @property
     def is_climax(self) -> bool:
         """Reserved for the song's peaks rather than ordinary vocabulary."""
         return any(w in config.CLIMAX_WORDS for w in self.words)
@@ -192,7 +203,8 @@ def resolve_bank(words_dir: Path, prefer_standardised: bool = True) -> tuple[Pat
 
 
 def load_bank(words_dir: Path = Path("words"),
-              prefer_standardised: bool = True) -> list[Unit]:
+              prefer_standardised: bool = True,
+              singable_only: bool = True) -> list[Unit]:
     words_dir, standardised = resolve_bank(words_dir, prefer_standardised)
     index = words_dir / "words.json"
     if not index.is_file():
@@ -228,7 +240,11 @@ def load_bank(words_dir: Path = Path("words"),
 
     units.extend(compose_words(units))
 
-    if not config.PLACE_BARE_SYLLABLES:
+    # A clip of syllables is not singable on its own, but it is raw material:
+    # arrange.py cuts it into its syllables and spells whole words out of them.
+    # Dropping it here threw that material away before anything could use it,
+    # which silently wasted every syllable clip somebody cut by hand.
+    if singable_only and not config.PLACE_BARE_SYLLABLES:
         singable = [u for u in units if u.is_word_like]
         if singable:
             return singable
@@ -340,22 +356,75 @@ def clean_slots(notes: list[dict]) -> tuple[list[Slot], int, int]:
     return final, merged, split
 
 
+def _split_long(group: list[Slot]) -> list[list[Slot]]:
+    """Break a phrase that runs longer than a phrase should, at its widest gap.
+
+    Silence alone cannot find the ends of continuous delivery. Rapped verses do
+    not pause, so gap detection returned one 25-second phrase on a test song,
+    and since density is decided per phrase, dropping that one phrase left the
+    first quarter of the track wordless while the original was singing from 4s.
+
+    Splitting at the widest internal gap is not musical analysis, it is the
+    least arbitrary cut available: whatever the smallest breath in the run is,
+    that is where a listener is most likely to hear a join anyway.
+    """
+    span = group[-1].offset_s - group[0].onset_s
+    if span <= config.PHRASE_MAX_S or len(group) < 4:
+        return [group]
+
+    gaps = [(b.onset_s - a.offset_s, i + 1)
+            for i, (a, b) in enumerate(zip(group, group[1:]))]
+    # Keep the cut away from the very ends, so a split never leaves a stub.
+    margin = max(1, len(group) // 8)
+    inner = [g for g in gaps if margin <= g[1] <= len(group) - margin]
+    if not inner:
+        return [group]
+
+    _, at = max(inner)
+    return _split_long(group[:at]) + _split_long(group[at:])
+
+
 def group_phrases(slots: list[Slot]) -> list[list[Slot]]:
-    """Re-derive phrases after cleanup, so groups match the slots being filled."""
+    """Re-derive phrases after cleanup, so groups match the slots being filled.
+
+    WRITES slot.phrase. This reads like a query and is not one: the slots it is
+    handed come back renumbered, because a group is what the rest of the tool
+    means by a phrase and nothing downstream would agree with a slot still
+    carrying the number it was detected with. Idempotent, so calling it twice
+    changes nothing the second time.
+
+    The consequence worth knowing: the phrase numbers in an arrangement file
+    are these, and the ones in analysis.json are the detector's. They do not
+    line up, and neither is wrong.
+    """
     groups: list[list[Slot]] = []
     for slot in slots:
         if groups and slot.onset_s - groups[-1][-1].offset_s <= config.PHRASE_GAP_S:
             groups[-1].append(slot)
         else:
             groups.append([slot])
-    return groups
+
+    out: list[list[Slot]] = []
+    for group in groups:
+        out.extend(_split_long(group))
+
+    # Renumber. A slot carries the phrase it was detected in, and both the
+    # length cap and the gap rule can put slots from one detected phrase into
+    # different groups. Anything reading slot.phrase afterwards then sees a
+    # placement spanning two phrases when it spans one group, which is what the
+    # rest of the tool means by a phrase from here on.
+    for number, group in enumerate(out):
+        for slot in group:
+            slot.phrase = number
+    return out
 
 
 # ---------------------------------------------------------------------------
 # Planning
 # ---------------------------------------------------------------------------
 
-def find_climaxes(groups: list[list[Slot]], min_slots: int = 1) -> set[int]:
+def find_climaxes(groups: list[list[Slot]], min_slots: int = 1,
+                  share: float | None = None) -> set[int]:
     """Which phrases are the song's peaks.
 
     Ranked on pitch and loudness together, since a climax is usually both
@@ -385,15 +454,74 @@ def find_climaxes(groups: list[list[Slot]], min_slots: int = 1) -> set[int]:
              + config.CLIMAX_LOUDNESS_WEIGHT * z(loud))
 
     how_many = max(config.CLIMAX_MIN_PEAKS,
-                   int(round(len(groups) * config.CLIMAX_PHRASE_SHARE)))
+                   int(round(len(groups) * (config.CLIMAX_PHRASE_SHARE
+                                            if share is None else share))))
     ranked = [eligible[j] for j in np.argsort(-score)]
     return set(ranked[:how_many])
+
+
+def core_words() -> set[str]:
+    """The words the song is mostly made of.
+
+    Named by the bank when it knows, since which words carry a song is a
+    property of the recordings and not something a general rule can guess.
+    Falling back to "short, not the shout, not the payoff" gets it right for a
+    bank that has not said.
+    """
+    named = getattr(config, "PLAY_CORE_WORDS", None)
+    if named:
+        return set(named)
+    return {w for w, n in config.WORD_SYLLABLES.items()
+            if n <= 2 and w not in config.SHOUT_WORDS and w not in config.CLIMAX_WORDS}
+
+
+# Every origin unit_origin can return, and the knob that prices it. A clip the
+# singer sang whole is free, so it has no knob.
+#
+# Listed rather than built from the origin name at the point of use. Looking up
+# f"{origin}_cost" meant a renamed or newly added origin silently priced itself
+# at zero and the preference vanished with nothing to notice, which is the
+# failure this repo keeps finding and keeps refusing to leave in place.
+ORIGIN_COSTS = {
+    "recorded": None,
+    "slice": "slice_cost",
+    "joined": "joined_cost",
+    "spelled": "spelled_cost",
+}
+
+
+def unit_origin(unit: Unit) -> str:
+    """How this unit came to exist, from most to least like a real recording.
+
+      recorded  a clip the singer sang, transitions and all
+      slice     one word cut out of such a clip. Genuine audio of that word.
+      joined    real words crossfaded into an order nobody sang
+      spelled   a word assembled out of syllable fragments
+
+    They are not equal and should not compete as if they were. A whole take
+    carries the singer's own movement between syllables; a word built out of
+    "pas" and "ka" carries a join where that movement should be.
+    """
+    name = unit.name
+    if name.startswith("spelled:"):
+        return "spelled"
+    if name.startswith(("invented:", "joined:")):
+        return "joined"
+    return "slice" if "#" in name else "recorded"
+
+
+def crown_words() -> set[str]:
+    """Long words that finish a combination rather than carry it."""
+    return {w for w, n in config.WORD_SYLLABLES.items()
+            if n > 2 and w not in config.SHOUT_WORDS and w not in config.CLIMAX_WORDS}
 
 
 def _choose(units: list[Unit], remaining: int, span_s: float,
             rng: random.Random, last: str | None,
             allow_shouts: bool = True, allow_climax: bool = False,
-            targets: list[float] | None = None) -> Unit | None:
+            targets: list[float] | None = None,
+            play: dict | None = None,
+            used: dict[str, int] | None = None) -> Unit | None:
     """Pick a unit that fits the slots left.
 
     Three things compete: how naturally the clip fills the time it is given, a
@@ -438,6 +566,56 @@ def _choose(units: list[Unit], remaining: int, span_s: float,
             cost += config.FOLD_PENALTY
         return config.PITCH_FIT_WEIGHT * cost
 
+    core = core_words()
+    crown = crown_words()
+
+    def role_cost(u: Unit) -> float:
+        """What each kind of word is worth, as a proportion of the song.
+
+        The bank has four roles and they are not interchangeable. A handful of
+        short words carry the thing; one long word is rarer and finishes a
+        combination; the shout and the payoff are seasoning. Left to compete on
+        duration fit alone the shout wins constantly, because it is a third of
+        the recordings and fits any slot, and the song becomes shouting.
+        """
+        if not play:
+            return 0.0
+        words = u.words
+        cost = 0.0
+        if any(w in config.SHOUT_WORDS for w in words):
+            cost += float(play.get("shout_cost", 0.0))
+        if any(w in crown for w in words):
+            cost += float(play.get("crown_cost", 0.0))
+        if any(w not in core and w not in crown
+               and w not in config.SHOUT_WORDS and w not in config.CLIMAX_WORDS
+               for w in words):
+            # A fourth kind: words the bank has but the song is not about.
+            # They read as novel, so the bonus for saying something new picks
+            # them up hard, and they crowd out the words that carry the thing.
+            cost += float(play.get("extra_cost", 0.0))
+        if words and all(w in core for w in words):
+            cost -= float(play.get("core_bonus", 0.0))
+        knob = ORIGIN_COSTS[unit_origin(u)]
+        if knob is not None:
+            cost += float(play.get(knob, 0.0))
+        return cost
+
+    def variety_cost(u: Unit) -> float:
+        """What it costs to say the same thing again.
+
+        The bank holds fourteen recorded phrases, so without this one clip that
+        happens to fit the song's typical slot wins most of them and the track
+        becomes a loop. Charged per label rather than per clip, since hearing
+        the same words in a different take is the same repetition to a
+        listener.
+        """
+        if not play or used is None:
+            return 0.0
+        seen = used.get(u.label, 0)
+        if seen == 0:
+            return -float(play.get("unused_bonus", 0.0))
+        return float(play.get("repeat_penalty", 0.0)) * np.log1p(seen)
+
     def mismatch(u: Unit) -> float:
         allotted = span_s * (u.syllables / remaining) if remaining else span_s
         if allotted <= 0:
@@ -445,32 +623,47 @@ def _choose(units: list[Unit], remaining: int, span_s: float,
         # Longer units are preferred at equal fit: fewer, longer placements
         # read as singing, while many short ones read as chatter.
         length_bonus = config.PREFER_LONGER_UNITS * np.log(u.syllables + 1)
-        return abs(np.log(u.duration_s / allotted)) - length_bonus + pitch_cost(u)
+        return (abs(np.log(u.duration_s / allotted)) - length_bonus
+                + pitch_cost(u) + variety_cost(u) + role_cost(u))
 
+    band = float(play.get("tie_band", 0.35)) if play else 0.35
     ranked = sorted(pool, key=mismatch)
-    top = [u for u in ranked if mismatch(u) <= mismatch(ranked[0]) + 0.35] or ranked[:1]
+    top = [u for u in ranked if mismatch(u) <= mismatch(ranked[0]) + band] or ranked[:1]
     return rng.choice(top)
 
 
-def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) -> Plan:
+def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None,
+               play: dict | None = None) -> Plan:
+    """Lay units onto slots. With `play`, vary what gets said and how often.
+
+    `play` is a parameter set from config.PLAY_LEVELS. Passing None keeps the
+    behaviour this had before playfulness existed, which is what the tests for
+    everything else depend on.
+    """
     rng = random.Random(config.WORD_ROTATION_SEED if seed is None else seed)
     forced = config.WORD_SEQUENCE
     plan = Plan(slots_total=len(slots))
 
     by_label = {u.label: u for u in units}
     forced_queue = list(forced) if forced else []
+    used: dict[str, int] = {}
 
     groups = group_phrases(slots)
     smallest_climax = min((u.syllables for u in units if u.is_climax), default=1)
-    climaxes = find_climaxes(groups, min_slots=smallest_climax)
+    climax_share = float(play.get("climax_share", config.CLIMAX_PHRASE_SHARE)) if play         else config.CLIMAX_PHRASE_SHARE
+    climaxes = find_climaxes(groups, min_slots=smallest_climax, share=climax_share)
 
     # Leave some phrases instrumental. Filling every one makes the words a
     # texture rather than events, which buries them on a smooth song.
     #
     # Peaks are exempt: thinning at random was silently discarding the very
     # phrases reserved for calculator, so the payoff never arrived at all.
-    fill = config.PHRASE_FILL
-    keep = {id(g) for i, g in enumerate(groups) if i in climaxes}
+    fill = float(play.get("phrase_fill", config.PHRASE_FILL)) if play else config.PHRASE_FILL
+    # The opening is never thinned away. Whatever the density setting, the
+    # first thing a listener decides is whether this song has words in it, and
+    # a track that stays instrumental through its first phrase has answered no
+    # by the time it starts. Peaks are exempt for the same kind of reason.
+    keep = {id(g) for i, g in enumerate(groups) if i in climaxes or i == 0}
     if fill >= 1.0:
         keep = {id(g) for g in groups}
     else:
@@ -481,6 +674,21 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
         # same overall density while guaranteeing the gaps stay short.
         ordinary = [i for i in range(len(groups)) if i not in climaxes]
         want_drop = max(0, len(ordinary) - (int(round(len(groups) * fill)) - len(keep)))
+        max_gap = float(play.get("max_gap_s", 0.0)) if play else 0.0
+
+        def silence_around(i: int, dropped: set[int]) -> float:
+            """How long the hole would be if this phrase went too.
+
+            Counted across neighbours already dropped, because two short
+            phrases dropped either side of a kept one still read as one long
+            absence once the kept phrase is over.
+            """
+            first = last = i
+            while (first - 1) in dropped:
+                first -= 1
+            while (last + 1) in dropped:
+                last += 1
+            return groups[last][-1].offset_s - groups[first][0].onset_s
 
         dropped: set[int] = set()
         for i in rng.sample(ordinary, len(ordinary)):
@@ -488,12 +696,27 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
                 break
             if (i - 1) in dropped or (i + 1) in dropped:
                 continue
+            # Capping phrase length turned eleven phrases into thirty on a test
+            # song, so the same drop RATE went from about two holes to seven.
+            # A proportion of phrases stopped meaning a proportion of silence
+            # once phrases became short, and the result was audible as the song
+            # dropping out while the original was still singing.
+            if max_gap > 0.0 and silence_around(i, dropped) > max_gap:
+                continue
             dropped.add(i)
 
         keep |= {id(groups[i]) for i in ordinary if i not in dropped}
 
-    shout_budget = max(1, int(round(len(groups) * config.SHOUT_MAX_SHARE)))
+    shout_share = float(play.get("shout_share", config.SHOUT_MAX_SHARE)) if play         else config.SHOUT_MAX_SHARE
+    shout_budget = max(1, int(round(len(groups) * shout_share)))
     shouts_used = 0
+
+    # A chant: the same thing said several times running, on purpose. Not the
+    # same as the monotony repeat_penalty exists to stop, which is one clip
+    # quietly winning every slot because it happens to fit best. This is chosen,
+    # it is bounded, and it ends.
+    chant_label: str | None = None
+    chant_left = 0
 
     for index, group in enumerate(groups):
         if id(group) not in keep:
@@ -503,7 +726,8 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
         # A peak may take one; anywhere else it is an occasional joke, which
         # only works while it stays unexpected.
         at_peak = index in climaxes and rng.random() < config.CLIMAX_USE_CHANCE
-        wildcard = index not in climaxes and rng.random() < config.CLIMAX_WILDCARD_CHANCE
+        wildcard_chance = float(play.get("climax_wildcard", config.CLIMAX_WILDCARD_CHANCE))             if play else config.CLIMAX_WILDCARD_CHANCE
+        wildcard = index not in climaxes and rng.random() < wildcard_chance
         climax_left = 1 if (at_peak or wildcard) else 0
 
         i = 0
@@ -522,7 +746,7 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
                 if shouts_used < shout_budget and climax_left > 0:
                     filler = _choose([u for u in units if u.syllables == 1],
                                       1, span_s, rng, last, allow_climax=True,
-                                      targets=targets)
+                                      targets=targets, play=play, used=used)
                 if filler is not None:
                     shouts_used += 1
                     covered = group[i:i + 1]
@@ -536,9 +760,17 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
                         slots=list(covered),
                     ))
                     plan.slots_used += 1
+                    used[filler.label] = used.get(filler.label, 0) + 1
                     break
 
-                if config.ODD_SLOT_POLICY == "merge_last" and plan.placements:
+                # Only into a placement in THIS phrase. Reaching for the last
+                # placement whatever it was held a word across a phrase gap,
+                # which contradicts the rule the gap exists to enforce, and made
+                # the placement cover slots that are not next to each other.
+                mergeable = (config.ODD_SLOT_POLICY == "merge_last"
+                             and plan.placements
+                             and plan.placements[-1].phrase == group[i].phrase)
+                if mergeable:
                     prev = plan.placements[-1]
                     prev.slot_span_s = group[i].offset_s - prev.onset_s
                     prev.play_s = min(prev.unit.duration_s, prev.slot_span_s)
@@ -556,14 +788,39 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
             # Left to compete on time-fit alone it usually lost, and a climax
             # that never arrives is worse than none at all.
             if unit is None and climax_left > 0:
-                unit = _choose([u for u in units if u.is_climax],
-                               remaining, span_s, rng, last, allow_climax=True,
-                               targets=targets)
+                payoff = [u for u in units if u.is_climax]
+                # The shout and the payoff travel together by default. Slicing
+                # the bank into words gave the planner a dozen ways to say the
+                # payoff alone, and they outvoted the one recording that says
+                # it properly, so the pairing has to be asked for rather than
+                # left to compete.
+                detach = float(play.get("detach_pairing", 1.0)) if play else 1.0
+                if rng.random() >= detach:
+                    paired = [u for u in payoff if u.is_shout_pairing
+                              and u.syllables <= remaining]
+                    payoff = paired or payoff
+                unit = _choose(payoff, remaining, span_s, rng, last,
+                               allow_climax=True, targets=targets,
+                               play=play, used=used)
+
+            if unit is None and chant_left > 0 and chant_label:
+                again = [u for u in units
+                         if u.label == chant_label and u.syllables <= remaining]
+                if again:
+                    # Inside a chant the repeat penalty is exactly wrong, so the
+                    # pool is narrowed to the chanted label and it cannot fire.
+                    unit = _choose(again, remaining, span_s, rng, None,
+                                   allow_shouts=True, allow_climax=True,
+                                   targets=targets, play=play, used=None)
+                    chant_left -= 1
+                else:
+                    chant_left = 0
 
             if unit is None:
                 unit = _choose(units, remaining, span_s, rng, last,
                                allow_shouts=shouts_used < shout_budget,
-                               allow_climax=False, targets=targets)
+                               allow_climax=False, targets=targets,
+                               play=play, used=used)
             if unit is not None and unit.is_bare_shout:
                 shouts_used += 1
             if unit is not None and unit.is_climax:
@@ -579,14 +836,14 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
             # carries the singer's own transition and cannot be bettered by
             # butting two clips together.
             if (not unit.is_bare_shout
-                    and not unit.words[:1] == ["aah"]
+                    and not (unit.words[:1] and unit.words[0] in config.SHOUT_WORDS)
                     and shouts_used < shout_budget
                     and remaining > unit.syllables):
                 bias = config.SHOUT_LEAD_IN_CLIMAX_BIAS if unit.is_climax else 1.0
                 if rng.random() < min(0.95, config.SHOUT_LEAD_IN_CHANCE * bias):
                     lead = _choose([u for u in units if u.is_bare_shout],
                                    1, group[i].dur_s, rng, last, allow_climax=True,
-                                   targets=targets)
+                                   targets=targets, play=play, used=used)
                     if lead is not None:
                         plan.placements.append(Placement(
                             unit=lead,
@@ -599,8 +856,23 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
                         ))
                         plan.slots_used += 1
                         shouts_used += 1
+                        used[lead.label] = used.get(lead.label, 0) + 1
                         i += 1
                         remaining -= 1
+
+                        # Rarely, nothing follows. The ear is set up for filth
+                        # and gets a gap instead. Only the unit that would have
+                        # come next is dropped: abandoning the whole phrase
+                        # made the joke cost several seconds of song, which is
+                        # how wild ended up with almost no words in it.
+                        if (play and not unit.is_climax
+                                and rng.random() < float(play.get("bare_shout", 0.0))):
+                            skip = min(unit.syllables, len(group) - i)
+                            plan.slots_dropped += skip
+                            i += skip
+                            last = lead.name
+                            continue
+
                         if remaining < unit.syllables:
                             last = lead.name
                             continue
@@ -618,10 +890,23 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None) ->
                 slots=list(covered),
             ))
             plan.slots_used += unit.syllables
+            used[unit.label] = used.get(unit.label, 0) + 1
             last = unit.name
             i += unit.syllables
 
-    # Nothing may run into whatever comes next.
+            # Say it again. Started after a placement rather than before one, so
+            # a chant is always a repeat of something the song just said.
+            if play and chant_left <= 0 and rng.random() < float(play.get("chant_chance", 0.0)):
+                chant_label = unit.label
+                chant_left = rng.randint(1, max(1, int(play.get("chant_max", 2))))
+
+    # Nothing may run into whatever comes next, and nothing may ring past the
+    # slots it was given. Only the first was enforced, so the LAST placement in
+    # a phrase had nothing after it to be cut against and sounded for its whole
+    # length: a four second clip over a 1.7 second span, straight through the
+    # gap the original singer left and into the next phrase.
+    for placement in plan.placements:
+        placement.play_s = min(placement.play_s, placement.slot_span_s)
     for a, b in zip(plan.placements, plan.placements[1:]):
         a.play_s = min(a.play_s, max(0.0, b.onset_s - a.onset_s))
 
@@ -782,6 +1067,12 @@ def precompute_shifted(plan: Plan, sr: int = config.SAMPLE_RATE,
     variant shifts is purely a selection over the same set. Doing the work once
     makes every additional mimicry setting almost free, so there is no reason
     to make anyone choose a single one up front.
+
+    The cache is per arrangement, and a two-level run pays for it twice. That
+    looks like an obvious saving and is not: measured across two songs, the
+    conservative and wild arrangements share 2 to 3 percent of their
+    (unit, shift) work, because different words land on different notes. A
+    cache keyed across levels would carry the bookkeeping and save nothing.
     """
     from .pitchshift import render_unit
 

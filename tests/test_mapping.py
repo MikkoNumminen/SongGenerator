@@ -260,3 +260,125 @@ class TestMimicry:
 
 def test_report_on_an_empty_plan():
     assert "nothing placed" in report(Plan(), [])
+
+
+def test_a_long_run_is_split_into_phrase_sized_pieces():
+    """Continuous delivery has no gaps, so a cap has to find the ends.
+
+    A rapped verse never pauses for PHRASE_GAP_S, which made a 25-second run
+    read as one phrase on a real song. Density is decided per phrase, so
+    dropping that one phrase silenced the first quarter of the track.
+    """
+    from song_generator import config
+    from song_generator.mapping import Slot, group_phrases
+
+    slots, at = [], 0.0
+    for _ in range(120):
+        slots.append(Slot(at, at + 0.2, 60.0, phrase=0))
+        at += 0.21          # never opens a PHRASE_GAP_S gap
+    groups = group_phrases(slots)
+
+    assert len(groups) > 1
+    for group in groups:
+        assert group[-1].offset_s - group[0].onset_s <= config.PHRASE_MAX_S
+
+
+def test_splitting_keeps_every_slot_exactly_once():
+    from song_generator.mapping import Slot, group_phrases
+
+    slots, at = [], 0.0
+    for _ in range(90):
+        slots.append(Slot(at, at + 0.2, 60.0, phrase=0))
+        at += 0.22
+    flat = [s for group in group_phrases(slots) for s in group]
+    assert flat == slots
+
+
+def test_a_short_phrase_is_left_alone():
+    from song_generator.mapping import Slot, group_phrases
+
+    slots = [Slot(i * 0.3, i * 0.3 + 0.25, 60.0, phrase=0) for i in range(6)]
+    assert group_phrases(slots) == [slots]
+
+
+def test_group_phrases_renumbers_the_slots_it_is_given():
+    """It writes slot.phrase, and that is deliberate rather than a leak.
+
+    A group is what the rest of the tool means by a phrase, and a slot still
+    carrying the number it was detected with made placements look as though
+    they spanned two phrases when they spanned one group.
+    """
+    from song_generator.mapping import Slot, group_phrases
+
+    slots, at = [], 0.0
+    for _ in range(40):
+        slots.append(Slot(at, at + 0.2, 60.0, phrase=7))
+        at += 0.21
+    group_phrases(slots)
+
+    assert {s.phrase for s in slots} != {7}
+    for number, group in enumerate(group_phrases(slots)):
+        assert all(s.phrase == number for s in group)
+
+
+def test_grouping_twice_changes_nothing_the_second_time():
+    from song_generator.mapping import Slot, group_phrases
+
+    slots, at = [], 0.0
+    for _ in range(40):
+        slots.append(Slot(at, at + 0.2, 60.0, phrase=0))
+        at += 0.21
+    first = [len(g) for g in group_phrases(slots)]
+    numbers = [s.phrase for s in slots]
+    assert [len(g) for g in group_phrases(slots)] == first
+    assert [s.phrase for s in slots] == numbers
+
+
+class TestTheMixNeverProducesSomethingUnplayable:
+    """Nothing checked that the output cannot clip.
+
+    Every rendered song measures a peak of 0.891, exactly the -1 dBFS ceiling,
+    so the limiter is working. That it is working was not tested anywhere, and
+    a clipped master is the one defect a listener notices immediately and no
+    other test would catch.
+    """
+
+    def _tone(self, amplitude, freq=220.0, seconds=1.0):
+        from song_generator import config
+
+        t = np.arange(int(config.SAMPLE_RATE * seconds)) / config.SAMPLE_RATE
+        one = (amplitude * np.sin(2 * np.pi * freq * t)).astype(np.float32)
+        return np.stack([one, one])
+
+    @pytest.mark.parametrize("words,bed", [
+        (0.3, 0.3),      # ordinary
+        (8.0, 0.3),      # words far too loud
+        (0.3, 9.0),      # bed far too loud
+        (20.0, 20.0),    # both absurd
+        (0.0, 0.3),      # nothing sung
+        (0.3, 0.0),      # no instrumental
+        (0.0, 0.0),      # nothing at all
+    ])
+    def test_the_ceiling_holds(self, words, bed):
+        from song_generator import config
+        from song_generator.mapping import mix
+
+        out = mix(self._tone(words), self._tone(bed, 110.0))
+        ceiling = 10 ** (config.OUTPUT_PEAK_CEILING_DB / 20)
+        assert float(np.abs(out).max()) <= ceiling + 1e-6
+        assert np.isfinite(out).all()
+
+    def test_a_length_mismatch_does_not_produce_garbage(self):
+        """Whichever bus is shorter decides the length, rather than one of them
+        running past the end of the other into whatever was in memory."""
+        from song_generator.mapping import mix
+
+        out = mix(self._tone(0.3), self._tone(0.3, 110.0, seconds=0.3))
+        assert out.shape[1] == self._tone(0.3, 110.0, seconds=0.3).shape[1]
+        assert np.isfinite(out).all()
+
+    def test_silence_in_gives_silence_out(self):
+        from song_generator.mapping import mix
+
+        out = mix(self._tone(0.0), self._tone(0.0, 110.0))
+        assert float(np.abs(out).max()) == 0.0
