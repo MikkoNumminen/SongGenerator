@@ -58,6 +58,10 @@ the same song reuses the cached stems and takes seconds.
 One song failing does not end the batch. A song with no vocal is refused as
 Mode B, recorded, and the rest continue.
 
+Each song writes both playfulness levels, so twenty songs is 280 files.
+`--play conservative` narrows it to one level when that is more listening than
+you want.
+
 ---
 
 ## Bring back a take that worked
