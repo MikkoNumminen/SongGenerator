@@ -559,12 +559,34 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None,
         # same overall density while guaranteeing the gaps stay short.
         ordinary = [i for i in range(len(groups)) if i not in climaxes]
         want_drop = max(0, len(ordinary) - (int(round(len(groups) * fill)) - len(keep)))
+        max_gap = float(play.get("max_gap_s", 0.0)) if play else 0.0
+
+        def silence_around(i: int, dropped: set[int]) -> float:
+            """How long the hole would be if this phrase went too.
+
+            Counted across neighbours already dropped, because two short
+            phrases dropped either side of a kept one still read as one long
+            absence once the kept phrase is over.
+            """
+            first = last = i
+            while (first - 1) in dropped:
+                first -= 1
+            while (last + 1) in dropped:
+                last += 1
+            return groups[last][-1].offset_s - groups[first][0].onset_s
 
         dropped: set[int] = set()
         for i in rng.sample(ordinary, len(ordinary)):
             if len(dropped) >= want_drop:
                 break
             if (i - 1) in dropped or (i + 1) in dropped:
+                continue
+            # Capping phrase length turned eleven phrases into thirty on a test
+            # song, so the same drop RATE went from about two holes to seven.
+            # A proportion of phrases stopped meaning a proportion of silence
+            # once phrases became short, and the result was audible as the song
+            # dropping out while the original was still singing.
+            if max_gap > 0.0 and silence_around(i, dropped) > max_gap:
                 continue
             dropped.add(i)
 

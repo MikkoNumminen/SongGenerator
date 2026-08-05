@@ -555,6 +555,10 @@ PLAY_DEFAULT_LEVEL = "conservative"
 #                    the whole bank is built around.
 #   phrase_fill      how many phrases get words at all. Lower leaves more of
 #                    the song instrumental, so the words land as events.
+#   max_gap_s        longest stretch a run may leave wordless by thinning.
+#                    phrase_fill alone is a proportion of PHRASES, which stopped
+#                    meaning a proportion of TIME once phrases were capped in
+#                    length, so the holes have to be bounded directly.
 #   shout_share      how much of the song may be shouts. The base setting keeps
 #                    the shout as punctuation; these levels want it as a voice.
 #   climax_share     how many phrases count as peaks, and so how often the
@@ -578,7 +582,8 @@ PLAY_LEVELS = {
         "tie_band": 0.35,
         "bare_shout": 0.05,
         "detach_pairing": 0.15,
-        "phrase_fill": 0.78,
+        "phrase_fill": 0.88,
+        "max_gap_s": 3.0,
         "shout_share": 0.45,
         "climax_share": 0.40,
         "climax_wildcard": 0.15,
@@ -598,7 +603,8 @@ PLAY_LEVELS = {
         "tie_band": 0.50,
         "bare_shout": 0.07,
         "detach_pairing": 0.45,
-        "phrase_fill": 0.80,
+        "phrase_fill": 0.85,
+        "max_gap_s": 3.5,
         "shout_share": 0.55,
         "climax_share": 0.50,
         "climax_wildcard": 0.25,
@@ -615,6 +621,7 @@ PLAY_LEVELS = {
         "bare_shout": 0.0,
         "detach_pairing": 1.0,
         "phrase_fill": PHRASE_FILL,
+        "max_gap_s": 0.0,
         "shout_share": SHOUT_MAX_SHARE,
         "climax_share": CLIMAX_PHRASE_SHARE,
         "climax_wildcard": CLIMAX_WILDCARD_CHANCE,

@@ -442,3 +442,28 @@ def test_the_opening_is_never_thinned_away(bank, slots):
         for i in range(10):
             plan, _, _ = build(slots, bank, level, 2200 + i)
             assert plan.placements[0].onset_s <= slots[0].onset_s + 1e-6
+
+
+def test_thinning_cannot_open_a_long_hole(bank, slots):
+    """A proportion of phrases is not a proportion of time.
+
+    phrase_fill drops whole phrases, which was tuned when phrases were long and
+    few. Capping phrase length turned eleven phrases into thirty on a real song,
+    so the same drop rate went from about two holes to seven and the track kept
+    falling silent while the original was still singing.
+    """
+    from song_generator.arrange import level_params
+
+    for level in ("conservative", "wild"):
+        allowed = level_params(level)["max_gap_s"]
+        for i in range(8):
+            plan, _, _ = build(slots, bank, level, 3300 + i)
+            sounding = sorted((p.onset_s, p.onset_s + min(p.play_s, p.unit.duration_s))
+                              for p in plan.placements)
+            prev, worst = slots[0].onset_s, 0.0
+            for start, end in sounding:
+                worst = max(worst, start - prev)
+                prev = max(prev, end)
+            # Generous: phrase boundaries and truncation contribute too, and
+            # only the thinning half is what this bounds.
+            assert worst <= allowed * 2.5
