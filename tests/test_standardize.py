@@ -716,3 +716,32 @@ def test_a_clip_too_short_for_its_bounds_still_gets_real_spans():
     out = shift_bounds([0.9, 1.1, 1.3, 1.5], 0.0, 1.0)
     edges = [0.0] + out + [1.0]
     assert all(b > a for a, b in zip(edges, edges[1:])), edges
+
+
+class TestNamesThatAreNotPaths:
+    """A clip name comes from a filename and becomes one again.
+
+    Containment catches traversal. These are the names that are not paths at
+    all, which reached libsndfile and failed there with a system error nobody
+    can read, or would have been written somewhere unintended.
+    """
+
+    def test_an_absolute_or_unc_name_is_refused(self, bank, tmp_path):
+        for name in ("C:/Windows/evil.wav", "//server/share/evil.wav"):
+            with pytest.raises(StandardizeError):
+                write_derivative(tmp_path / "tier", name, _clip(), [bank])
+
+    def test_a_control_character_is_refused(self, bank, tmp_path):
+        for name in ("ok\nevil.wav", "ok\revil.wav", "ok\x00.wav"):
+            with pytest.raises(StandardizeError, match="not a usable clip name"):
+                write_derivative(tmp_path / "tier", name, _clip(), [bank])
+
+    def test_an_empty_or_dot_name_is_refused(self, bank, tmp_path):
+        for name in ("", ".", ".."):
+            with pytest.raises(StandardizeError, match="not a usable clip name"):
+                write_derivative(tmp_path / "tier", name, _clip(), [bank])
+
+    def test_an_ordinary_name_still_writes(self, bank, tmp_path):
+        written = write_derivative(tmp_path / "tier", "paska_1.wav", _clip(), [bank])
+        assert written.is_file()
+        assert (tmp_path / "tier").resolve() in written.resolve().parents

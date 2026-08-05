@@ -102,6 +102,15 @@ def write_derivative(root: Path, name: str, audio: np.ndarray,
     skipped by a later code path that forgot about it.
     """
     root_r = check_destination(root, sources)
+
+    # A clip name comes from a filename on disk and ends up as one again, so it
+    # is checked before it is used rather than after libsndfile fails with a
+    # system error nobody can read. Containment is checked below and catches
+    # traversal; this catches the names that are not paths at all.
+    if not name or name in (".", "..") or any(ord(c) < 32 for c in name):
+        raise StandardizeError(
+            f"refusing to write {name!r}: that is not a usable clip name.")
+
     dest = _resolved(root_r / name)
 
     if root_r not in dest.parents:
