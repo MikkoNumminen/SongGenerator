@@ -709,9 +709,17 @@ PLAY_LOG_DIR = "arrangements"
 #                large shifts, where WORLD starts to sound vocoded.
 SHIFT_ENGINE = "world"
 
-# Formant handling. 1.0 = formants held exactly where they were, which is what
-# keeps a shifted clip sounding like the same singer rather than a chipmunk.
-# Values above 1.0 deliberately brighten; below 1.0 darken.
+# Formant handling for the rubberband engine. WORLD does not use this: it
+# preserves the envelope by construction, leaving it untouched while F0 is
+# replaced.
+#
+# 1.0 = formants held exactly where they were, which is what keeps a shifted
+# clip sounding like the same singer rather than a chipmunk. Values above 1.0
+# deliberately brighten; below 1.0 darken.
+#
+# Note this is the TOOL's convention, not Rubber Band's, which reads 1.0 as
+# "do not scale the envelope" and so produces exactly the chipmunk 1.0 is meant
+# to avoid. pitchshift translates.
 FORMANT_SCALE = 1.0
 
 # Hard cap on how far a clip may be shifted, in semitones. Beyond this the
