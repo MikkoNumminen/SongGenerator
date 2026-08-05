@@ -132,15 +132,72 @@ never see. Resolve it on a real vocal.
 
   `python -m song_generator.doctor` reports this breakdown per bank.
 
-- **Syllables may not be worth keeping.** Clips of bare syllables (`bra`, `vo`,
-  `me`, `ter`) map onto a melody 1:1 and can spell words that were never
-  recorded intact, which is why they were tried. In practice they crowded out
-  the words: a clip of `bra` fills a slot as neatly as one of `bravo` and says
-  nothing, and a track full of them stops being about bravo, tango, delta,
-  kilometer and aah calculator. They are currently set aside rather than deleted
-  (`SYL_` prefix, `python -m song_generator.set_aside --restore` puts them back).
-  If they stay unhelpful, drop `WORD_SPELLING`, `compose_words` and
-  `PLACE_BARE_SYLLABLES` entirely rather than leaving dead machinery around.
+  **Measured again on the current bank, 37 clips, 14 songs.** The ceiling
+  tracks one number almost exactly: how far the melody sits above the bank.
+
+  | song | melody | above bank | over 7 st | ceiling |
+  |---|---|---|---|---|
+  | musickorea | 67.9 | +14.4 | 90% | 0.51 |
+  | cardib_up | 63.4 | +9.9 | 58% | 0.68 |
+  | musichyva | 62.2 | +8.6 | 52% | 0.75 |
+  | rocketman_bluegrass | 58.7 | +5.1 | 19% | 0.87 |
+  | paskaperse | 53.5 | 0.0 | 6% | 0.95 |
+
+  Mean ceiling 0.78. The bank sits at MIDI 53.6 with a 10-90 percentile span
+  of 53.3 to 61.0, so it has almost no register at all.
+
+  **If higher takes cannot be recorded, the same range can be generated once,
+  offline, per clip.** Simulated over all 14 songs, assuming a variant that
+  sounds as good as a recording:
+
+  | variants held per clip | mean ceiling | worst song | songs at 1.00 |
+  |---|---|---|---|
+  | none, today | 0.78 | 0.51 | 0 of 14 |
+  | +12 | 0.95 | 0.75 | 3 of 14 |
+  | +12, +24 | 0.96 | 0.75 | 5 of 14 |
+  | -12, +12, +24 | **0.99** | **0.91** | **11 of 14** |
+
+  A single octave up captures most of it. That the grid is this coarse is not
+  luck: `fold_shift` already reduces any shift to a residual within +/-6
+  semitones and discards only the octave, so octave-spaced variants restore
+  exactly what folding throws away and the engine handles the rest at a
+  distance it is already good at.
+
+  Sizing: 37 clips x 3 octaves is about 111 files and 70 MB against a 23 MB
+  standardised tier.
+
+  **The arithmetic above proves what is reachable, not that it is reachable.**
+  It assumes a +12 variant sounds like a recording. Generating those variants
+  with WORLD would buy nothing, because that is what a live +12 shift already
+  does and the reason folding exists is that it sounds wrong. The gain exists
+  only if something generates a better one, which is what a voice model would
+  be for. So the first step is not a pipeline:
+
+  1. Take one word. Produce it an octave up three ways: the existing WORLD
+     shift, a voice model, and if possible a real recording of that word sung
+     an octave higher. Listen. If the model is not clearly better than WORLD,
+     the whole idea is dead and no pipeline is worth building.
+  2. Only then: generate variants once per bank into a derivative tier beside
+     the recordings, under the same rules `standardize.py` already follows,
+     since a generated clip is a derivative of a hand-recorded one and must
+     never be able to overwrite it.
+  3. Selection needs no new logic. A variant is another `Unit` with a different
+     `midi`, and `PREFER_NEAREST_SOURCE_PITCH` already prefers the nearest
+     take. `unit_fit` becomes honest about the ceiling for free.
+
+  Keeping the runtime deterministic is the reason for generating up front
+  rather than shifting live: the tool chooses among files that exist rather
+  than running a model mid-render, and a clone without the extra behaves
+  exactly as it does today.
+
+- **Syllables turned out to be worth keeping. Resolved.** They crowded out the
+  words when they could be sung on their own: a clip of `bra` filled a slot as
+  neatly as one of `bravo` and said nothing. The pool a song is chosen from is
+  now filtered to whole words, so a bare syllable is never placed, and those
+  clips do the job they were always meant for. `arrange.py` cuts them apart and
+  spells words no recording contains, which on the current bank is every take
+  of two words. `set_aside` still exists for a bank whose syllables really are
+  junk, and now reports which words would stop being spellable first.
   Shouts are exempt: `aah` is a real utterance and the only odd-length unit,
   so it is the only thing that fits the leftover slot of an odd phrase.
 
