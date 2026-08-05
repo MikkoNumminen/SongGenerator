@@ -203,7 +203,8 @@ def resolve_bank(words_dir: Path, prefer_standardised: bool = True) -> tuple[Pat
 
 
 def load_bank(words_dir: Path = Path("words"),
-              prefer_standardised: bool = True) -> list[Unit]:
+              prefer_standardised: bool = True,
+              singable_only: bool = True) -> list[Unit]:
     words_dir, standardised = resolve_bank(words_dir, prefer_standardised)
     index = words_dir / "words.json"
     if not index.is_file():
@@ -239,7 +240,11 @@ def load_bank(words_dir: Path = Path("words"),
 
     units.extend(compose_words(units))
 
-    if not config.PLACE_BARE_SYLLABLES:
+    # A clip of syllables is not singable on its own, but it is raw material:
+    # arrange.py cuts it into its syllables and spells whole words out of them.
+    # Dropping it here threw that material away before anything could use it,
+    # which silently wasted every syllable clip somebody cut by hand.
+    if singable_only and not config.PLACE_BARE_SYLLABLES:
         singable = [u for u in units if u.is_word_like]
         if singable:
             return singable

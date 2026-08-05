@@ -265,18 +265,33 @@ def enrich(units: list[Unit], level: str, rng) -> list[Unit]:
     something that was never recorded, and they win a slot only when they fit
     it better than anything real.
     """
+    from .mapping import compose_words
+
     params = level_params(level)
-    pool = list(units)
     if not params["slice_words"]:
-        return pool
+        return [u for u in units if u.is_word_like] or list(units)
 
+    # Cut everything into its parts first. A clip of whole words gives words; a
+    # clip of syllables gives syllables, which is what spelling needs.
     slices = slice_words(units)
-    pool.extend(slices)
 
-    by_word = index_by_word(pool)
+    # Spell whole words out of loose syllables. compose_words wants single
+    # syllables as units of their own, which is exactly what slicing a syllable
+    # clip produces, so a hand-cut "pas ka" reaches every word using pas or ka.
+    spelled = compose_words(units + slices)
+
+    pool = list(units) + slices + spelled
+
+    # Invent from WORDS only. Built from every single-token unit it also
+    # reached for syllables, and every order containing one was then thrown
+    # away as unsingable, so the whole invention budget went nowhere.
+    by_word = index_by_word([u for u in pool if u.is_word_like])
     existing = {u.label for u in units}
     pool.extend(invent_units(by_word, int(params["invent_combos"]), rng, existing))
-    return pool
+
+    # Only whole words get sung. The syllables did their job by spelling.
+    singable = [u for u in pool if u.is_word_like]
+    return singable or pool
 
 
 # ---------------------------------------------------------------------------

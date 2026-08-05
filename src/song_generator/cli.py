@@ -201,7 +201,8 @@ def main(argv: list[str] | None = None) -> int:
     singing_from, standardised = resolve_bank(
         words_dir, prefer_standardised=not args.raw_clips)
     try:
-        units = load_bank(words_dir, prefer_standardised=not args.raw_clips)
+        units = load_bank(words_dir, prefer_standardised=not args.raw_clips,
+                          singable_only=False)
         if not args.json:
             how = "standardised" if standardised else "as recorded"
             print(f"  bank      {args.bank} ({singing_from}, {how})")
