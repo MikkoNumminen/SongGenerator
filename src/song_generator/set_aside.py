@@ -3,23 +3,7 @@
     python -m song_generator.set_aside
     python -m song_generator.set_aside --restore
 
-Syllables were worth trying -- they map onto a melody 1:1 and can spell words
-that were never recorded intact -- but in practice they crowded out the words.
-A clip of "pas" fills a slot as neatly as one of "bravo" and says nothing, and
-a track full of them stops being about bravo, tango, delta, kilometer and aah
-calculator.
-
-THAT IS NO LONGER WHY THEY WOULD CROWD ANYTHING. The pool a song is chosen
-from is filtered to whole words, so a bare syllable is never placed, and the
-syllable clips now do the job they were always meant for: arrange.py cuts them
-apart and spells words out of them that no recording contains.
-
-So setting them aside costs spelling and buys nothing. On the current bank it
-removes three clips and every spelling of one word with them. The command is
-kept because a bank whose syllables really are junk still wants it, and
---restore still puts them back, but it now says what it would cost first.
-
-So they are renamed rather than deleted:
+Clips are renamed rather than deleted:
 
     pas.wav   ->   SYL_pas.wav
 
@@ -30,6 +14,24 @@ ear was real work and it stays recorded in the name.
 Shouts are exempt: aah is a genuine utterance, not a fragment of one, and it is
 the only odd-length unit in the bank -- the single leftover slot an odd phrase
 produces has nothing else to fill it.
+
+WHY THIS IS RARELY WHAT YOU WANT NOW
+------------------------------------
+Syllables were worth trying -- they map onto a melody 1:1 and can spell words
+that were never recorded intact -- but in practice they crowded out the words.
+A clip of "pas" filled a slot as neatly as one of "bravo" and said nothing,
+and a track full of them stopped being about bravo, tango, delta, kilometer
+and aah calculator. That is what this command was built for.
+
+It is no longer how syllables behave. The pool a song is chosen from is
+filtered to whole words, so a bare syllable is never placed at all, and those
+clips now do the job they were always meant for: arrange.py cuts them apart
+and spells words out of them that no recording contains.
+
+So running this costs spelling and buys nothing. On the current bank it takes
+three clips and every spelling of one word with them. The command stays,
+because a bank whose syllables really are junk still wants it, and it now
+reports what would be lost before anything moves.
 """
 
 from __future__ import annotations
@@ -76,13 +78,12 @@ def _report_cost(folder: Path, going: set[str], dry_run: bool) -> None:
     """
     index = folder / "words.json"
     if not index.is_file():
+        # No index means an unbuilt folder of candidates rather than a bank,
+        # and nothing there is spelling anything yet.
         return
 
-    try:
-        from .arrange import enrich
-        from .mapping import load_bank
-    except ImportError:  # pragma: no cover - only if the package is half-installed
-        return
+    from .arrange import enrich
+    from .mapping import BankError, load_bank
 
     def spellable(keep: set[str] | None) -> set[str]:
         import random
@@ -97,7 +98,11 @@ def _report_cost(folder: Path, going: set[str], dry_run: bool) -> None:
         everything = {p.name for p in folder.glob("*.wav")}
         before = spellable(None)
         after = spellable(everything - going)
-    except Exception:  # pragma: no cover - a warning must never break the command
+    except (BankError, OSError, ValueError, KeyError) as exc:
+        # Named rather than blanket. This is advisory and must not stop the
+        # rename, but swallowing everything would hide a real bug in the
+        # spelling machinery behind a command that appeared to work.
+        print(f"\n  (could not work out the cost: {exc})")
         return
 
     lost = sorted(before - after)
