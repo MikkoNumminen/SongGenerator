@@ -30,7 +30,13 @@ three different takes to choose between. Each is written to
 turned out well is brought back.
 
 First run on a song pays for separation (~0.45x realtime). Every later run on
-the same song reuses the cached stems and takes seconds.
+the same song reuses the cached stems.
+
+Rendering both levels costs about 50 seconds of resynthesis on a 2.5 minute
+song, since each arrangement is resynthesised separately. The seven mimicry
+settings within a level are nearly free, because they are a selection over the
+same shifted set. `--play conservative` halves the time when only one level is
+wanted.
 
 **Useful flags**
 

@@ -1067,6 +1067,12 @@ def precompute_shifted(plan: Plan, sr: int = config.SAMPLE_RATE,
     variant shifts is purely a selection over the same set. Doing the work once
     makes every additional mimicry setting almost free, so there is no reason
     to make anyone choose a single one up front.
+
+    The cache is per arrangement, and a two-level run pays for it twice. That
+    looks like an obvious saving and is not: measured across two songs, the
+    conservative and wild arrangements share 2 to 3 percent of their
+    (unit, shift) work, because different words land on different notes. A
+    cache keyed across levels would carry the bookkeeping and save nothing.
     """
     from .pitchshift import render_unit
 
