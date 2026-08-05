@@ -354,3 +354,19 @@ def test_a_fixed_arrangement_gives_a_fixed_ladder(bank, slots):
 
     assert first == second
     assert first == sorted(first)
+
+
+def test_the_payoff_pairing_is_guaranteed_not_merely_likely(bank, slots):
+    """A song without it reads as missing its payoff, so it is coverage."""
+    for level in ("conservative", "wild"):
+        for i in range(8):
+            _, arrangement, _ = build(slots, bank, level, 4000 + i)
+            assert arrangement.has_pairing(), f"{level} seed {4000 + i} lost the pairing"
+
+
+def test_a_bank_with_no_pairing_is_not_asked_for_one(slots):
+    """The rule cannot demand something the recordings do not contain."""
+    thin = [_unit(["tango", "bravo"]), _unit(["delta"])]
+    _, arrangement, tries = build(slots, thin, "conservative", 12)
+    assert not arrangement.has_pairing()
+    assert tries == 1

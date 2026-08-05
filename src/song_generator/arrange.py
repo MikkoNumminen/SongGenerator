@@ -311,6 +311,12 @@ class Arrangement:
     def missing(self) -> list[str]:
         return [w for w in required_words() if w not in self.words_used()]
 
+    def has_pairing(self) -> bool:
+        """Whether the shout runs into the payoff anywhere in this song."""
+        return any(a in config.SHOUT_WORDS and b in config.CLIMAX_WORDS
+                   for line in self.lines
+                   for a, b in zip(line.words, line.words[1:]))
+
 
 def clock(seconds: float) -> str:
     return f"{int(seconds // 60)}:{seconds % 60:05.2f}"
@@ -481,6 +487,15 @@ def build(slots, units: list[Unit], level: str, seed: int,
     wanted = set(required_words())
     tries = max(1, int(config.PLAY_COVERAGE_TRIES))
 
+    # The pairing counts as coverage, not as an aesthetic preference. It is the
+    # one thing the bank is built around, and a song without it anywhere reads
+    # as a song missing its payoff rather than as a song that varied.
+    possible = any(u.is_shout_pairing for u in units)
+
+    def scored(arrangement) -> tuple[int, int]:
+        return (len(wanted & arrangement.words_used()),
+                int(arrangement.has_pairing()))
+
     best = None
     for attempt in range(tries):
         this_seed = seed + attempt
@@ -488,11 +503,12 @@ def build(slots, units: list[Unit], level: str, seed: int,
         plan = plan_words(slots, pool, seed=this_seed,
                           play=None if level == "off" else params)
         arrangement = describe(plan, song, bank, level, this_seed)
-        got = arrangement.words_used()
 
-        if wanted <= got:
+        covered = wanted <= arrangement.words_used()
+        paired = arrangement.has_pairing() or not possible
+        if covered and paired:
             return plan, arrangement, attempt + 1
-        if best is None or len(wanted & got) > len(wanted & best[1].words_used()):
+        if best is None or scored(arrangement) > scored(best[1]):
             best = (plan, arrangement, attempt + 1)
 
     return best
