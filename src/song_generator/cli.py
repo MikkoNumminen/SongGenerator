@@ -104,6 +104,18 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def output_path(explicit: Path | None, song: Path) -> Path:
+    """Where a run writes, with every song in a folder of its own.
+
+    A run writes fourteen files and there are a dozen songs, so flat that is
+    nearly two hundred sorted by name, interleaving every song's levels and
+    rungs. The song name stays in the filename as well, so a file dragged out
+    of its folder still says what it is.
+    """
+    base = explicit or Path("output") / f"{song.stem}.mp3"
+    return base.parent / base.stem / base.name
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
@@ -111,7 +123,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: input file not found: {args.input}", file=sys.stderr)
         return EXIT_ERROR
 
-    output = args.output or Path("output") / f"{args.input.stem}.song_generator.mp3"
+    output = output_path(args.output, args.input)
     work = work_dir_for(args.input, args.work_dir)
     device = resolve_device(args.device)
 

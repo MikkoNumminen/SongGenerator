@@ -110,3 +110,39 @@ class TestHelpTextIsNotAPromiseTheToolBreaks:
     def test_seed_help_says_a_run_is_fresh_by_default(self):
         said = self._help_for("--seed").lower()
         assert "new one each run" in said or "fresh" in said
+
+
+class TestOutputGoesInItsOwnFolder:
+    """A run writes fourteen files and there are a dozen songs.
+
+    Flat, that is nearly two hundred files sorted by name, which interleaves
+    every song's levels and rungs and makes finding one take a scroll.
+    """
+
+    def test_the_default_lands_in_a_folder_named_for_the_song(self):
+        from pathlib import Path
+
+        from song_generator.cli import output_path
+
+        got = output_path(None, Path("input/musicHyva.mp4"))
+        assert got.parent.name == "musicHyva"
+        assert got.parent.parent.name == "output"
+
+    def test_the_filename_still_names_the_song(self):
+        """So a file dragged out of its folder still says what it is."""
+        from pathlib import Path
+
+        from song_generator.cli import output_path
+
+        assert output_path(None, Path("input/musicHyva.mp4")).name == "musicHyva.mp3"
+
+    def test_an_explicit_output_is_folded_the_same_way(self):
+        """Otherwise batch, which passes -o per song, would stay flat."""
+        from pathlib import Path
+
+        from song_generator.cli import output_path
+
+        got = output_path(Path("elsewhere/song.mp3"), Path("input/x.mp4"))
+        assert got.parent.name == "song"
+        assert got.parent.parent.name == "elsewhere"
+        assert got.name == "song.mp3"
