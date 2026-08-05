@@ -747,7 +747,7 @@ FORMANT_SCALE = 1.0
 # wrong on this material.
 #
 # Sweeping the engine from 0 to 16 semitones against each clip's own unshifted
-# self: formants never drift more than 3%, so the chipmunk this cap was
+# self: formants never drift by more than 4%, so the chipmunk this cap was
 # protecting against does not happen at any distance the tool would ask for.
 # What does change past 9 is harmonicity, +3.3 dB at 12 against +0.8 at 7, and
 # the loudness envelope, drifting twice as far. Read as a cost, that suggested
