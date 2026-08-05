@@ -101,8 +101,19 @@ never see. Resolve it on a real vocal.
 
 ## Open items
 
-- **Record word takes at higher pitches. This is the biggest remaining win, and
-  it is not a code problem.**
+- **Record word takes at higher pitches. Still the way to reach the last of
+  it, but much less urgent than it was.**
+
+  The cap was the larger part of this. It sat at 7 semitones on the assumption
+  that a bigger stretch sounds worse than landing an octave out, and on this
+  material it does not: at 12 both test songs sound better by ear, and the mean
+  ceiling across fourteen songs went from 0.78 to 0.90. See
+  SHIFT_CAP_SEMITONES for the measurement and the listening result.
+
+  What remains is the songs that still fold heavily, which are the ones sitting
+  furthest above the bank: musickorea at 0.60 with 75% still folded, music8 at
+  0.81, music46 and music45 at 0.82. Those are a range problem and no cap
+  setting reaches them.
 
   Every song so far is heavily octave-folded, 52% of syllables on musicHyva,
   31% on Juna Turkuun. A folded syllable lands on the right note *name* in the
