@@ -11,10 +11,23 @@ and the project's own venv.
 .\.venv\Scripts\song-generator.exe input\song.mp4
 ```
 
-Writes seven mp3s to `output/`, one per mimicry setting from 0.00 (words ignore
-the tune entirely, clashing, and funny for it) to 1.00 (sings the melody as
-closely as the song allows). Pick by ear; there is no correct value, and the
-right one varies by song.
+Writes **fourteen** mp3s to `output/`: both playfulness levels, and for each,
+seven mimicry settings from 0.00 (words ignore the tune entirely, clashing,
+and funny for it) to 1.00 (sings the melody as closely as the song allows).
+
+```
+song.conservative.mim0p00.mp3 ... song.conservative.mim1p00.mp3
+song.wild.mim0p00.mp3         ... song.wild.mim1p00.mp3
+```
+
+Both levels every time, because which is funnier is a listening decision and a
+run that produced one of them has not finished the job. Pick by ear; there is
+no correct value for either dial, and the right one varies by song.
+
+Every run draws a new arrangement, so running the same song three times gives
+three different takes to choose between. Each is written to
+`work/<song>/arrangements/` and the path is printed, which is how a take that
+turned out well is brought back.
 
 First run on a song pays for separation (~0.45x realtime). Every later run on
 the same song reuses the cached stems and takes seconds.
@@ -24,8 +37,11 @@ the same song reuses the cached stems and takes seconds.
 | Flag | Effect |
 |---|---|
 | `--mimicry 0.45` | One file at one setting instead of the sweep |
+| `--play wild` | One level instead of both |
+| `--arrangement <path>` | Replay a saved arrangement exactly, or an edited one |
 | `--bank chaos` | Sing with every candidate clip, identity ignored |
-| `--seed 42` | Different word choices, same everything else |
+| `--seed 42` | Fix the arrangement seed; otherwise a new one each run |
+| `--raw-clips` | Ignore the standardised tier, sing the recordings as they are |
 | `--no-shift` | Words at their own recorded pitch |
 | `--rows 30` | Print more of the extracted note table |
 | `--json` | Machine-readable summary |
@@ -41,6 +57,49 @@ the same song reuses the cached stems and takes seconds.
 
 One song failing does not end the batch. A song with no vocal is refused as
 Mode B, recorded, and the rest continue.
+
+---
+
+## Bring back a take that worked
+
+Every arrangement is logged, so nothing good is lost to a re-roll.
+
+```powershell
+.\.venv\Scripts\song-generator.exe input\song.mp4 `
+    --arrangement work\songrrangementsţ686-wild.arr
+```
+
+The file is readable and editable. Change the words on a line, delete a line,
+or delete the `[take]` to let the tool choose the recording. A word the bank
+cannot say is refused by name rather than quietly dropped. See
+`docs/DATA-FORMATS.md`.
+
+---
+
+## One word is too common, or too rare
+
+Each kind of word has a share of the song it should have, weighted per level in
+the `PLAYFULNESS` block of `config.py`. See `docs/GLOSSARY.md` for what the
+roles mean.
+
+| Symptom | Knob |
+|---|---|
+| The song is mostly shouting | `shout_cost` up, or `shout_share` down |
+| The words that carry it are drowned out | `core_bonus` up |
+| A long word turns up too often | `crown_cost` up |
+| Words the song is not about keep appearing | `extra_cost` up |
+| The payoff is everywhere / never | `climax_share`, `climax_wildcard` |
+| It says the same thing too often | `repeat_penalty` up, `chant_chance` down |
+| It never repeats anything, which is half the joke | `chant_chance` up |
+| Words sound stitched together | `spelled_cost` and `joined_cost` up |
+
+Measure rather than guess. The run's report prints what was used, and the
+share of each role is worth counting across several seeds before deciding a
+knob is wrong, since one arrangement is one draw.
+
+Coverage outranks all of them: a required word missing is a broken rule, so
+these weights are relaxed and then dropped rather than let that happen. Turning
+a knob to 0 will not remove a required word from a song.
 
 ---
 

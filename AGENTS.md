@@ -11,8 +11,8 @@ The venv is deliberately isolated (torch, demucs and heavy audio deps live
 there and must not leak into other projects). Always use it explicitly:
 
 ```powershell
-.\.venv\Scripts\song-generator.exe input\song.mp4              # full run, 7 variants
-.\.venv\Scripts\python.exe -m pytest tests\ -q                        # 192 tests, ~10s
+.\.venv\Scripts\song-generator.exe input\song.mp4              # full run, both levels x 7 rungs
+.\.venv\Scripts\python.exe -m pytest tests\ -q                        # 336 tests, ~20s
 .\.venv\Scripts\python.exe -m song_generator.build_bank        # rebuild the word bank
 .\.venv\Scripts\python.exe -m song_generator.doctor            # diagnose anything
 ```
@@ -67,6 +67,29 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   reproducible by comparing file bytes; decode and compare the samples. This
   cost a debugging session as a test that failed about twice in a hundred runs
   and looked like non-determinism in the code.
+
+## Keep the docs current
+
+The aesthetic decisions in this tool are not recoverable from the code. A
+number in `config.py` says what the tool does; it does not say that the shout
+was taking a third of the song and had to be charged for it, or that a word
+assembled from syllables carries a join where the singer's own movement should
+be. Those were decided by listening, and the next person to touch a knob will
+undo them by accident if the reasoning is not written down.
+
+So when behaviour changes, update the docs in the same commit:
+
+| Changed | Update |
+|---|---|
+| A new module | `docs/ARCHITECTURE.md` (a test enforces this one) |
+| A term worth knowing | `docs/GLOSSARY.md` |
+| A file written to disk | `docs/DATA-FORMATS.md` |
+| How to do something, or a knob worth turning | `docs/WORKFLOWS.md` |
+| A trap that cost time once | this file |
+
+Measured claims belong in the docs with their numbers, since "the shout was
+too loud" ages badly and "the shout was 34% of what got sung against the core
+words' 29%" does not.
 
 ## Reading order
 

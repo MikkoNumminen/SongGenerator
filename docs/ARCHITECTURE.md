@@ -31,16 +31,20 @@ song.mp4
    │                    (pitch change AND energy onset, neither alone
    │                     sees both a slur and a repeated note)
    │
+   ├─ arrange.py ────── playfulness ──── one arrangement per level, logged
+   │      slice_words      words cut out of recorded phrases
+   │      build            drawn from a seed, redrawn until coverage holds
+   │
    ├─ mapping.py ────── plan + render ── the whole arrangement decision
    │      clean_slots      blips merged, held notes split
-   │      group_phrases    slots → sung lines
-   │      find_climaxes    where calculator is allowed
-   │      plan_words       which unit goes where
+   │      group_phrases    slots → sung lines, capped in length
+   │      find_climaxes    where the payoff is allowed
+   │      plan_words       which unit goes where, by role and fit
    │      decide_shifts    which units sing along (MIMICRY)
    │      render           audio, via pitchshift
    │      mix              level-matched against the instrumental
    │
-   └─ 7 mp3s, one per mimicry setting
+   └─ 14 mp3s: both playfulness levels x 7 mimicry settings
 ```
 
 ## Modules
@@ -49,7 +53,7 @@ song.mp4
 
 | Module | Does | Key exports |
 |---|---|---|
-| `cli.py` | Wires everything; one run writes the whole mimicry sweep | `main` |
+| `cli.py` | Wires everything; one run writes both levels across the mimicry sweep | `main` |
 | `audio_io.py` | The only place sample rate and array shape are established | `decode`, `encode_mp3`, `read_wav` |
 | `separate.py` | Demucs or Mel-Band Roformer behind one interface, cached | `separate`, `Stems` |
 | `detect.py` | Mode A vs Mode B, with the numbers behind the verdict | `detect_vocal`, `VocalReport` |
@@ -107,9 +111,26 @@ Recorded clips always win where one exists, because a real recording carries
 the singer's own transition between two words and a crossfade does not. The
 slices are what let the tool say something that was never recorded.
 
-One run picks one playfulness level, which produces one arrangement, which is
-then rendered across the whole mimicry ladder. Playfulness and mimicry are
-different questions and deliberately do not multiply.
+A run renders BOTH playfulness levels, each producing one arrangement of its
+own, and each arrangement is then rendered across the whole mimicry ladder:
+fourteen files. Playfulness and mimicry are different questions and
+deliberately do not multiply into each other, but which level is funnier is a
+listening decision, so shipping one of them and offering the other would leave
+the decision needing another command.
+
+Which words get sung is not left to duration fit alone. The bank's words have
+roles with shares of the song attached, weighted per level: a handful of core
+words carry it, a long word is rarer and finishes a combination, the shout and
+the payoff are seasoning, and words the bank accumulated but the song is not
+about are a garnish. Without that the shout wins constantly, being a third of
+the recordings and short enough for any slot. Units are also ranked by origin,
+so a clip the singer sang whole beats a word cut out of one, which beats an
+order nobody sang, which beats a word assembled from syllable fragments.
+
+Coverage outranks every one of those weights. A share is a preference and a
+missing required word is a broken rule, so when the weights are what holds a
+word out they are relaxed and then dropped. `docs/GLOSSARY.md` defines the
+roles and origins.
 
 Every arrangement is written to `work/<song>/arrangements/` as a file a person
 can read and edit, and `--arrangement` plays one back. Replay rebuilds the

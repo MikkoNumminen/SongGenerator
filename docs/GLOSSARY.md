@@ -71,6 +71,68 @@ exactly the crack and attack that make it a shout.
 The only place `calculator` is allowed, so it stays a payoff rather than becoming
 the texture.
 
+## Playing with the words
+
+**Arrangement**. What gets sung where, for one run: an ordered list of
+placements, each naming its words and optionally the exact clip. Written to
+`work/<song>/arrangements/` as a file a person can read against the song and
+edit. `--arrangement` plays one back. See `docs/DATA-FORMATS.md` for the
+format.
+
+**Playfulness level**. How freely the words are rearranged. `conservative`
+stays near what was recorded; `wild` invents more orders, spreads wider and
+leans harder on the shout and the payoff; `off` is the behaviour from before
+any of this existed. One level produces ONE arrangement, which is then
+rendered across the whole mimicry ladder. Playfulness and mimicry are separate
+questions and deliberately do not multiply: a run writes both levels times
+seven rungs, not two arrangements per rung.
+
+**Word role**. The bank's words are not interchangeable, and each has a share
+of the song it should have. Weighted per level in `PLAY_LEVELS`.
+
+| Role | Which words | Share of what gets sung |
+|---|---|---|
+| **core** | named by `PLAY_CORE_WORDS`, else every short word that is neither shout nor payoff | 70-74% conservative, 53-60% wild |
+| **crown** | the long words. Rarer, and finish a combination rather than carry one | 4-6% |
+| **shout** | `SHOUT_WORDS` | 14-18% conservative, 23-28% wild |
+| **payoff** | `CLIMAX_WORDS`, already rationed by the climax machinery | 5-6% conservative, 9-11% wild |
+| **extra** | everything else the bank has accumulated | 1-4% |
+
+Left to compete on duration fit alone the shout wins constantly, being a third
+of the recordings and short enough for any slot, and the result is a song of
+shouting with words in the gaps. Extras are worse: they read as novel, so the
+bonus for saying something new reaches for them, and novelty is exactly the
+wrong reason to sing a word the song is not about.
+
+**Origin**. How a unit came to exist, from most to least like a real
+recording. Ranked, because they are not equal: a whole take carries the
+singer's own movement between syllables and an assembled one carries a join
+where that movement should be.
+
+| Origin | What it is |
+|---|---|
+| `recorded` | a clip the singer sang whole |
+| `slice` | one word cut out of such a clip, at the boundaries `build_bank` measured. Genuine audio of that word |
+| `joined` | real words crossfaded into an order nobody sang |
+| `spelled` | a word assembled out of syllable fragments |
+
+Slicing and spelling exist to reach sequences nobody recorded, not to replace
+what was recorded. In practice `spelled` should be near zero and appears only
+when nothing recorded will do.
+
+**Chant**. The same thing said several times running, on purpose. Distinct
+from the monotony `repeat_penalty` exists to stop, which is one clip quietly
+winning every slot because it happens to fit best. A chant is chosen, bounded
+by `chant_max`, and ends.
+
+**Coverage**. The rule that every word in `PLAY_REQUIRED_WORDS` appears
+somewhere, and that the shout-into-payoff pairing appears at least once when
+the bank holds one. Checked after an arrangement is drawn; a failure is
+redrawn from a derived seed. Coverage outranks every weight above: when the
+weights are what is holding a required word out, the weights are relaxed and
+then dropped, because a share is a preference and a missing word is a broken
+rule.
+
 ## Filename prefixes in `words/candidates/`
 
 | Prefix | Meaning | Safe for a tool to rename? |
