@@ -539,6 +539,12 @@ PLAY_COVERAGE_TRIES = 12
 
 PLAY_DEFAULT_LEVEL = "conservative"
 
+# Levels rendered when no single one is asked for. Both, always: which is
+# funnier is decided by ear, and a run that produced one and offered the other
+# had not finished. Each is its own arrangement with its own seed and its own
+# log, so either can be brought back alone.
+PLAY_BOTH_LEVELS = ("conservative", "wild")
+
 # The two levels, as parameter sets.
 #
 #   invent_combos    how many word orders to build that were never recorded.
