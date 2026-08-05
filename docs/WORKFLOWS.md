@@ -230,6 +230,13 @@ The second matters more. Watch these numbers. They move when behaviour changes:
 
 ## Set syllables aside, or bring them back
 
+Rarely wanted now. Syllable clips used to crowd out the words, because a clip
+of `bra` filled a slot as neatly as one of `bravo` and said nothing. The pool
+a song is chosen from is filtered to whole words, so a bare syllable is never
+placed, and those clips instead spell words no recording contains. Setting
+them aside costs that and buys nothing, so the command reports which words
+would stop being spellable before you decide.
+
 ```powershell
 .\.venv\Scripts\python.exe -m song_generator.set_aside            # out of the bank
 .\.venv\Scripts\python.exe -m song_generator.set_aside --restore  # back in

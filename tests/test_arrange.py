@@ -669,3 +669,18 @@ def test_the_redraw_budget_is_not_spent_on_the_unreachable(bank, slots):
     thin = [u for u in bank if u.words == ["delta"]]
     _, _, tries = build(slots, thin, "conservative", 7)
     assert tries == 1
+
+
+def test_a_bare_syllable_is_never_placed(bank, slots):
+    """The reason set_aside exists no longer applies.
+
+    Syllables used to crowd out words because a clip of "bra" filled a slot as
+    neatly as one of "bravo" and said nothing. The pool is now filtered to
+    whole words, so they cannot be placed at all, and their job is spelling
+    words no recording contains.
+    """
+    for level in ("conservative", "wild"):
+        for i in range(4):
+            plan, _, _ = build(slots, bank, level, 9100 + i)
+            for placement in plan.placements:
+                assert placement.unit.is_word_like, placement.unit.label
