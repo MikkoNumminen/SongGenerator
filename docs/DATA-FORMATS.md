@@ -115,6 +115,12 @@ phrase 1
    0:07.26  x1  =0.35  eee                      [eee_then__muumit__50.76.wav]
 ```
 
+`phrase N` counts the phrases the mapper sings to, which are the detector's
+phrases after cleanup has merged blips, split held notes and capped anything
+too long to be one phrase. They do not line up with the `phrase` field on a
+note in `analysis.json`, and neither is wrong: that file records what was
+heard, this one records what the tool sang to.
+
 The span is written because it cannot always be derived: a word may be held
 across a leftover slot, which widens what it is given without adding a note to
 land on. Omit it in a hand-written file and the slots decide.

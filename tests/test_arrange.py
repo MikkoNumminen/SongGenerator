@@ -684,3 +684,27 @@ def test_a_bare_syllable_is_never_placed(bank, slots):
             plan, _, _ = build(slots, bank, level, 9100 + i)
             for placement in plan.placements:
                 assert placement.unit.is_word_like, placement.unit.label
+
+
+def test_every_origin_has_a_price_in_every_level():
+    """A knob looked up by a name built at runtime fails silently.
+
+    unit_origin's answer used to be interpolated into f"{origin}_cost", so a
+    renamed or newly added origin would price itself at zero and the whole
+    preference would vanish with nothing raised. The mapping is explicit now,
+    and this pins that it stays complete.
+    """
+    from song_generator.mapping import ORIGIN_COSTS
+
+    for level, params in config.PLAY_LEVELS.items():
+        for origin, knob in ORIGIN_COSTS.items():
+            if knob is None:
+                continue
+            assert knob in params, f"{level} prices no {origin}"
+
+
+def test_every_origin_the_pool_produces_is_priced(bank):
+    from song_generator.mapping import ORIGIN_COSTS, unit_origin
+
+    seen = {unit_origin(u) for u in enrich(bank, "wild", random.Random(1))}
+    assert seen <= set(ORIGIN_COSTS), f"unpriced origins: {seen - set(ORIGIN_COSTS)}"

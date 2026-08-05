@@ -299,3 +299,36 @@ def test_a_short_phrase_is_left_alone():
 
     slots = [Slot(i * 0.3, i * 0.3 + 0.25, 60.0, phrase=0) for i in range(6)]
     assert group_phrases(slots) == [slots]
+
+
+def test_group_phrases_renumbers_the_slots_it_is_given():
+    """It writes slot.phrase, and that is deliberate rather than a leak.
+
+    A group is what the rest of the tool means by a phrase, and a slot still
+    carrying the number it was detected with made placements look as though
+    they spanned two phrases when they spanned one group.
+    """
+    from song_generator.mapping import Slot, group_phrases
+
+    slots, at = [], 0.0
+    for _ in range(40):
+        slots.append(Slot(at, at + 0.2, 60.0, phrase=7))
+        at += 0.21
+    group_phrases(slots)
+
+    assert {s.phrase for s in slots} != {7}
+    for number, group in enumerate(group_phrases(slots)):
+        assert all(s.phrase == number for s in group)
+
+
+def test_grouping_twice_changes_nothing_the_second_time():
+    from song_generator.mapping import Slot, group_phrases
+
+    slots, at = [], 0.0
+    for _ in range(40):
+        slots.append(Slot(at, at + 0.2, 60.0, phrase=0))
+        at += 0.21
+    first = [len(g) for g in group_phrases(slots)]
+    numbers = [s.phrase for s in slots]
+    assert [len(g) for g in group_phrases(slots)] == first
+    assert [s.phrase for s in slots] == numbers

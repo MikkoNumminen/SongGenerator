@@ -385,7 +385,18 @@ def _split_long(group: list[Slot]) -> list[list[Slot]]:
 
 
 def group_phrases(slots: list[Slot]) -> list[list[Slot]]:
-    """Re-derive phrases after cleanup, so groups match the slots being filled."""
+    """Re-derive phrases after cleanup, so groups match the slots being filled.
+
+    WRITES slot.phrase. This reads like a query and is not one: the slots it is
+    handed come back renumbered, because a group is what the rest of the tool
+    means by a phrase and nothing downstream would agree with a slot still
+    carrying the number it was detected with. Idempotent, so calling it twice
+    changes nothing the second time.
+
+    The consequence worth knowing: the phrase numbers in an arrangement file
+    are these, and the ones in analysis.json are the detector's. They do not
+    line up, and neither is wrong.
+    """
     groups: list[list[Slot]] = []
     for slot in slots:
         if groups and slot.onset_s - groups[-1][-1].offset_s <= config.PHRASE_GAP_S:
@@ -462,6 +473,21 @@ def core_words() -> set[str]:
         return set(named)
     return {w for w, n in config.WORD_SYLLABLES.items()
             if n <= 2 and w not in config.SHOUT_WORDS and w not in config.CLIMAX_WORDS}
+
+
+# Every origin unit_origin can return, and the knob that prices it. A clip the
+# singer sang whole is free, so it has no knob.
+#
+# Listed rather than built from the origin name at the point of use. Looking up
+# f"{origin}_cost" meant a renamed or newly added origin silently priced itself
+# at zero and the preference vanished with nothing to notice, which is the
+# failure this repo keeps finding and keeps refusing to leave in place.
+ORIGIN_COSTS = {
+    "recorded": None,
+    "slice": "slice_cost",
+    "joined": "joined_cost",
+    "spelled": "spelled_cost",
+}
 
 
 def unit_origin(unit: Unit) -> str:
@@ -569,7 +595,9 @@ def _choose(units: list[Unit], remaining: int, span_s: float,
             cost += float(play.get("extra_cost", 0.0))
         if words and all(w in core for w in words):
             cost -= float(play.get("core_bonus", 0.0))
-        cost += float(play.get(f"{unit_origin(u)}_cost", 0.0))
+        knob = ORIGIN_COSTS[unit_origin(u)]
+        if knob is not None:
+            cost += float(play.get(knob, 0.0))
         return cost
 
     def variety_cost(u: Unit) -> float:
