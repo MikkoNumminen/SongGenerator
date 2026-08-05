@@ -166,6 +166,40 @@ never see. Resolve it on a real vocal.
   Sizing: 37 clips x 3 octaves is about 111 files and 70 MB against a 23 MB
   standardised tier.
 
+  **Measured where the engine actually starts to suffer.** Twelve clips, each
+  shifted upward and compared against its own unshifted self. The 0 st row is
+  the control: resynthesis costs something even when nothing moves, so that is
+  the floor, not zero.
+
+  | shift | formants | harmonicity | envelope error |
+  |---|---|---|---|
+  | 0 st | 1.001 | +0.1 | 0.051 |
+  | 6 st | 1.023 | +0.9 | 0.053 |
+  | **7 st, the cap** | 1.022 | +0.8 | 0.058 |
+  | **9 st** | 1.001 | +0.7 | 0.062 |
+  | 10 st | 1.015 | +2.1 | 0.061 |
+  | **12 st** | 0.986 | +3.3 | 0.126 |
+  | 14 st | 1.034 | +3.6 | 0.080 |
+
+  Formants never drift: WORLD holds the vocal tract within 3% of its own size
+  at every shift out to 16 semitones, so the chipmunk the cap exists to
+  prevent does not happen at any distance the tool would ask for.
+
+  What does change is harmonicity, which rises as a vocoder smooths a rough
+  voice toward a clean tone, and that is the thing worth protecting here. It is
+  flat out to 9 semitones and then climbs.
+
+  So the cap is not where the damage begins. **9 is nearly free**: same
+  harmonicity as 7, envelope error a hair above it, and on the ceiling table
+  above it takes rocketman from 0.87 to 0.96 and musicwtf from 0.86 to 0.96.
+  **12 is not free**: harmonicity up 2.5 dB over the cap and envelope error
+  more than doubled, which is the smoothing that would cost the voice its
+  roughness.
+
+  Raising the cap to 9 looks defensible on measurement alone. Going past that
+  is an ear question, and scratch/cap holds two songs rendered at 7 and at 12
+  for exactly that.
+
   **The arithmetic above proves what is reachable, not that it is reachable.**
   It assumes a +12 variant sounds like a recording. Generating those variants
   with WORLD would buy nothing, because that is what a live +12 shift already
