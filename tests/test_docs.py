@@ -199,9 +199,11 @@ def test_every_command_a_tool_prints_can_actually_be_run():
     text += "".join(p.read_text(encoding="utf-8") for p in DOCS.glob("*.md"))
 
     problems = []
-    for module, flags in set(re.findall(r"song_generator\.([a-z_]+)((?:\s+--[a-z-]+)*)", text)):
-        if module in {"mp3", "mp4", "exe"}:      # a filename, not a command
-            continue
+    # The lookahead keeps "song_generator.mp3" out: a name followed by a digit
+    # is an output file, not a module, and matching it captured a module "mp"
+    # that never existed.
+    pattern = r"song_generator\.([a-z_]+)(?![a-z0-9])((?:\s+--[a-z-]+)*)"
+    for module, flags in set(re.findall(pattern, text)):
         try:
             loaded = importlib.import_module(f"song_generator.{module}")
         except ImportError:
