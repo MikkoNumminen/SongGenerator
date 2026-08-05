@@ -600,12 +600,14 @@ PLAY_BOTH_LEVELS = ("conservative", "wild")
 #   shout_cost       what including the shout costs, on top of its budget.
 #   extra_cost       what a word that is none of the above costs. A bank
 #                    accumulates words the song is not really about, and
-#                    unused_bonus rewards them for sounding new.
+#                    unused_bonus rewards them for sounding new. Charged
+#                    heavily: these are a garnish that should surprise when it
+#                    turns up, not part of the regular vocabulary.
 PLAY_LEVELS = {
     # Recognisable and tidy. Keeps close to what was recorded, and mostly
     # varies which take of a phrase is used rather than inventing orders.
     "conservative": {
-        "extra_cost": 0.45,
+        "extra_cost": 1.60,
         "core_bonus": 0.9,
         "crown_cost": 0.22,
         "shout_cost": 0.55,
@@ -630,7 +632,7 @@ PLAY_LEVELS = {
     # as scrambling it and the result had almost no words in it, which is a
     # different thing from being unpredictable.
     "wild": {
-        "extra_cost": 0.45,
+        "extra_cost": 1.25,
         "core_bonus": 0.8,
         "crown_cost": 0.2,
         "shout_cost": 0.3,
