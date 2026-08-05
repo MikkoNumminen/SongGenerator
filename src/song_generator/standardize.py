@@ -216,8 +216,14 @@ def shift_bounds(bounds: list[float], head_s: float, duration_s: float) -> list[
     eps = 1e-4
     out: list[float] = []
     previous = 0.0
-    for b in bounds:
-        value = min(max(float(b) - head_s, previous + eps), max(duration_s - eps, eps))
+    for i, b in enumerate(bounds):
+        # Room is reserved for every boundary still to come. Capping each one
+        # at the same duration - eps collapsed them onto that value whenever a
+        # tail trim pushed several past the new end, and a boundary equal to
+        # the next one is a syllable of zero length: it renders as silence,
+        # and the word loses its ending without anything reporting it.
+        ceiling = duration_s - eps * (len(bounds) - i)
+        value = min(max(float(b) - head_s, previous + eps), max(ceiling, previous + eps))
         out.append(round(value, 4))
         previous = value
     return out

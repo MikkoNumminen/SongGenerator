@@ -520,3 +520,84 @@ def test_whole_words_are_preferred_over_stitched_ones(bank, slots):
         total = sum(counted.values())
         assert counted["spelled"] / total < 0.05, "spelling should be a last resort"
         assert counted["recorded"] >= counted["spelled"]
+
+
+class TestReplayIsFaithful:
+    """A replay must be the arrangement, not something close to it.
+
+    The log is the only record of a take somebody liked, so a replay that
+    substitutes a different clip or rings for a different length has lost the
+    thing it was meant to preserve, while still playing and sounding fine.
+    """
+
+    def _pairs(self, bank, slots, level, seed):
+        plan, arrangement, _ = build(slots, bank, level, seed)
+        replayed = realise(parse_text(render_text(arrangement)), slots, bank)
+        assert len(replayed.placements) == len(plan.placements)
+        return list(zip(plan.placements, replayed.placements))
+
+    def test_the_same_clips_come_back(self, bank, slots):
+        """Not merely the same words: invented and spelled units exist only
+        inside an enriched pool, and looking for one among the recordings alone
+        found nothing and quietly picked a different take."""
+        for level in ("conservative", "wild"):
+            for i in range(4):
+                for planned, replayed in self._pairs(bank, slots, level, 8100 + i):
+                    assert planned.unit.name == replayed.unit.name
+
+    def test_the_same_notes_come_back(self, bank, slots):
+        for level in ("conservative", "wild"):
+            for i in range(4):
+                for planned, replayed in self._pairs(bank, slots, level, 8200 + i):
+                    assert [s.midi for s in planned.slots] == \
+                           [s.midi for s in replayed.slots]
+
+    def test_the_same_lengths_come_back(self, bank, slots):
+        """Within the rounding the file itself carries."""
+        for level in ("conservative", "wild"):
+            for i in range(4):
+                for planned, replayed in self._pairs(bank, slots, level, 8300 + i):
+                    assert planned.play_s == pytest.approx(replayed.play_s, abs=0.02)
+                    assert planned.slot_span_s == pytest.approx(
+                        replayed.slot_span_s, abs=0.02)
+
+
+def test_nothing_rings_past_the_span_it_was_given(bank, slots):
+    """A clip longer than its slots was cut against the NEXT placement only, so
+    the last one in a phrase sounded for its whole length and rang straight
+    through the gap the original singer left."""
+    for level in ("conservative", "wild"):
+        for i in range(6):
+            plan, arrangement, _ = build(slots, bank, level, 8400 + i)
+            for placement in plan.placements:
+                assert placement.play_s <= placement.slot_span_s + 1e-6
+            replayed = realise(parse_text(render_text(arrangement)), slots, bank)
+            for placement in replayed.placements:
+                assert placement.play_s <= placement.slot_span_s + 1e-6
+
+
+def test_no_placement_spans_two_phrases(bank, slots):
+    """Words never straddle a phrase boundary. A slot keeps the phrase it was
+    detected in, and splitting a long run put slots from one detected phrase
+    into different groups, so the numbers had to be re-derived."""
+    for level in ("conservative", "wild"):
+        for i in range(6):
+            plan, arrangement, _ = build(slots, bank, level, 8500 + i)
+            replayed = realise(parse_text(render_text(arrangement)), slots, bank)
+            for plan_or_replay in (plan, replayed):
+                for placement in plan_or_replay.placements:
+                    phrases = {s.phrase for s in placement.slots}
+                    assert len(phrases) <= 1, f"{placement.unit.label} spans {phrases}"
+
+
+def test_an_arrangement_without_a_span_still_replays(bank, slots):
+    """The span is optional, so a hand-written file need not carry one."""
+    text = (
+        "# song    test\n"
+        "# seed    1\n"
+        "phrase 0\n"
+        "  0:00.00  x4  delta bravo\n"
+    )
+    plan = realise(parse_text(text), slots, bank)
+    assert [p.unit.words for p in plan.placements] == [["delta", "bravo"]]
+    assert plan.placements[0].slot_span_s > 0

@@ -104,15 +104,20 @@ never overwritten, so an older arrangement stays reproducible.
 #
 #   at      when it starts. The song decides the slots; this locates the line.
 #   x<n>    how many melody slots it covers.
+#   =<s>    how long it is given, in seconds. Optional.
 #   words   what is sung there, in order. This is the part to edit.
 #   [take]  which recording. Delete it and the best fit is chosen for you, or
 #           the words are built out of slices if nothing recorded says them.
 
 phrase 1
-   0:02.57  x8  pillu paska pornolehti     [pillu-paska-pornolehti_1.wav]
-   0:04.94  x6  perse pillu perse          [perse-pillu-perse_1.wav]
-   0:07.26  x1  eee                        [eee_then__muumit__50.76-53.15.wav]
+   0:02.57  x8  =2.37  pillu paska pornolehti   [pillu-paska-pornolehti_1.wav]
+   0:04.94  x6  =1.96  perse pillu perse        [perse-pillu-perse_1.wav]
+   0:07.26  x1  =0.35  eee                      [eee_then__muumit__50.76.wav]
 ```
+
+The span is written because it cannot always be derived: a word may be held
+across a leftover slot, which widens what it is given without adding a note to
+land on. Omit it in a hand-written file and the slots decide.
 
 **Two-way on purpose.** The tool writes it and a person can edit it and feed
 it back:

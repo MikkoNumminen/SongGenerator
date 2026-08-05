@@ -246,6 +246,31 @@ def test_bounds_stay_ordered_and_inside_the_clip():
     assert all(0.0 < b < 1.0 for b in out)
 
 
+def test_no_two_bounds_ever_land_on_the_same_moment():
+    """Equal boundaries are a syllable of zero length, which renders as silence.
+
+    Sorted is not enough to catch it: [0.9, 0.9] is sorted. This happened for
+    real when a tail trim pushed several boundaries past the new end and each
+    was capped at the same value.
+    """
+    for bounds, head, dur in (
+        ([0.9, 1.1, 1.3, 1.5], 0.0, 1.0),      # every bound past the end
+        ([1.2, 1.25, 1.3], 0.4, 0.9),          # head trim and a short clip
+        ([0.05, 0.06, 0.07], 0.2, 0.3),        # bounds before the head trim
+    ):
+        out = shift_bounds(bounds, head, dur)
+        assert len(out) == len(bounds)
+        assert all(b > a for a, b in zip(out, out[1:])), out
+        assert all(0.0 < b < dur for b in out), out
+
+
+def test_the_spans_a_trimmed_clip_implies_are_all_real():
+    """What Unit.syllable_spans builds must have no zero-length piece."""
+    bounds = shift_bounds([0.8, 1.0, 1.2, 1.4], 0.1, 1.05)
+    edges = [0.0] + bounds + [1.05]
+    assert all(b > a for a, b in zip(edges, edges[1:])), edges
+
+
 def test_bounds_survive_a_zero_trim_unchanged():
     assert shift_bounds([0.2, 0.4], 0.0, 1.0) == [0.2, 0.4]
 

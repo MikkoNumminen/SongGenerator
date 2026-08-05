@@ -306,6 +306,7 @@ class Line:
     n_slots: int
     words: list[str]
     take: str | None = None
+    span_s: float | None = None
 
     @property
     def label(self) -> str:
@@ -346,7 +347,8 @@ def describe(plan, song: str, bank: str, level: str, seed: int) -> Arrangement:
     """Read an arrangement out of a finished plan."""
     return Arrangement(song=song, bank=bank, level=level, seed=seed, lines=[
         Line(phrase=p.phrase, onset_s=round(p.onset_s, 3), n_slots=p.n_slots,
-             words=list(p.unit.words), take=p.unit.name)
+             words=list(p.unit.words), take=p.unit.name,
+             span_s=round(p.slot_span_s, 3))
         for p in plan.placements
     ])
 
@@ -362,6 +364,9 @@ HEADER = """# SongGenerator arrangement
 #
 #   at      when it starts. The song decides the slots; this locates the line.
 #   x<n>    how many melody slots it covers.
+#   =<s>    how long it is given, in seconds. Optional; omit it and the slots
+#           decide. Present because a word may be held across a leftover slot,
+#           which widens the span without adding a note.
 #   words   what is sung there, in order. This is the part to edit.
 #   [take]  which recording. Delete it and the best fit is chosen for you, or
 #           the words are built out of slices if nothing recorded says them.
@@ -382,7 +387,8 @@ def render_text(arr: Arrangement) -> str:
             out.append(f"{chr(10)}phrase {phrase}")
         words = " ".join(line.words)
         take = f"  [{line.take}]" if line.take else ""
-        out.append(f"  {clock(line.onset_s):>8}  x{line.n_slots:<2} {words:<32}{take}")
+        span = f" ={line.span_s:.2f}" if line.span_s is not None else ""
+        out.append(f"  {clock(line.onset_s):>8}  x{line.n_slots:<2}{span:<7} {words:<32}{take}")
     return "\n".join(out) + "\n"
 
 
@@ -434,7 +440,17 @@ def parse_text(text: str) -> Arrangement:
         except ValueError as exc:
             raise ArrangementError(f"line {number}: {exc} in {raw!r}") from exc
 
-        words = fields[2:]
+        rest_fields = fields[2:]
+        span_s = None
+        if rest_fields and rest_fields[0].startswith("="):
+            try:
+                span_s = float(rest_fields[0][1:])
+            except ValueError as exc:
+                raise ArrangementError(
+                    f"line {number}: cannot read the span in {raw!r}") from exc
+            rest_fields = rest_fields[1:]
+
+        words = rest_fields
         unknown = [w for w in words if w not in config.WORD_SYLLABLES]
         if unknown:
             raise ArrangementError(
@@ -443,7 +459,7 @@ def parse_text(text: str) -> Arrangement:
         if not words:
             raise ArrangementError(f"line {number}: no words given")
 
-        lines.append(Line(phrase, onset_s, n_slots, words, take))
+        lines.append(Line(phrase, onset_s, n_slots, words, take, span_s))
 
     if not lines:
         raise ArrangementError("no placements in this arrangement")
@@ -551,8 +567,18 @@ def realise(arrangement: Arrangement, slots, units: list[Unit]) -> object:
     """
     from .mapping import Placement, Plan
 
+    # Rebuild the pool the run had, not merely the recorded clips. A take can
+    # be a word cut out of a phrase, a word spelled from syllables, or an order
+    # nobody sang, and none of those exist until enrichment makes them. Looking
+    # for such a name in the recordings alone found nothing and quietly
+    # substituted a different take, so a replay was not the arrangement it
+    # claimed to be. The file records the level and the seed precisely so the
+    # same pool can be built again.
     pool = list(units)
-    pool.extend(slice_words(units))
+    if arrangement.level in config.PLAY_LEVELS:
+        pool = enrich(units, arrangement.level, random.Random(arrangement.seed))
+    if not any("#" in u.name for u in pool):
+        pool = pool + slice_words(units)
     by_word = index_by_word(pool)
 
     plan = Plan(slots_total=len(slots))
@@ -562,7 +588,16 @@ def realise(arrangement: Arrangement, slots, units: list[Unit]) -> object:
         if start is None:
             raise ArrangementError("this song has no slots to place words on")
 
-        covered = slots[start:start + max(1, line.n_slots)]
+        # Never past the end of the phrase the line starts in. Slicing forward
+        # by a slot count alone let a long unit reach into the next phrase,
+        # which is the one thing PHRASE_GAP_S exists to prevent: a word held
+        # across a gap the original singer left empty.
+        phrase = slots[start].phrase
+        covered = []
+        for slot in slots[start:start + max(1, line.n_slots)]:
+            if slot.phrase != phrase:
+                break
+            covered.append(slot)
         if not covered:
             raise ArrangementError(
                 f"{clock(line.onset_s)}: no slots there. This arrangement was "
@@ -575,17 +610,35 @@ def realise(arrangement: Arrangement, slots, units: list[Unit]) -> object:
                 f"this bank. No clip holds those words and no slices exist for "
                 f"all of them.")
 
+        # A unit lands on one slot per syllable. It may COVER more than that:
+        # the odd-slot policy holds the last word across a leftover slot, which
+        # widens the span without giving the word another note to sing. Taking
+        # slots from n_slots rebuilt that as an extra landing note, so a
+        # replayed arrangement rang for a different length than the original.
+        landing = covered[:max(1, unit.syllables)]
+        # The span is recorded rather than derived. merge_last widens a
+        # placement to swallow a leftover slot without giving the word another
+        # note, so the span cannot be rebuilt from the slot count alone, and a
+        # replay that derived it cut a word short by over a second.
+        span_s = line.span_s if line.span_s is not None else (
+            covered[-1].offset_s - covered[0].onset_s)
         plan.placements.append(Placement(
             unit=unit,
             onset_s=covered[0].onset_s,
-            slot_span_s=covered[-1].offset_s - covered[0].onset_s,
+            slot_span_s=span_s,
             play_s=unit.duration_s,
             n_slots=len(covered),
             phrase=covered[0].phrase,
-            slots=list(covered),
+            slots=list(landing),
         ))
         plan.slots_used += len(covered)
 
+    # Nothing runs into what follows, and nothing rings past the span it was
+    # given. The planner truncates on both, and a replay that set play_s to the
+    # whole clip let a four second unit sound where a 1.3 second one was
+    # planned, which is not the arrangement the file describes.
+    for placement in plan.placements:
+        placement.play_s = min(placement.play_s, placement.slot_span_s)
     for a, b in zip(plan.placements, plan.placements[1:]):
         a.play_s = min(a.play_s, max(0.0, b.onset_s - a.onset_s))
     return plan

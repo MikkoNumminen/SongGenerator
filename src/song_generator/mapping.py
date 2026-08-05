@@ -396,6 +396,15 @@ def group_phrases(slots: list[Slot]) -> list[list[Slot]]:
     out: list[list[Slot]] = []
     for group in groups:
         out.extend(_split_long(group))
+
+    # Renumber. A slot carries the phrase it was detected in, and both the
+    # length cap and the gap rule can put slots from one detected phrase into
+    # different groups. Anything reading slot.phrase afterwards then sees a
+    # placement spanning two phrases when it spans one group, which is what the
+    # rest of the tool means by a phrase from here on.
+    for number, group in enumerate(out):
+        for slot in group:
+            slot.phrase = number
     return out
 
 
@@ -726,7 +735,14 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None,
                     used[filler.label] = used.get(filler.label, 0) + 1
                     break
 
-                if config.ODD_SLOT_POLICY == "merge_last" and plan.placements:
+                # Only into a placement in THIS phrase. Reaching for the last
+                # placement whatever it was held a word across a phrase gap,
+                # which contradicts the rule the gap exists to enforce, and made
+                # the placement cover slots that are not next to each other.
+                mergeable = (config.ODD_SLOT_POLICY == "merge_last"
+                             and plan.placements
+                             and plan.placements[-1].phrase == group[i].phrase)
+                if mergeable:
                     prev = plan.placements[-1]
                     prev.slot_span_s = group[i].offset_s - prev.onset_s
                     prev.play_s = min(prev.unit.duration_s, prev.slot_span_s)
@@ -856,7 +872,13 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None,
                 chant_label = unit.label
                 chant_left = rng.randint(1, max(1, int(play.get("chant_max", 2))))
 
-    # Nothing may run into whatever comes next.
+    # Nothing may run into whatever comes next, and nothing may ring past the
+    # slots it was given. Only the first was enforced, so the LAST placement in
+    # a phrase had nothing after it to be cut against and sounded for its whole
+    # length: a four second clip over a 1.7 second span, straight through the
+    # gap the original singer left and into the next phrase.
+    for placement in plan.placements:
+        placement.play_s = min(placement.play_s, placement.slot_span_s)
     for a, b in zip(plan.placements, plan.placements[1:]):
         a.play_s = min(a.play_s, max(0.0, b.onset_s - a.onset_s))
 
