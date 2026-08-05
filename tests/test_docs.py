@@ -240,3 +240,17 @@ def test_a_constant_a_level_overrides_says_so():
         recent = before[-700:]
         assert "PLAY_LEVELS" in recent, \
             f"{constant} is overridden by every level and does not say so"
+
+
+def test_the_readme_describes_both_dials():
+    """It described mimicry alone while the tool had grown a second dial.
+
+    Playfulness decides what gets sung and mimicry decides how closely it
+    follows the tune. Someone reading only about mimicry would not know the
+    other existed, or why a run writes fourteen files rather than seven.
+    """
+    text = read(ROOT / "README.md").lower()
+    assert "mimicry" in text
+    assert "playfulness" in text
+    assert "conservative" in text and "wild" in text
+    assert "fourteen" in text or "14 " in text
