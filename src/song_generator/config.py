@@ -532,6 +532,11 @@ BEAT_SUBDIVISION = 4
 # name the required ones in vocabulary_local.py instead of changing this.
 PLAY_REQUIRED_WORDS = None
 
+# The words a song is mostly made of. None means every short word that is
+# neither the shout nor the payoff. A bank whose core is narrower than that
+# should name it in vocabulary_local.py.
+PLAY_CORE_WORDS = None
+
 # How many times to redraw an arrangement that failed the coverage rule before
 # repairing it by hand. Each retry is a fresh seed derived from the first, so
 # the run stays reproducible from the seed it reports.
@@ -585,10 +590,25 @@ PLAY_BOTH_LEVELS = ("conservative", "wild")
 #                    still stops the other kind of repetition, where one clip
 #                    quietly wins every slot because it fits best.
 #   chant_max        how many extra times, at most.
+#   core_bonus       how strongly the words that carry the song are preferred.
+#                    Without this the shout wins on fit alone, being a third of
+#                    the recordings and short enough for any slot, and the
+#                    result is a song of shouting with words in the gaps.
+#   crown_cost       what including a long word costs. It is rarer than the
+#                    core on purpose and finishes a combination rather than
+#                    carrying one.
+#   shout_cost       what including the shout costs, on top of its budget.
+#   extra_cost       what a word that is none of the above costs. A bank
+#                    accumulates words the song is not really about, and
+#                    unused_bonus rewards them for sounding new.
 PLAY_LEVELS = {
     # Recognisable and tidy. Keeps close to what was recorded, and mostly
     # varies which take of a phrase is used rather than inventing orders.
     "conservative": {
+        "extra_cost": 0.45,
+        "core_bonus": 0.9,
+        "crown_cost": 0.22,
+        "shout_cost": 0.55,
         "invent_combos": 10,
         "slice_words": True,
         "repeat_penalty": 0.85,
@@ -598,9 +618,9 @@ PLAY_LEVELS = {
         "detach_pairing": 0.15,
         "phrase_fill": 0.88,
         "max_gap_s": 3.0,
-        "shout_share": 0.45,
-        "climax_share": 0.40,
-        "climax_wildcard": 0.15,
+        "shout_share": 0.22,
+        "climax_share": 0.18,
+        "climax_wildcard": 0.06,
         "chant_chance": 0.14,
         "chant_max": 2,
     },
@@ -610,6 +630,10 @@ PLAY_LEVELS = {
     # as scrambling it and the result had almost no words in it, which is a
     # different thing from being unpredictable.
     "wild": {
+        "extra_cost": 0.45,
+        "core_bonus": 0.8,
+        "crown_cost": 0.2,
+        "shout_cost": 0.3,
         "invent_combos": 34,
         "slice_words": True,
         "repeat_penalty": 0.60,
@@ -619,14 +643,18 @@ PLAY_LEVELS = {
         "detach_pairing": 0.45,
         "phrase_fill": 0.85,
         "max_gap_s": 3.5,
-        "shout_share": 0.55,
-        "climax_share": 0.50,
-        "climax_wildcard": 0.25,
+        "shout_share": 0.34,
+        "climax_share": 0.30,
+        "climax_wildcard": 0.12,
         "chant_chance": 0.30,
         "chant_max": 4,
     },
     # Today's behaviour, for comparing against.
     "off": {
+        "extra_cost": 0.0,
+        "core_bonus": 0.0,
+        "crown_cost": 0.0,
+        "shout_cost": 0.0,
         "invent_combos": 0,
         "slice_words": False,
         "repeat_penalty": 0.0,

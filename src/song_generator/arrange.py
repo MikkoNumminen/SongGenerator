@@ -514,9 +514,20 @@ def build(slots, units: list[Unit], level: str, seed: int,
     best = None
     for attempt in range(tries):
         this_seed = seed + attempt
+
+        # Coverage is a rule; how often each kind of word should be heard is a
+        # preference. When a redraw alone cannot find a required word, it is
+        # usually the preferences holding it out, so they give way rather than
+        # the rule. A long word charged for being long is exactly the case.
+        drawing = dict(params)
+        if attempt >= tries // 2:
+            relax = 0.0 if attempt >= (3 * tries) // 4 else 0.5
+            for knob in ("crown_cost", "extra_cost", "shout_cost", "core_bonus"):
+                drawing[knob] = float(drawing.get(knob, 0.0)) * relax
+
         pool = enrich(units, level, random.Random(this_seed))
         plan = plan_words(slots, pool, seed=this_seed,
-                          play=None if level == "off" else params)
+                          play=None if level == "off" else drawing)
         arrangement = describe(plan, song, bank, level, this_seed)
 
         covered = wanted <= arrangement.words_used()

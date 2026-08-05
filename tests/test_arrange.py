@@ -8,6 +8,7 @@ one that has to hold: the log is the only record of an arrangement, so a
 round trip that quietly drifts loses the take rather than reporting it.
 """
 
+import collections
 import random
 
 import numpy as np
@@ -467,3 +468,36 @@ def test_thinning_cannot_open_a_long_hole(bank, slots):
             # Generous: phrase boundaries and truncation contribute too, and
             # only the thinning half is what this bounds.
             assert worst <= allowed * 2.5
+
+
+def test_the_core_words_carry_the_song(bank, slots):
+    """The words a song is built on must outweigh the seasoning.
+
+    Left to compete on duration fit the shout wins constantly, being a third of
+    the recordings and short enough for any slot, and the result is a song of
+    shouting with words in the gaps.
+    """
+    from song_generator.mapping import core_words
+
+    core = core_words()
+    for level in ("conservative", "wild"):
+        counted = collections.Counter()
+        for i in range(6):
+            plan, _, _ = build(slots, bank, level, 5100 + i)
+            counted.update(w for p in plan.placements for w in p.unit.words)
+        total = sum(counted.values())
+        share = sum(n for w, n in counted.items() if w in core) / total
+        assert share > 0.4, f"{level}: core words only {share:.0%} of what is sung"
+
+
+def test_coverage_outranks_the_word_weights(bank, slots):
+    """A required word charged for being long must still get in.
+
+    The weights say how often each kind of word should be heard; coverage says
+    a song without one of them is invalid. When the weights are what is keeping
+    a word out, the weights are what gives way.
+    """
+    for level in ("conservative", "wild"):
+        for i in range(6):
+            _, arrangement, _ = build(slots, bank, level, 6100 + i)
+            assert arrangement.missing() == [], f"{level} seed {6100 + i}"

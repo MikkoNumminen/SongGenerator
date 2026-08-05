@@ -440,6 +440,27 @@ def find_climaxes(groups: list[list[Slot]], min_slots: int = 1,
     return set(ranked[:how_many])
 
 
+def core_words() -> set[str]:
+    """The words the song is mostly made of.
+
+    Named by the bank when it knows, since which words carry a song is a
+    property of the recordings and not something a general rule can guess.
+    Falling back to "short, not the shout, not the payoff" gets it right for a
+    bank that has not said.
+    """
+    named = getattr(config, "PLAY_CORE_WORDS", None)
+    if named:
+        return set(named)
+    return {w for w, n in config.WORD_SYLLABLES.items()
+            if n <= 2 and w not in config.SHOUT_WORDS and w not in config.CLIMAX_WORDS}
+
+
+def crown_words() -> set[str]:
+    """Long words that finish a combination rather than carry it."""
+    return {w for w, n in config.WORD_SYLLABLES.items()
+            if n > 2 and w not in config.SHOUT_WORDS and w not in config.CLIMAX_WORDS}
+
+
 def _choose(units: list[Unit], remaining: int, span_s: float,
             rng: random.Random, last: str | None,
             allow_shouts: bool = True, allow_climax: bool = False,
@@ -490,6 +511,37 @@ def _choose(units: list[Unit], remaining: int, span_s: float,
             cost += config.FOLD_PENALTY
         return config.PITCH_FIT_WEIGHT * cost
 
+    core = core_words()
+    crown = crown_words()
+
+    def role_cost(u: Unit) -> float:
+        """What each kind of word is worth, as a proportion of the song.
+
+        The bank has four roles and they are not interchangeable. A handful of
+        short words carry the thing; one long word is rarer and finishes a
+        combination; the shout and the payoff are seasoning. Left to compete on
+        duration fit alone the shout wins constantly, because it is a third of
+        the recordings and fits any slot, and the song becomes shouting.
+        """
+        if not play:
+            return 0.0
+        words = u.words
+        cost = 0.0
+        if any(w in config.SHOUT_WORDS for w in words):
+            cost += float(play.get("shout_cost", 0.0))
+        if any(w in crown for w in words):
+            cost += float(play.get("crown_cost", 0.0))
+        if any(w not in core and w not in crown
+               and w not in config.SHOUT_WORDS and w not in config.CLIMAX_WORDS
+               for w in words):
+            # A fourth kind: words the bank has but the song is not about.
+            # They read as novel, so the bonus for saying something new picks
+            # them up hard, and they crowd out the words that carry the thing.
+            cost += float(play.get("extra_cost", 0.0))
+        if words and all(w in core for w in words):
+            cost -= float(play.get("core_bonus", 0.0))
+        return cost
+
     def variety_cost(u: Unit) -> float:
         """What it costs to say the same thing again.
 
@@ -514,7 +566,7 @@ def _choose(units: list[Unit], remaining: int, span_s: float,
         # read as singing, while many short ones read as chatter.
         length_bonus = config.PREFER_LONGER_UNITS * np.log(u.syllables + 1)
         return (abs(np.log(u.duration_s / allotted)) - length_bonus
-                + pitch_cost(u) + variety_cost(u))
+                + pitch_cost(u) + variety_cost(u) + role_cost(u))
 
     band = float(play.get("tie_band", 0.35)) if play else 0.35
     ranked = sorted(pool, key=mismatch)
