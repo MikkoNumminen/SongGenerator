@@ -172,3 +172,33 @@ class TestSyllableBoundaryCount:
 
     def test_single_syllable_has_no_boundaries(self):
         assert syllable_boundaries(_syllabic(3), SR, n_syllables=1) == []
+
+
+class TestShoutTails:
+    """A stuttered shout written out is content, not a take label.
+
+    The distinction is only decidable from the shape of the name: a single
+    unbroken run after a separator is a label ("delta_hah" is a take called
+    hah), while shout letters broken up by separators is somebody writing down
+    what they heard. Getting it wrong cost a 6.6 second clip six of its eleven
+    syllables, which put every syllable in it on the wrong note.
+    """
+
+    def test_a_stuttered_tail_is_read_as_shouts(self):
+        words, rest = parse_phrase("calculator-aah_ah-a-a-ah")
+        assert words[0] == "calculator"
+        assert words.count("aah") == 5
+        assert rest == ""
+
+    def test_an_unbroken_run_after_a_separator_is_still_a_label(self):
+        assert parse_phrase("delta_hah") == (["delta"], "hah")
+        assert parse_phrase("bravo-haze") == (["bravo"], "haze")
+
+    def test_a_label_with_a_non_shout_letter_survives_separators(self):
+        """Only ALL shout letters counts; one ordinary letter makes it a label."""
+        assert parse_phrase("bravo-ha-ze") == (["bravo"], "ha-ze")
+
+    def test_a_leading_run_is_unaffected(self):
+        words, rest = parse_phrase("aaah")
+        assert words == ["aah"]
+        assert rest == ""

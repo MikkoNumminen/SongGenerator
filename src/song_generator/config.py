@@ -275,6 +275,14 @@ WORD_SPELLING = {
     "calculator": ("cal", "cu", "la", "tor"),
 }
 
+# Extra syllable fragments a clip name may use, beyond the ones that appear in
+# WORD_SPELLING. Somebody naming by ear writes what they hear, and a sung
+# stutter ("pi pillu", "pe perse") is a real thing in the recordings that no
+# canonical spelling contains. Listing them here lets those names parse instead
+# of being refused, which is the difference between a clip being usable and
+# sitting on disk. They are fragments, never sung alone.
+EXTRA_SYLLABLES = ()
+
 # Letters a held shout may be spelled with. A shout has no canonical spelling:
 # someone naming clips by ear writes what they heard, so aah, aaah, ahh and
 # aaahh all have to read as the same gesture. Any run of these letters does.

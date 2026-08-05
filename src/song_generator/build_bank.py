@@ -105,7 +105,8 @@ class Named:
         return "-".join(self.words)
 
 
-SYLLABLES = {s for parts in config.WORD_SPELLING.values() for s in parts}
+SYLLABLES = ({s for parts in config.WORD_SPELLING.values() for s in parts}
+             | set(getattr(config, "EXTRA_SYLLABLES", ())))
 
 # Words and syllables share one namespace, matched longest first so "bravo" is
 # never read as the syllable "pas" plus leftovers, and "pas" on its own is
@@ -114,7 +115,9 @@ _BANK_BY_LENGTH = sorted(set(config.WORD_SYLLABLES) | SYLLABLES, key=len, revers
 
 # Parentheses included because Windows appends " (2)" when a name collides,
 # which is exactly what happens when several takes of one syllable are named.
-_SEPARATORS = "_- .()"
+# Commas and semicolons because someone naming a long shout by ear writes what
+# they hear, and "ei, ee e e" is a perfectly clear description of a clip.
+_SEPARATORS = "_- .(),;!"
 
 
 # A held shout gets spelled however it sounded: aah, aaah, ahh, heei, aaahh.
@@ -158,6 +161,10 @@ def parse_phrase(stem: str) -> tuple[list[str], str] | None:
     words: list[str] = []
     i = 0
     after_separator = False
+    # Sticky once the remainder is recognised as a written-out shout: the LAST
+    # run in such a tail has no separator after it, so re-deciding per run drops
+    # it every time.
+    in_shout_tail = False
 
     while i < len(raw):
         if raw[i] in _SEPARATORS:
@@ -174,9 +181,22 @@ def parse_phrase(stem: str) -> tuple[list[str], str] | None:
         # A shout run only counts when what follows it is a separator, the end
         # of the name, or another bank word. Without that check the variant
         # label in "bravo-high" is eaten, since h and i are both shout letters.
-        # Not straight after a separator: that position introduces a variant
-        # label, and labels like "high" or "hei" are made of shout letters.
-        run = 0 if after_separator else _shout_run(raw, i)
+        #
+        # Straight after a separator is where a variant label lives, so a run
+        # there is normally not a shout. It is one when what remains is nothing
+        # but shout letters BROKEN UP by separators, which is how somebody
+        # writes down a stuttered shout: "eee_ei-e-e-e-ei-eeeei". A single
+        # unbroken run stays a label, because "delta_hah" is a take called hah
+        # far more often than it is delta followed by a shout, and that
+        # ambiguity is only resolvable by ear.
+        #
+        # Worth the distinction: a 6.6 second clip was being recorded as five
+        # syllables, which put every one of them in the wrong place.
+        tail = raw[i:]
+        if (any(c in _SEPARATORS for c in tail)
+                and all(c in _SHOUT_CHARS or c in _SEPARATORS for c in tail)):
+            in_shout_tail = True
+        run = _shout_run(raw, i) if (not after_separator or in_shout_tail) else 0
         if run > best_len:
             after = i + run
             follows_cleanly = (
@@ -185,7 +205,14 @@ def parse_phrase(stem: str) -> tuple[list[str], str] | None:
                 or any(raw.startswith(w, after) for w in _BANK_BY_LENGTH)
             )
             if follows_cleanly:
-                best_word, best_len = "aah", run
+                # The shout's name comes from the vocabulary, not from here. It
+                # was hardcoded to the example bank's "aah", so on any bank that
+                # names its own shout a long run produced a token no vocabulary
+                # contained, and the clip was quietly unusable. It only bit when
+                # the run was longer than the shout word itself, which is why
+                # "eee e eeeeee ee" was fine and twelve e's was not.
+                shout = config.SHOUT_WORDS[0] if config.SHOUT_WORDS else "aah"
+                best_word, best_len = shout, run
 
         if best_word is None:
             break
