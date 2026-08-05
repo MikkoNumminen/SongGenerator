@@ -168,6 +168,9 @@ def build_parser() -> argparse.ArgumentParser:
                    help="filename of the better stem inside each work dir")
     p.add_argument("--dry-run", action="store_true",
                    help="report provenance only, cut nothing")
+    p.add_argument("--overwrite", action="store_true",
+                   help="allow writing over clips already in --out. Off, "
+                        "because that directory may hold hand-named work")
     return p
 
 
@@ -210,6 +213,31 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.dry_run:
         return 0
+
+    # Checked before anything else that could stop the run, because "this would
+    # destroy work you cannot get back" outranks "the stems are not ready".
+    # Reporting the stems first hid it until someone fixed them and ran again.
+    #
+    # --out defaulted to the directory this tool created, back when nothing
+    # else lived there. A bank gets hand-curated afterwards: clips renamed by
+    # ear, new ones added, and none of that regenerable. Writing over it would
+    # destroy exactly the work the repo says can never be recreated.
+    existing = {p.name for p in args.out.glob("*.wav")} if args.out.is_dir() else set()
+    clashes = sorted(n for n in found if n in existing)
+    if clashes and not args.overwrite:
+        print(f"\nerror: {len(clashes)} clips already exist in {args.out}, and "
+              f"re-cutting would write over them:", file=sys.stderr)
+        for name in clashes[:8]:
+            print(f"           {name}", file=sys.stderr)
+        if len(clashes) > 8:
+            print(f"           ... and {len(clashes) - 8} more", file=sys.stderr)
+        print("\n       Those may be hand-named recordings, which cannot be "
+              "regenerated.\n"
+              "       Pick an --out that does not exist yet, or pass --overwrite "
+              "if you are\n"
+              "       certain the clips there are this tool's own output.",
+              file=sys.stderr)
+        return 2
 
     missing = [s for s in sources if not (Path(config.WORK_DIR) / s / args.stem).is_file()]
     if missing:

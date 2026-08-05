@@ -42,6 +42,12 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   (whole-source, clip-by-clip, shape-ranked shortlist) and was wrong nearly
   every time on shouted singing. It is kept only as a labelling *hint*.
   Identification is done by ear.
+- **Never point a tool's output at a bank somebody curated by hand.** The
+  clips in a bank get renamed by ear and added to over time, and none of that
+  is regenerable. `recut_bank --out` defaulted to `words_hq` from when it
+  created that directory, and would have written over eighteen hand-named
+  recordings; it now refuses unless told otherwise. Any new tool that writes
+  clips needs the same refusal.
 - **Never re-separate needlessly.** Stems are cached under `work/<song>/`.
   Separation is by far the slowest stage; everything else is seconds.
 

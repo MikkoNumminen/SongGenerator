@@ -10,6 +10,8 @@ Correlation is exact here rather than approximate. A clip is a verbatim slice of
 the stem, so the right position scores near 1.0 and nothing else comes close.
 """
 
+import json
+
 import numpy as np
 import pytest
 
@@ -138,3 +140,55 @@ class TestFromName:
         assert abs(measured.start_s - from_the_name.start_s) > 0.02, (
             "this test is only meaningful while the two disagree"
         )
+
+
+class TestRecutWillNotClobberHandNamedClips:
+    """--out defaulted to the directory this tool created, back when nothing
+    else lived there.
+
+    A bank gets hand-curated afterwards: clips renamed by ear, new ones added,
+    none of it regenerable. On this machine the default run would have written
+    over eighteen of them and replaced the index, which is exactly the work
+    AGENTS.md says can never be recreated.
+    """
+
+    def _bank(self, path, names):
+        path.mkdir(parents=True, exist_ok=True)
+        index = {}
+        for name in names:
+            audio_io.write_wav(path / name, _stem(seconds=1.0))
+            index[name] = {"words": ["bravo"], "syllables": 2, "duration_s": 1.0,
+                           "midi": 53.0, "syllable_bounds_s": [0.5]}
+        (path / "words.json").write_text(json.dumps(index), encoding="utf-8")
+        return path
+
+    def test_it_refuses_when_the_output_already_holds_those_clips(self, tmp_path, capsys):
+        from song_generator.recut_bank import main
+
+        source = self._bank(tmp_path / "words", ["bravo_1.wav"])
+        out = self._bank(tmp_path / "words_hq", ["bravo_1.wav"])
+        before = (out / "bravo_1.wav").read_bytes()
+
+        code = main(["--bank", str(source), "--out", str(out)])
+        assert code == 2
+        assert "already exist" in capsys.readouterr().err
+        assert (out / "bravo_1.wav").read_bytes() == before
+
+    def test_the_refusal_names_what_would_be_lost(self, tmp_path, capsys):
+        from song_generator.recut_bank import main
+
+        source = self._bank(tmp_path / "words", ["bravo_1.wav", "tango_1.wav"])
+        out = self._bank(tmp_path / "words_hq", ["bravo_1.wav"])
+
+        main(["--bank", str(source), "--out", str(out)])
+        said = capsys.readouterr().err
+        assert "bravo_1.wav" in said
+        assert "--overwrite" in said
+
+    def test_an_empty_output_directory_is_not_refused(self, tmp_path):
+        """The ordinary case still works: nothing there, nothing to lose."""
+        from song_generator.recut_bank import main
+
+        source = self._bank(tmp_path / "words", ["bravo_1.wav"])
+        code = main(["--bank", str(source), "--out", str(tmp_path / "fresh")])
+        assert code != 2
