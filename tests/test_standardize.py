@@ -8,6 +8,9 @@ tier exists at all.
 """
 
 import json
+import subprocess
+import sys
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -95,14 +98,45 @@ def test_writes_a_sibling_normally(bank, tmp_path):
     assert written.parent.resolve() == out.resolve()
 
 
-def test_symlinked_destination_pointing_back_is_caught(bank, tmp_path):
-    link = tmp_path / "sneaky"
+def _link_to(link: Path, target: Path) -> bool:
+    """Point link at target by whatever means this machine allows.
+
+    Windows refuses os.symlink without Developer Mode or elevation, which left
+    this test skipped and the resolution branch of the guard unexercised on the
+    machine the tool actually runs on. A directory junction needs no privilege
+    and is a reparse point all the same, so Path.resolve sees through it the
+    same way.
+    """
     try:
-        link.symlink_to(bank, target_is_directory=True)
+        link.symlink_to(target, target_is_directory=True)
+        return True
     except (OSError, NotImplementedError):
-        pytest.skip("symlinks need privileges this machine does not grant")
+        pass
+    if sys.platform != "win32":
+        return False
+    done = subprocess.run(["cmd", "/c", "mklink", "/J", str(link), str(target)],
+                          capture_output=True)
+    return done.returncode == 0 and link.exists()
+
+
+def test_a_link_pointing_back_at_the_source_is_caught(bank, tmp_path):
+    """A destination disguised as somewhere else still resolves to the source."""
+    link = tmp_path / "sneaky"
+    if not _link_to(link, bank):
+        pytest.skip("this machine allows neither a symlink nor a junction")
     with pytest.raises(StandardizeError):
         check_destination(link, [bank])
+
+
+def test_a_link_is_no_route_into_the_source_either(bank, tmp_path):
+    """The same disguise one level down, where a write would actually land."""
+    link = tmp_path / "sneaky"
+    if not _link_to(link, bank):
+        pytest.skip("this machine allows neither a symlink nor a junction")
+    before = (bank / "bravo_1.wav").read_bytes()
+    with pytest.raises(StandardizeError):
+        write_derivative(link, "bravo_1.wav", _clip(amp=0.9), [bank])
+    assert (bank / "bravo_1.wav").read_bytes() == before
 
 
 # ---------------------------------------------------------------------------
@@ -394,12 +428,22 @@ def test_a_second_run_rebuilds_nothing(built):
     assert {p: p.stat().st_mtime_ns for p in out.iterdir()} == stamps
 
 
-def test_the_same_inputs_give_byte_identical_derivatives(built, tmp_path):
+def test_the_same_inputs_give_identical_audio(built, tmp_path):
+    """Determinism is a property of the samples, not of the container.
+
+    Compared as audio rather than as file bytes on purpose. libsndfile writes a
+    PEAK chunk into a float WAV carrying the wall-clock time of the write, at
+    byte 60, so two runs that straddle a second boundary produce files that
+    differ by exactly that one byte while the samples are bit-identical.
+    Comparing bytes here made this test fail about twice in a hundred runs for
+    a reason that had nothing to do with the pass.
+    """
     a = standardise_bank(built, tmp_path / "a", "offset")
     b = standardise_bank(built, tmp_path / "b", "offset")
     assert len(a.built) == len(b.built) == 3
     for name in ("bravo_1.wav", "aah_1.wav", "bravo-tango_1.wav"):
-        assert (tmp_path / "a" / name).read_bytes() == (tmp_path / "b" / name).read_bytes()
+        assert np.array_equal(audio_io.read_wav(tmp_path / "a" / name),
+                              audio_io.read_wav(tmp_path / "b" / name))
 
 
 def test_a_changed_source_is_rebuilt_and_the_rest_are_not(built):
@@ -425,13 +469,15 @@ def test_the_two_shout_modes_differ_only_on_the_shout(built, tmp_path):
     standardise_bank(built, tmp_path / "offset", "offset")
     standardise_bank(built, tmp_path / "raw", "as_recorded")
 
-    shout_a = (tmp_path / "offset" / "aah_1.wav").read_bytes()
-    shout_b = (tmp_path / "raw" / "aah_1.wav").read_bytes()
-    assert shout_a != shout_b
+    # Audio, not file bytes: the container carries a write timestamp that has
+    # nothing to do with the mode. See test_the_same_inputs_give_identical_audio.
+    shout_a = audio_io.read_wav(tmp_path / "offset" / "aah_1.wav")
+    shout_b = audio_io.read_wav(tmp_path / "raw" / "aah_1.wav")
+    assert not np.array_equal(shout_a, shout_b)
 
-    word_a = (tmp_path / "offset" / "bravo_1.wav").read_bytes()
-    word_b = (tmp_path / "raw" / "bravo_1.wav").read_bytes()
-    assert word_a == word_b
+    word_a = audio_io.read_wav(tmp_path / "offset" / "bravo_1.wav")
+    word_b = audio_io.read_wav(tmp_path / "raw" / "bravo_1.wav")
+    assert np.array_equal(word_a, word_b)
 
 
 def test_the_manifest_traces_every_derivative_to_its_source(built):
