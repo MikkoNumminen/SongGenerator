@@ -83,3 +83,30 @@ class TestBatchPassesThroughWhatItOffers:
         from song_generator.batch import build_parser as batch_parser
 
         assert batch_parser().parse_args(["input/*.mp4"]).play is None
+
+
+class TestHelpTextIsNotAPromiseTheToolBreaks:
+    """Help text is documentation that ships inside the binary.
+
+    --output once promised output/<stem>.song_generator.mp3 while the tool
+    wrote <stem>.<level>.mim<N>.mp3, so the one place a user looks for the
+    answer had the wrong one.
+    """
+
+    def _help_for(self, flag):
+        parser = build_parser()
+        for action in parser._actions:
+            if flag in action.option_strings:
+                return action.help or ""
+        raise AssertionError(f"{flag} is gone")
+
+    def test_output_help_mentions_what_is_added_to_the_name(self):
+        said = self._help_for("--output")
+        assert "level" in said and "mim" in said
+
+    def test_play_help_says_both_are_the_default(self):
+        assert "both" in self._help_for("--play")
+
+    def test_seed_help_says_a_run_is_fresh_by_default(self):
+        said = self._help_for("--seed").lower()
+        assert "new one each run" in said or "fresh" in said

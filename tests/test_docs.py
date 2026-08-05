@@ -180,3 +180,39 @@ def test_every_cli_module_can_be_imported():
                  "mine_words", "set_aside", "successors", "hunt"):
         module = importlib.import_module(f"song_generator.{name}")
         assert hasattr(module, "main"), f"{name} is documented as runnable but has no main()"
+
+
+def test_every_command_a_tool_prints_can_actually_be_run():
+    """Instructions printed at a user are documentation that ships in the code.
+
+    calculator_low.wav was printed as an example of what to name a clip and
+    did not parse, so anyone following it lost that take silently. The same
+    shape of mistake applies to a command: a module that was renamed, or a flag
+    that never existed, is worse in a printed instruction than in a doc,
+    because it arrives at the moment somebody is trying to act on it.
+    """
+    import importlib
+    import re
+
+    text = "".join(p.read_text(encoding="utf-8")
+                   for p in (ROOT / "src" / "song_generator").glob("*.py"))
+    text += "".join(p.read_text(encoding="utf-8") for p in DOCS.glob("*.md"))
+
+    problems = []
+    for module, flags in set(re.findall(r"song_generator\.([a-z_]+)((?:\s+--[a-z-]+)*)", text)):
+        if module in {"mp3", "mp4", "exe"}:      # a filename, not a command
+            continue
+        try:
+            loaded = importlib.import_module(f"song_generator.{module}")
+        except ImportError:
+            problems.append(f"song_generator.{module} does not exist")
+            continue
+        if not hasattr(loaded, "build_parser"):
+            continue
+        known = {name for action in loaded.build_parser()._actions
+                 for name in action.option_strings}
+        for flag in re.findall(r"--[a-z-]+", flags):
+            if flag not in known:
+                problems.append(f"song_generator.{module} has no {flag}")
+
+    assert not problems, "instructions nobody can follow: " + "; ".join(problems)

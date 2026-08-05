@@ -53,7 +53,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("input", type=Path, help="input song (mp3, or anything ffmpeg reads)")
     p.add_argument("-o", "--output", type=Path, default=None,
-                   help="output mp3 [default: output/<input stem>.song_generator.mp3]")
+                   help="base name for the output. The level and the mimicry "
+                        "setting are added to it, so one run writes "
+                        "<name>.<level>.mim<N>.mp3 "
+                        "[default: output/<input stem>.song_generator.mp3]")
     p.add_argument("--separator", choices=["demucs", "roformer"], default=config.SEPARATOR,
                    help="source separation backend")
     p.add_argument("--device", default=None, help="torch device, e.g. cuda or cpu [default: autodetect]")
