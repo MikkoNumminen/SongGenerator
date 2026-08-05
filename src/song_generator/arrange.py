@@ -546,6 +546,20 @@ def build(slots, units: list[Unit], level: str, seed: int,
     wanted = set(required_words())
     tries = max(1, int(config.PLAY_COVERAGE_TRIES))
 
+    if not units:
+        raise ArrangementError(
+            "the bank holds no usable clips, so there is nothing to sing."
+            " Check the bank directory and that build_bank has been run over it."
+        )
+
+    # A word no clip contains cannot be found by redrawing, and spending the
+    # whole budget looking for it hides the ones that a redraw WOULD have
+    # found. Narrow the target to what the bank can actually say, and report
+    # the rest as missing from the bank rather than from this arrangement.
+    sayable = {w for u in units for w in u.words}
+    unreachable = sorted(wanted - sayable)
+    wanted &= sayable
+
     # The pairing counts as coverage, not as an aesthetic preference. It is the
     # one thing the bank is built around, and a song without it anywhere reads
     # as a song missing its payoff rather than as a song that varied.
@@ -583,6 +597,17 @@ def build(slots, units: list[Unit], level: str, seed: int,
             best = (plan, arrangement, attempt + 1)
 
     return best
+
+
+def unreachable_words(units: list[Unit]) -> list[str]:
+    """Required words no clip in this bank contains.
+
+    Worth separating from "this draw missed one": no number of redraws fixes a
+    word that was never recorded, and reporting them the same way makes a bank
+    problem look like bad luck.
+    """
+    sayable = {w for u in units for w in u.words}
+    return sorted(set(required_words()) - sayable)
 
 
 def realise(arrangement: Arrangement, slots, units: list[Unit]) -> object:

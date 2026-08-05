@@ -212,6 +212,10 @@ def main(argv: list[str] | None = None) -> int:
 
     slots, merged, split = clean_slots([n.__dict__ for n in analysis.notes])
 
+    cannot_say = arrange.unreachable_words(units)
+    if cannot_say and not args.json:
+        print(f"  BANK      holds no clip saying: {', '.join(cannot_say)}")
+
     # Both levels, every time. Which one is funnier is a listening decision, so
     # a run that produced one of them and offered the other had not finished
     # the job. They are separate arrangements with separate seeds, and each

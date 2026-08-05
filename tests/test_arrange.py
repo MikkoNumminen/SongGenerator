@@ -642,3 +642,30 @@ class TestHandEditingIsGuarded:
         assert unclock("-0:05.00") == pytest.approx(-5.0)
         assert unclock("-1:30.00") == pytest.approx(-90.0)
         assert unclock("2:07.53") == pytest.approx(127.53)
+
+
+def test_an_empty_bank_is_refused_rather_than_sung(slots):
+    """Nothing to sing is a broken setup, not a song with no words in it."""
+    with pytest.raises(ArrangementError, match="no usable clips"):
+        build(slots, [], "conservative", 7)
+
+
+def test_a_word_no_clip_says_is_reported_against_the_bank(bank, slots):
+    """No number of redraws finds a word that was never recorded.
+
+    Reporting it as missing from the arrangement makes a bank problem look
+    like bad luck, and spends the whole redraw budget hunting for something
+    unreachable while a word a redraw WOULD have found goes missing instead.
+    """
+    from song_generator.arrange import unreachable_words
+
+    thin = [u for u in bank if u.words == ["delta"]]
+    assert unreachable_words(thin) == sorted(set(required_words()) - {"delta"})
+    assert unreachable_words(bank) == []
+
+
+def test_the_redraw_budget_is_not_spent_on_the_unreachable(bank, slots):
+    """A bank missing a word still draws promptly, rather than retrying."""
+    thin = [u for u in bank if u.words == ["delta"]]
+    _, _, tries = build(slots, thin, "conservative", 7)
+    assert tries == 1
