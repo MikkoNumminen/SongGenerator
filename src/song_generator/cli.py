@@ -198,11 +198,11 @@ def main(argv: list[str] | None = None) -> int:
     words_dir = args.words_dir or Path(config.BANKS[args.bank])
     if args.bare_syllables:
         config.PLACE_BARE_SYLLABLES = True
+    singing_from, standardised = resolve_bank(
+        words_dir, prefer_standardised=not args.raw_clips)
     try:
         units = load_bank(words_dir, prefer_standardised=not args.raw_clips)
         if not args.json:
-            singing_from, standardised = resolve_bank(
-                words_dir, prefer_standardised=not args.raw_clips)
             how = "standardised" if standardised else "as recorded"
             print(f"  bank      {args.bank} ({singing_from}, {how})")
     except BankError as exc:
@@ -221,7 +221,7 @@ def main(argv: list[str] | None = None) -> int:
             seed = args.seed if args.seed is not None else random.randrange(1, 1_000_000)
             word_plan, described, tries = arrange.build(
                 slots, units, args.play, seed,
-                song=args.input.stem, bank=str(words_dir))
+                song=args.input.stem, bank=str(singing_from))
             saved = arrange.save(described, work)
             if not args.json:
                 redrawn = "" if tries == 1 else f", redrawn {tries - 1}x for coverage"
