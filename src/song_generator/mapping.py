@@ -52,6 +52,17 @@ class Unit:
         return all(w in config.SHOUT_WORDS for w in self.words)
 
     @property
+    def is_shout_pairing(self) -> bool:
+        """A shout running straight into the payoff, as recorded.
+
+        This is the pairing the whole bank is built around, so it is protected
+        twice: it is never cut apart into its words, and at a peak it is
+        preferred over anything else that could go there.
+        """
+        return any(a in config.SHOUT_WORDS and b in config.CLIMAX_WORDS
+                   for a, b in zip(self.words, self.words[1:]))
+
+    @property
     def is_climax(self) -> bool:
         """Reserved for the song's peaks rather than ordinary vocabulary."""
         return any(w in config.CLIMAX_WORDS for w in self.words)
@@ -585,9 +596,20 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None,
             # Left to compete on time-fit alone it usually lost, and a climax
             # that never arrives is worse than none at all.
             if unit is None and climax_left > 0:
-                unit = _choose([u for u in units if u.is_climax],
-                               remaining, span_s, rng, last, allow_climax=True,
-                               targets=targets, play=play, used=used)
+                payoff = [u for u in units if u.is_climax]
+                # The shout and the payoff travel together by default. Slicing
+                # the bank into words gave the planner a dozen ways to say the
+                # payoff alone, and they outvoted the one recording that says
+                # it properly, so the pairing has to be asked for rather than
+                # left to compete.
+                detach = float(play.get("detach_pairing", 1.0)) if play else 1.0
+                if rng.random() >= detach:
+                    paired = [u for u in payoff if u.is_shout_pairing
+                              and u.syllables <= remaining]
+                    payoff = paired or payoff
+                unit = _choose(payoff, remaining, span_s, rng, last,
+                               allow_climax=True, targets=targets,
+                               play=play, used=used)
 
             if unit is None:
                 unit = _choose(units, remaining, span_s, rng, last,
@@ -633,13 +655,18 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None,
                         i += 1
                         remaining -= 1
 
-                        # Rarely, nothing follows. The ear has been set up for
-                        # filth and gets silence instead, which is funny once
-                        # and tiresome the third time, so it stays rare and the
-                        # rest of the phrase is abandoned to make the gap real.
-                        if play and rng.random() < float(play.get("bare_shout", 0.0)):
-                            plan.slots_dropped += len(group) - i
-                            break
+                        # Rarely, nothing follows. The ear is set up for filth
+                        # and gets a gap instead. Only the unit that would have
+                        # come next is dropped: abandoning the whole phrase
+                        # made the joke cost several seconds of song, which is
+                        # how wild ended up with almost no words in it.
+                        if (play and not unit.is_climax
+                                and rng.random() < float(play.get("bare_shout", 0.0))):
+                            skip = min(unit.syllables, len(group) - i)
+                            plan.slots_dropped += skip
+                            i += skip
+                            last = lead.name
+                            continue
 
                         if remaining < unit.syllables:
                             last = lead.name

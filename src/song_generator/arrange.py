@@ -90,6 +90,10 @@ def slice_words(units: list[Unit], sr: int = config.SAMPLE_RATE) -> list[Unit]:
     """
     out: list[Unit] = []
     for unit in units:
+        # Cutting the payoff pairing into words is how the payoff got lost:
+        # the bare halves outnumbered the recording and won the peaks off it.
+        if unit.is_shout_pairing:
+            continue
         spans = word_spans(unit)
         if spans is None:
             continue

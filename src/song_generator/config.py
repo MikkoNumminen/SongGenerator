@@ -537,6 +537,11 @@ PLAY_DEFAULT_LEVEL = "conservative"
 #   bare_shout       chance that a placed shout is left with nothing after it.
 #                    Rare on purpose. The joke is that the ear is set up for
 #                    a word and does not get one, and it dies if it recurs.
+#                    Only the next unit is dropped, never the whole phrase.
+#   detach_pairing   chance the shout and the payoff are allowed to go their
+#                    separate ways at a peak. They travel together by default,
+#                    because the recording of them together is the one clip
+#                    the whole bank is built around.
 #   phrase_fill      how many phrases get words at all. Lower leaves more of
 #                    the song instrumental, so the words land as events.
 PLAY_LEVELS = {
@@ -549,18 +554,23 @@ PLAY_LEVELS = {
         "unused_bonus": 0.25,
         "tie_band": 0.35,
         "bare_shout": 0.05,
+        "detach_pairing": 0.15,
         "phrase_fill": 0.78,
     },
     # Less predictable. Invents more orders, spreads the vocabulary harder,
     # chooses from a wider band so fit steers less, and leaves more air.
+    # Less predictable, NOT emptier. An earlier pass thinned the song as well
+    # as scrambling it and the result had almost no words in it, which is a
+    # different thing from being unpredictable.
     "wild": {
         "invent_combos": 34,
         "slice_words": True,
         "repeat_penalty": 0.60,
         "unused_bonus": 0.70,
-        "tie_band": 0.60,
-        "bare_shout": 0.12,
-        "phrase_fill": 0.66,
+        "tie_band": 0.50,
+        "bare_shout": 0.07,
+        "detach_pairing": 0.45,
+        "phrase_fill": 0.80,
     },
     # Today's behaviour, for comparing against.
     "off": {
@@ -570,6 +580,7 @@ PLAY_LEVELS = {
         "unused_bonus": 0.0,
         "tie_band": 0.35,
         "bare_shout": 0.0,
+        "detach_pairing": 1.0,
         "phrase_fill": PHRASE_FILL,
     },
 }

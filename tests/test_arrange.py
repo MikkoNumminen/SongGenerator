@@ -87,8 +87,26 @@ def test_a_single_word_clip_is_not_cut(bank):
 
 
 def test_slicing_yields_every_word_on_its_own(bank):
+    """Every word in an ordinary clip becomes available by itself."""
     by = index_by_word(slice_words(bank))
-    assert set(by) == {"tango", "bravo", "delta", "kilometer", "aah", "calculator"}
+    assert set(by) == {"tango", "bravo", "delta", "kilometer"}
+
+
+def test_the_payoff_pairing_is_never_cut_apart(bank):
+    """Slicing it is what lost it: the halves outvoted the whole recording.
+
+    A dozen ways to say the payoff alone beat the one clip that says it the way
+    the singer did, so the pairing stopped appearing at all. It stays whole.
+    """
+    pairing = next(u for u in bank if u.words == ["aah", "calculator"])
+    assert pairing.is_shout_pairing
+    assert not any(s.name.startswith(pairing.name) for s in slice_words(bank))
+
+
+def test_the_pairing_survives_enrichment(bank):
+    for level in ("conservative", "wild"):
+        pool = enrich(bank, level, random.Random(2))
+        assert any(u.is_shout_pairing for u in pool)
 
 
 def test_a_slice_is_shorter_than_the_clip_it_came_from(bank):
@@ -204,6 +222,26 @@ def test_every_required_word_is_present(bank, slots):
     _, arrangement, _ = build(slots, bank, "conservative", 7)
     assert arrangement.missing() == []
     assert set(required_words()) <= arrangement.words_used()
+
+
+def test_wild_is_not_emptier_than_conservative(bank, slots):
+    """Unpredictable and sparse are different things, and wild was both."""
+    filled = {}
+    for level in ("conservative", "wild"):
+        runs = [build(slots, bank, level, 900 + i)[0].slots_used for i in range(6)]
+        filled[level] = sum(runs) / len(runs)
+    assert filled["wild"] >= filled["conservative"] * 0.9
+
+
+def test_wild_still_says_more_different_things(bank, slots):
+    variety = {}
+    for level in ("conservative", "wild"):
+        seen = set()
+        for i in range(6):
+            plan, _, _ = build(slots, bank, level, 700 + i)
+            seen.update(p.unit.label for p in plan.placements)
+        variety[level] = len(seen)
+    assert variety["wild"] > variety["conservative"]
 
 
 def test_coverage_is_reported_when_it_cannot_be_met(slots):
