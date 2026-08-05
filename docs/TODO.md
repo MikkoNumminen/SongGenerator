@@ -239,26 +239,66 @@ never see. Resolve it on a real vocal.
   than running a model mid-render, and a clone without the extra behaves
   exactly as it does today.
 
-- **Syllables turned out to be worth keeping. Resolved.** They crowded out the
-  words when they could be sung on their own: a clip of `bra` filled a slot as
+## Resolved
+
+Kept rather than deleted, because each says what was tried and why the answer
+turned out the way it did.
+
+- **Syllables turned out to be worth keeping.** They crowded out the words
+  when they could be sung on their own: a clip of `bra` filled a slot as
   neatly as one of `bravo` and said nothing. The pool a song is chosen from is
   now filtered to whole words, so a bare syllable is never placed, and those
-  clips do the job they were always meant for. `arrange.py` cuts them apart and
-  spells words no recording contains, which on the current bank is every take
-  of two words. `set_aside` still exists for a bank whose syllables really are
-  junk, and now reports which words would stop being spellable first.
-  Shouts are exempt: `aah` is a real utterance and the only odd-length unit,
-  so it is the only thing that fits the leftover slot of an odd phrase.
+  clips do the job they were always meant for. `arrange.py` cuts them apart
+  and spells words no recording contains, which on the current bank is every
+  take of two words. `set_aside` still exists for a bank whose syllables
+  really are junk, and reports which words would stop being spellable first.
 
-- **`calculator` is not in the bank yet.** It does not appear anywhere in the
-  the source material it was first built against. It is expected to come from
-  another source later. Until then the bank has four of the five words, and
-  `config.WORD_SYLLABLES` still lists `calculator` (4 syllables) so it slots in
-  with no code change the moment a clip named `calculator*.wav` appears.
+  Shouts were always exempt: the shout is a real utterance and the only
+  odd-length unit, so it is the only thing that fits the leftover slot of an
+  odd phrase.
 
-- **Syllable boundaries inside the word clips.** Auto-detection from energy
-  valleys is planned for commit 3, written to `words/words.json`. Hand
-  correcting those few numbers is expected to beat the detector noticeably, and
-  the file is designed to be edited.
-- **Which shift engine wins.** `SHIFT_ENGINE` defaults to `world`; `rubberband`
-  is implemented as an A/B. Decide by listening once commit 4 lands.
+- **Every word in the vocabulary now has a clip.** The climax word was missing
+  for a long time, since it appeared nowhere in the source material the bank
+  was first cut from, and the bank ran on four of the five words. It arrived
+  from another source. `python -m song_generator.doctor` reports any word
+  still missing, and currently reports none.
+
+- **Syllable boundaries are detected and hand-correctable.** Detection from
+  energy valleys is implemented in `build_bank.syllable_boundaries` and runs
+  on every build: 34 of 37 clips on the current bank carry boundaries, and the
+  three without are single syllables that correctly have none.
+
+  Hand correction is still expected to beat the detector on any clip with a
+  soft internal consonant, and `words.json` is designed for it. Edit
+  `syllable_bounds_s` and add `"hand_corrected": true`, and a later rebuild
+  keeps your values instead of stamping over them. Nothing has been corrected
+  yet, so that gain is available and unclaimed.
+
+- **WORLD wins as the shift engine.** Both are implemented and `SHIFT_ENGINE`
+  chooses; `--engine` overrides per run. Measured across ten bank clips at the
+  shifts the tool actually asks for, formants relative to the unshifted source
+  where 1.00 is a vocal tract the same size:
+
+  | shift | engine | formants | harmonicity | seconds |
+  |---|---|---|---|---|
+  | 4 st | world | 1.026 | -0.1 | 13.5 |
+  | 4 st | rubberband | 0.993 | +1.8 | 4.2 |
+  | 8 st | world | 1.017 | +1.0 | 9.0 |
+  | 8 st | rubberband | 0.933 | +4.8 | 4.5 |
+  | 12 st | world | 0.984 | +2.3 | 9.6 |
+  | 12 st | rubberband | 0.850 | +7.6 | 4.5 |
+
+  WORLD holds the vocal tract within 3% of its own size at every shift. Rubber
+  Band darkens steadily, 15% down by an octave, and smooths harder: +7.6 dB of
+  harmonicity against WORLD's +2.3, which on shouted material is the roughness
+  going away.
+
+  Rubber Band is about twice as fast, and that is the only thing it wins.
+  Resynthesis is around 25 seconds a song, so halving it buys little against
+  sounding further from the singer.
+
+  Worth knowing before re-running this: Rubber Band spent a long time with
+  formant preservation switched off entirely, reading 1.35x at an octave, so
+  any comparison made before that was fixed judged a version nobody meant to
+  ship. It is kept as an alternative because darker and smoother is a real
+  colour, not because it is a contender for the default.
