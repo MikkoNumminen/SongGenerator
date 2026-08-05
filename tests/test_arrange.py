@@ -501,3 +501,22 @@ def test_coverage_outranks_the_word_weights(bank, slots):
         for i in range(6):
             _, arrangement, _ = build(slots, bank, level, 6100 + i)
             assert arrangement.missing() == [], f"{level} seed {6100 + i}"
+
+
+def test_whole_words_are_preferred_over_stitched_ones(bank, slots):
+    """A word assembled from syllables carries a join where movement should be.
+
+    Slicing and spelling exist to reach what was never recorded, not to replace
+    what was. Ranked: a whole take, then a word cut out of one, then an order
+    nobody sang, then a word built out of fragments.
+    """
+    from song_generator.mapping import unit_origin
+
+    for level in ("conservative", "wild"):
+        counted = collections.Counter()
+        for i in range(6):
+            plan, _, _ = build(slots, bank, level, 7100 + i)
+            counted.update(unit_origin(p.unit) for p in plan.placements)
+        total = sum(counted.values())
+        assert counted["spelled"] / total < 0.05, "spelling should be a last resort"
+        assert counted["recorded"] >= counted["spelled"]

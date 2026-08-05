@@ -598,6 +598,13 @@ PLAY_BOTH_LEVELS = ("conservative", "wild")
 #                    core on purpose and finishes a combination rather than
 #                    carrying one.
 #   shout_cost       what including the shout costs, on top of its budget.
+#   slice_cost       what using a word cut out of a clip costs, against a clip
+#                    the singer actually sang whole.
+#   joined_cost      what an order nobody sang costs. Real words, but the
+#                    movement between them is a crossfade.
+#   spelled_cost     what a word assembled from syllable fragments costs.
+#                    Charged hardest: whole words almost every time, and a
+#                    spelling only when nothing recorded will do.
 #   extra_cost       what a word that is none of the above costs. A bank
 #                    accumulates words the song is not really about, and
 #                    unused_bonus rewards them for sounding new. Charged
@@ -607,6 +614,9 @@ PLAY_LEVELS = {
     # Recognisable and tidy. Keeps close to what was recorded, and mostly
     # varies which take of a phrase is used rather than inventing orders.
     "conservative": {
+        "slice_cost": 0.20,
+        "joined_cost": 0.55,
+        "spelled_cost": 1.10,
         "extra_cost": 1.60,
         "core_bonus": 0.9,
         "crown_cost": 0.22,
@@ -632,6 +642,9 @@ PLAY_LEVELS = {
     # as scrambling it and the result had almost no words in it, which is a
     # different thing from being unpredictable.
     "wild": {
+        "slice_cost": 0.10,
+        "joined_cost": 0.32,
+        "spelled_cost": 0.80,
         "extra_cost": 1.25,
         "core_bonus": 0.8,
         "crown_cost": 0.2,
@@ -653,6 +666,9 @@ PLAY_LEVELS = {
     },
     # Today's behaviour, for comparing against.
     "off": {
+        "slice_cost": 0.0,
+        "joined_cost": 0.0,
+        "spelled_cost": 0.0,
         "extra_cost": 0.0,
         "core_bonus": 0.0,
         "crown_cost": 0.0,

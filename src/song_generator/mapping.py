@@ -455,6 +455,26 @@ def core_words() -> set[str]:
             if n <= 2 and w not in config.SHOUT_WORDS and w not in config.CLIMAX_WORDS}
 
 
+def unit_origin(unit: Unit) -> str:
+    """How this unit came to exist, from most to least like a real recording.
+
+      recorded  a clip the singer sang, transitions and all
+      slice     one word cut out of such a clip. Genuine audio of that word.
+      joined    real words crossfaded into an order nobody sang
+      spelled   a word assembled out of syllable fragments
+
+    They are not equal and should not compete as if they were. A whole take
+    carries the singer's own movement between syllables; a word built out of
+    "pas" and "ka" carries a join where that movement should be.
+    """
+    name = unit.name
+    if name.startswith("spelled:"):
+        return "spelled"
+    if name.startswith(("invented:", "joined:")):
+        return "joined"
+    return "slice" if "#" in name else "recorded"
+
+
 def crown_words() -> set[str]:
     """Long words that finish a combination rather than carry it."""
     return {w for w, n in config.WORD_SYLLABLES.items()
@@ -540,6 +560,7 @@ def _choose(units: list[Unit], remaining: int, span_s: float,
             cost += float(play.get("extra_cost", 0.0))
         if words and all(w in core for w in words):
             cost -= float(play.get("core_bonus", 0.0))
+        cost += float(play.get(f"{unit_origin(u)}_cost", 0.0))
         return cost
 
     def variety_cost(u: Unit) -> float:

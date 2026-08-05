@@ -522,7 +522,8 @@ def build(slots, units: list[Unit], level: str, seed: int,
         drawing = dict(params)
         if attempt >= tries // 2:
             relax = 0.0 if attempt >= (3 * tries) // 4 else 0.5
-            for knob in ("crown_cost", "extra_cost", "shout_cost", "core_bonus"):
+            for knob in ("crown_cost", "extra_cost", "shout_cost", "core_bonus",
+                         "slice_cost", "joined_cost", "spelled_cost"):
                 drawing[knob] = float(drawing.get(knob, 0.0)) * relax
 
         pool = enrich(units, level, random.Random(this_seed))
