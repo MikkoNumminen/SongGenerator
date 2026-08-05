@@ -90,6 +90,54 @@ their targets.
 
 ---
 
+## `words_hq.std/standardized.json`
+
+How each derivative was made, and what it was made from. Written by
+`standardize.py`.
+
+```jsonc
+{
+  "format": 1,
+  "params_sha256": "9f2c...",     // every threshold and target, as one hash
+  "shout_mode": "offset",
+  "source_dir": "words_hq",
+  "clips": {
+    "aah-calculator_1.wav": {
+      "source_sha256": "4a81...", // of the recorded clip's bytes
+      "source_bytes": 302444,
+      "trim_head_s": 0.012,       // what syllable_bounds_s was shifted by
+      "trim_tail_s": 0.43,
+      "lufs_before": -24.8,
+      "lufs_after": -20.0,
+      "gain_db": 4.8,
+      "ceiling_limited": false,   // true = could not reach target without clipping
+      "levelled": true,           // false = a shout under shout_mode "as_recorded"
+      "group": "shout"
+    }
+  }
+}
+```
+
+Staleness is decided by hashing, never by names or timestamps: a clip re-cut to
+the same length under the same name is exactly the case a naming convention
+cannot see. `params_sha256` covers the thresholds too, so editing one in
+`config.py` makes every derivative read as stale even though no source moved.
+
+```powershell
+.\.venv\Scripts\python.exe -m song_generator.standardize --check
+```
+
+Reports **stale** (source changed), **new** (source has no derivative),
+**missing** (manifest claims one that is not on disk), **orphan** (derivative
+whose source is gone) and **drifted** (parameters moved, so all of them are).
+Exits non-zero unless everything matches, so it can gate a build.
+
+The tier alongside it is an ordinary bank: `words.json` in the same directory,
+with `duration_s` and `syllable_bounds_s` rewritten to match the trimmed audio.
+`--words-dir words_hq.std` reads it like any other.
+
+---
+
 ## `work/<song>/detect.json`
 
 The Mode A / Mode B verdict and the numbers behind it.

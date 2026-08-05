@@ -302,6 +302,78 @@ SHOUT_MIN_S = 0.35
 
 
 # ---------------------------------------------------------------------------
+# BANK STANDARDISATION -- assembling clips that sit together
+# ---------------------------------------------------------------------------
+# A one-time pass over a finished bank, producing a DERIVATIVE tier beside it.
+# Edges and levels only: what a word sounds like is the whole point of the bank
+# and is never touched. No denoise, no EQ, no compression, no resynthesis.
+#
+# Used by `python -m song_generator.standardize`, not by the main pipeline.
+
+# Suffix appended to a bank directory to name its standardised tier, so
+# words_hq becomes words_hq.std. A sibling rather than a subdirectory, because
+# the result is a complete bank in its own right: --words-dir points at it and
+# every existing tool reads it with no special case.
+STD_SUFFIX = ".std"
+
+# The manifest filename inside a standardised tier. Its presence is also what
+# tells the runtime these clips are already levelled, so it must not skip
+# level_clip over them a second time.
+STD_MANIFEST = "standardized.json"
+
+# How far below a clip's own peak counts as dead air. Much deeper than
+# WORD_SILENCE_DB, which finds sung regions inside a scene; this only has to
+# find the silence a cut left at each end, and going deeper is the conservative
+# direction -- it finds less, and trims less.
+STD_DEAD_AIR_DB = -45.0
+
+# Silence deliberately left in front of the first sound and after the last.
+# Measured on the bank: heads carry 35 ms of silence on average and never more
+# than 58 ms, so a 25 ms guard removes about 10 ms from a typical clip. That is
+# the intent. A soft word start misjudged by a few milliseconds is audible and
+# unrecoverable, a hair of leading silence is neither.
+STD_HEAD_GUARD_S = 0.025
+STD_TAIL_GUARD_S = 0.040
+
+# Hard ceiling on the head trim, whatever the envelope claims. Nothing in the
+# current bank comes close; it exists so that a future clip opening on a quiet
+# breath cannot have that breath removed by a detector that read it as silence.
+STD_HEAD_CAP_S = 0.120
+
+# Edge fades, applied after trimming, purely to stop a click at the cut.
+# Asymmetric on purpose: a long fade-in is what softens an attack, and the
+# attack is the character of a shout, so the head gets the shortest fade that
+# still removes the click. The tail can afford more and nobody hears it.
+STD_FADE_IN_S = 0.004
+STD_FADE_OUT_S = 0.012
+
+# Target loudness for a sung word, LUFS. Gated integrated loudness rather than
+# peak or RMS, because it matches how the ear ranks two clips against each
+# other. Every clip in the bank is longer than the 400 ms gating window, so
+# this measures properly rather than falling back to something cruder.
+#
+# Set near the RMS target the runtime used before, so the balance against the
+# instrumental bed does not move when a bank is standardised.
+CLIP_TARGET_LUFS = -20.0
+
+# How the shout is levelled. It is not ordinary vocabulary: SHOUT_KEEP_RAW
+# already exempts it from resynthesis on the grounds that its rawness IS the
+# sound, and level is part of how it was recorded.
+#
+# "offset"      - shouts get their own target, CLIP_TARGET_LUFS minus
+#                 SHOUT_LUFS_OFFSET. Evens out shout against shout without
+#                 flattening the shout-to-word relationship the bank has.
+# "as_recorded" - shouts are not levelled at all. Trimmed and faded like
+#                 everything else, otherwise exactly as recorded.
+SHOUT_LEVEL_MODE = "offset"
+
+# How far below the word target a shout sits, in dB, when SHOUT_LEVEL_MODE is
+# "offset". Measured rather than chosen: across the bank, bare shouts read
+# 2.7 dB below sung words over their loudest 400 ms. Rounded to 3.
+SHOUT_LUFS_OFFSET = 3.0
+
+
+# ---------------------------------------------------------------------------
 # STAGE 2 -- MELODY AND TIMING EXTRACTION      (built in commit 2)
 # ---------------------------------------------------------------------------
 

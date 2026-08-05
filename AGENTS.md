@@ -55,6 +55,13 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   to `temperature=0.0` with beam search. Do not remove that.
 - **The venv has no Triton.** The recogniser falls back to a slower DTW path and
   warns about it. Harmless.
+- **A float WAV is not a pure function of its samples.** libsndfile writes a
+  PEAK chunk holding the wall-clock time of the write, at byte 60. Two runs
+  producing bit-identical audio therefore produce files that differ by that one
+  byte whenever they straddle a second boundary. Never assert that audio is
+  reproducible by comparing file bytes; decode and compare the samples. This
+  cost a debugging session as a test that failed about twice in a hundred runs
+  and looked like non-determinism in the code.
 
 ## Reading order
 

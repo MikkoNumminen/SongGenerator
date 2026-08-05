@@ -169,7 +169,31 @@ def level_clip(audio: np.ndarray) -> np.ndarray:
     return (audio * gain).astype(np.float32)
 
 
-def load_bank(words_dir: Path = Path("words")) -> list[Unit]:
+def resolve_bank(words_dir: Path, prefer_standardised: bool = True) -> tuple[Path, bool]:
+    """Which directory to sing from, and whether its clips are already levelled.
+
+    A standardised tier sits beside its bank as words_hq.std and is preferred
+    when it exists. A clone that has never run the pass has no such directory
+    and gets the recorded clips, which is the behaviour that shipped before the
+    tier existed.
+
+    The second value says whether the clips arrive pre-levelled. Getting that
+    wrong is silent: level_clip would re-measure baked audio and replace a
+    considered LUFS decision with an RMS one, undoing the pass on load.
+    """
+    words_dir = Path(words_dir)
+    if prefer_standardised:
+        tier = words_dir.with_name(words_dir.name + config.STD_SUFFIX)
+        if (tier / "words.json").is_file() and (tier / config.STD_MANIFEST).is_file():
+            return tier, True
+    # Pointing --words-dir straight at a tier has to work too, so the marker is
+    # what decides, not how the directory was reached.
+    return words_dir, (words_dir / config.STD_MANIFEST).is_file()
+
+
+def load_bank(words_dir: Path = Path("words"),
+              prefer_standardised: bool = True) -> list[Unit]:
+    words_dir, standardised = resolve_bank(words_dir, prefer_standardised)
     index = words_dir / "words.json"
     if not index.is_file():
         raise BankError(
@@ -191,7 +215,10 @@ def load_bank(words_dir: Path = Path("words")) -> list[Unit]:
             syllables=e["syllables"],
             duration_s=e["duration_s"],
             midi=e.get("midi"),
-            audio=level_clip(audio_io.read_wav(path)),
+            # Already levelled at bake time, to a loudness target rather than
+            # an RMS one. Running level_clip over it would throw that away.
+            audio=(audio_io.read_wav(path) if standardised
+                   else level_clip(audio_io.read_wav(path))),
             bounds_s=e.get("syllable_bounds_s", []),
             syllable_midi=e.get("syllable_midi", []),
         ))
