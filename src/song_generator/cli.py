@@ -15,9 +15,16 @@ from . import __version__, arrange, audio_io, config
 from .analysis import analyse, report as analysis_report
 from .detect import detect_vocal
 from .mapping import (
-    BankError, clean_slots, decide_shifts, load_bank, mimicry, plan_words,
-    precompute_shifted, render, resolve_bank, mix as mix_buses,
+    BankError,
+    clean_slots,
+    decide_shifts,
+    load_bank,
+    mimicry,
+    mix as mix_buses,
+    precompute_shifted,
+    render,
     report as mapping_report,
+    resolve_bank,
 )
 from .separate import SeparationError, separate
 from .util import fmt_duration, resolve_device, work_dir_for
@@ -237,6 +244,7 @@ def main(argv: list[str] | None = None) -> int:
     # a run that produced one of them and offered the other had not finished
     # the job. They are separate arrangements with separate seeds, and each
     # writes its own log, so either can be brought back on its own.
+    levels: list[str | None]
     if args.arrangement:
         levels = [None]
     elif args.play:
@@ -247,7 +255,6 @@ def main(argv: list[str] | None = None) -> int:
     single = args.no_shift or args.mix is not None or args.mimicry is not None
     targets = [None] if single else list(config.MIMICRY_VARIANTS)
     written: list[tuple[Path, str, float, int]] = []
-    last_plan = None
 
     for level in levels:
         try:
@@ -280,7 +287,6 @@ def main(argv: list[str] | None = None) -> int:
         if missing and not args.json:
             print(f"  MISSING   {label} never says: {', '.join(missing)}")
         word_plan.merged, word_plan.split = merged, split
-        last_plan = word_plan
 
         # The resynthesis is shared across the mimicry sweep: which units a
         # variant shifts is only a selection over the same shifted set.
@@ -314,8 +320,6 @@ def main(argv: list[str] | None = None) -> int:
         if not args.json:
             print(mapping_report(word_plan, units))
             print()
-
-    word_plan = last_plan
 
     if not args.json:
         if len(written) == 1:

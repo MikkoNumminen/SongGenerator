@@ -34,7 +34,7 @@ import numpy as np
 
 from . import audio_io, config
 from .analysis import extract_f0, hz_to_midi, note_name
-from .extract_words import cut, Candidate
+from .extract_words import Candidate, cut
 from .util import resolve_device
 
 
@@ -448,8 +448,8 @@ def _find_vocal(explicit: Path | None) -> Path:
     return found[-1]
 
 
-def _collect(args, device) -> list[tuple[str, str, np.ndarray, dict]]:
-    """(word, variant, clip, source-info) for everything to put in the bank."""
+def _collect(args, device) -> list[tuple[list[str], str, np.ndarray, dict]]:
+    """(words, variant, clip, source-info) for everything to put in the bank."""
     if args.raw:
         if not args.candidates.is_dir():
             raise LabelError(f"{args.candidates} not found")

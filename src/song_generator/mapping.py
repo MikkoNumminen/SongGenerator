@@ -657,7 +657,7 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None,
     plan = Plan(slots_total=len(slots))
 
     by_label = {u.label: u for u in units}
-    forced_queue = list(forced) if forced else []
+    forced_queue: list[str] = list(forced) if forced else []
     used: dict[str, int] = {}
 
     groups = group_phrases(slots)

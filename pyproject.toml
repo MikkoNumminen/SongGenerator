@@ -38,3 +38,58 @@ song-generator = "song_generator.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.ruff.lint]
+# Ruff's default rule selection is the baseline; the ignores below are the
+# rules this codebase has looked at and decided against, with the reason each
+# time. An entry here means "checked, and the flagged pattern is deliberate",
+# never "too noisy to read".
+ignore = [
+    # int(round(x)) marks the spot where a float becomes an array index or a
+    # sample count. round() only returns a plain int here because numpy defines
+    # __round__ that way for its scalars; the explicit cast states the intent
+    # at the call site instead of leaning on that, and survives an operand
+    # growing an ndigits argument. All 45 sites were read; none is a defect.
+    "RUF046",
+    # zip(xs[:-1], xs[1:]) is the established idiom here and reads as the index
+    # arithmetic this code does everywhere; itertools.pairwise() renames the
+    # pattern without changing behaviour or cost.
+    "RUF007",
+    # Batch loops catch Exception on purpose so one bad source cannot end a
+    # run over dozens of files; every site logs the failure and carries on,
+    # and the comments at each site say so.
+    "BLE001",
+    # Both ffmpeg calls check returncode by hand and raise AudioError carrying
+    # the decoded stderr, which tells the user more than the CalledProcessError
+    # that check=True would raise.
+    "PLW1510",
+]
+
+[tool.ruff.lint.isort]
+# The codebase writes aliased names inside the same parenthesised import as
+# everything else; without this the sorter tears each alias out into its own
+# statement, which is churn with no reader benefit.
+combine-as-imports = true
+
+[tool.mypy]
+python_version = "3.11"
+
+# The audio and ML dependencies ship without stubs. Missing type information
+# for a library is a fact about the library, not a defect in this code, so it
+# is recorded once here rather than suppressed import by import.
+[[tool.mypy.overrides]]
+module = [
+    "audio_separator.*",
+    "demucs.*",
+    "librosa.*",
+    "pylibrb",
+    "pyloudnorm",
+    "pyworld",
+    "scipy.*",
+    "soundfile",
+    "torch",
+    "torch.*",
+    "torchcrepe",
+    "whisper",
+]
+ignore_missing_imports = true

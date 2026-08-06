@@ -28,12 +28,10 @@ import random
 from dataclasses import dataclass
 from pathlib import Path
 
-
-
 import numpy as np
 
 from . import config
-from .mapping import Unit, _crossfade
+from .mapping import Plan, Unit, _crossfade
 
 # Fade over a slice edge. Long enough to kill the click of cutting mid-phrase,
 # short enough not to soften the consonant that starts a word.
@@ -545,7 +543,7 @@ def unit_for(words: list[str], pool: list[Unit], by_word: dict[str, list[Unit]],
 # ---------------------------------------------------------------------------
 
 def build(slots, units: list[Unit], level: str, seed: int,
-          song: str = "", bank: str = "") -> tuple[object, Arrangement, int]:
+          song: str = "", bank: str = "") -> tuple[Plan, Arrangement, int]:
     """One arrangement, redrawn until it says every required word.
 
     Coverage is checked after the fact rather than forced during planning,
@@ -573,7 +571,6 @@ def build(slots, units: list[Unit], level: str, seed: int,
     # found. Narrow the target to what the bank can actually say, and report
     # the rest as missing from the bank rather than from this arrangement.
     sayable = {w for u in units for w in u.words}
-    unreachable = sorted(wanted - sayable)
     wanted &= sayable
 
     # The pairing counts as coverage, not as an aesthetic preference. It is the
@@ -612,6 +609,8 @@ def build(slots, units: list[Unit], level: str, seed: int,
         if best is None or scored(arrangement) > scored(best[1]):
             best = (plan, arrangement, attempt + 1)
 
+    # tries is clamped to at least one, so the loop ran and recorded a best.
+    assert best is not None
     return best
 
 
@@ -626,7 +625,7 @@ def unreachable_words(units: list[Unit]) -> list[str]:
     return sorted(set(required_words()) - sayable)
 
 
-def realise(arrangement: Arrangement, slots, units: list[Unit]) -> object:
+def realise(arrangement: Arrangement, slots, units: list[Unit]) -> Plan:
     """Turn a description back into a plan, exactly.
 
     Placements are rebuilt from the file rather than replanned, so an edited
@@ -634,7 +633,7 @@ def realise(arrangement: Arrangement, slots, units: list[Unit]) -> object:
     to the slot nearest the time it records; a line that cannot be anchored is
     refused by name, since a silently misaligned word is worse than a stop.
     """
-    from .mapping import Placement, Plan
+    from .mapping import Placement
 
     # Rebuild the pool the run had, not merely the recorded clips. A take can
     # be a word cut out of a phrase, a word spelled from syllables, or an order
