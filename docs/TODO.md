@@ -239,6 +239,149 @@ never see. Resolve it on a real vocal.
   than running a model mid-render, and a clone without the extra behaves
   exactly as it does today.
 
+- **`doctor --song` predicts almost no octave folding on songs that then fold
+  heavily.** The prediction is the number someone acts on before spending a
+  render, so it should either be right or say what it is assuming.
+
+  Measured on `tobias_sammets_avantasia_-_misplaced_among_the_angels_feat_floor_jansen_official`,
+  a 5:16 song whose melody spans A#2 to C6, against the 25-unit bank:
+
+  | | `doctor --song` | the render |
+  |---|---|---|
+  | median shift | 1.3 st | 10.9 st requested, 5.2 after folding |
+  | octave-folded | 0% | 46%, 382 of 831 syllables |
+
+  Not specific to that song or that bank. `musichyva` reports 0.9 st and 0%
+  against the previous bank while its ceiling table entry above sits at 0.86,
+  which is a ceiling only a folded song can have.
+
+  Both numbers cannot describe the same job. The report is the fast way to ask
+  whether a song suits the bank, and answering "no folding" for a song that
+  folds half its syllables is worse than not answering, because it points away
+  from the range problem the item above is about.
+
+  Where to start: whether the prediction walks the melody against the whole
+  bank while placement can only choose units that also fit the slot's length
+  and the word being sung, and whether it is measuring per note or per placed
+  syllable. If it turns out to be a best case rather than a prediction, saying
+  so in the output is enough.
+
+- **Nothing records where a song came from.** Eighteen songs have been analysed
+  and seventeen rendered, and for most of them the only surviving trace of the
+  original is a filename. `music46.mp4` says nothing about what it is, who
+  recorded it or where it was fetched from, and no amount of reading the repo
+  recovers that.
+
+  This matters more than it looks, because every directory the sources live in
+  is gitignored: `input/`, `work/` and `output/` are all excluded, so a fresh
+  clone has no songs and no way to find them again. Four of the current songs
+  were rendered straight out of a downloads folder and are not even in
+  `input/`. Losing that folder loses the source.
+
+  What to record, one row per song: the name the tool knows it by (which is the
+  `work/` directory and the `output/` folder), the original address, and what
+  that address is. An address is a web link for anything fetched, or a path for
+  anything ripped, recorded or received as a file. The tool derives its own
+  name by slugifying the input filename, so the name is a stable key.
+
+  What is already knowable, and what is not:
+
+  | Songs | Local source | Original address |
+  |---|---|---|
+  | 13 in `input/` | present | unknown, only the owner has these |
+  | 4 rendered from downloads | present, outside the repo | unknown |
+  | `seija_simola_-_juna_turkuun` | analysed, no input file left | unknown |
+
+  So the local half can be filled in by listing directories, and the half worth
+  having cannot. That part is a sitting-down-and-writing job for whoever has the
+  links.
+
+  One decision to make first: whether the file is tracked. `docs/` is tracked,
+  so a file there publishes every link to anyone who clones the repo. If this is
+  a private index of where the audio came from, it belongs beside the audio in a
+  gitignored location instead, and the tracked docs need only say that it exists
+  and what shape it has.
+
+- **A live site: drop a song in, get a paskaperse back.** Nothing about the
+  pipeline needs a person once the bank exists, so the interesting question is
+  not whether it can be a web service but what it costs and what it hands a
+  stranger.
+
+  What a request actually costs, measured on this machine today, an RTX 3080 Ti:
+
+  | | 5 minute song |
+  |---|---|
+  | Roformer separation | about 30s |
+  | Whole run, analysis through 14 renders | about 4 minutes |
+  | Bytes written | 14 files at 320k CBR, roughly 177 MB |
+
+  So a naive site is a GPU queue, not a web app. Every upload occupies a real
+  graphics card for minutes, and the obvious first cut is to render one level
+  at one mimicry setting rather than the full 14, which is a `--play` and a
+  rung away and drops the output to about 13 MB.
+
+  Three things would have to be decided before any of it is worth building, and
+  none of them are engineering:
+
+  1. **The bank is somebody's voice.** A public site distributes those
+     recordings to everyone who uses it, saying what they say. That is the
+     owner's call to make explicitly, not a detail to discover after launch.
+  2. **The uploads are commercial recordings**, and the output is a derivative
+     of both the upload and the bank. A local tool and a public service that
+     stores and serves the result are not in the same position.
+  3. **Most strangers would get the worst version of it.** Ceilings measured
+     across seven songs today ran from 0.99 to 0.69, and the number tracks one
+     thing: how far the song sits above the bank's register. A site cannot pick
+     its songs. Whatever arrives is likelier to be a wide-range pop or metal
+     track, which is the material that folds hardest, so the median visitor
+     hears the version that carries the tune only in part.
+
+  Also worth knowing: Mode B is not implemented, so any upload without a vocal
+  stem exits with code 3. On a site that is a user-facing error and needs a
+  message written for it rather than an exit code.
+
+- **A downloadable app, so people can do this themselves.** The other end of
+  the same question, and the one that sidesteps the two legal problems above by
+  never holding anyone's audio. It replaces them with a packaging problem.
+
+  What ships is the hard part. The tool is a thin thing on top of a very thick
+  stack: torch with CUDA, a separator, WORLD, torchcrepe and ffmpeg. Measured
+  on this machine:
+
+  | | size |
+  |---|---|
+  | `.venv` | **5.3 GB** |
+  | torch hub cache | 32 MB |
+  | a 25-clip bank plus its standardised tier | 26 MB |
+
+  So the recordings, which are the entire point, are half a percent of the
+  download. Everything else is the machinery, and the separator additionally
+  fetches its own model weights at first run rather than carrying them, so a
+  first launch needs a network connection whatever the installer contains.
+  Trimming that 5.3 GB means a CPU-only torch build, which is the same
+  question as the first bullet below.
+
+  Open questions, roughly in the order they would bite:
+
+  - **GPU or not.** Device is autodetected and a CPU path exists, but nothing
+    has ever timed a CPU run. If it turns out to be an hour a song, the app is
+    a different product than if it is ten minutes, and that number should be
+    measured before any of this is designed.
+  - **Whose bank.** Shipping the app means shipping clips, which is the same
+    consent question the site raises. Alternatively the app ships empty and
+    points at `build_bank`, which makes it a tool for people willing to record
+    and label their own words. That is a much smaller audience and a much
+    smaller problem.
+  - **There is no interface.** `cli.py` is argparse, and the docs are
+    PowerShell. Anyone who would download an app is not going to pass
+    `--mimicry`.
+  - **Windows first is currently implicit**, not decided. Nothing in the code
+    is Windows-only, but every documented path is.
+
+  The honest sequencing is that this item and the site item share one
+  prerequisite, a decision about distributing the recordings, and neither is
+  worth starting until that is settled.
+
 ## Resolved
 
 Kept rather than deleted, because each says what was tried and why the answer

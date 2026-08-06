@@ -43,6 +43,7 @@ See [docs/TODO.md](docs/TODO.md).
 | [docs/GLOSSARY.md](docs/GLOSSARY.md) | Slot, unit, phrase, mimicry, fold. Load-bearing terms. |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The pipeline, module by module. |
 | [docs/WORKFLOWS.md](docs/WORKFLOWS.md) | Recipes: add a song, extend the bank, tune density. |
+| [docs/DATA-FORMATS.md](docs/DATA-FORMATS.md) | Every file the tool writes, field by field. |
 | [docs/TODO.md](docs/TODO.md) | What is deliberately unfinished. |
 | [docs/AI-FIRST.md](docs/AI-FIRST.md) | How legible this repo is, scored against a written rubric. |
 | [src/song_generator/config.py](src/song_generator/config.py) | Every tunable, with the reasoning behind its value. |
@@ -152,6 +153,6 @@ payoff rather than becoming the texture. In the example vocabulary that is
 ## Status
 
 All four build stages are done: separation and mode detection, melody and timing
-extraction, word mapping, and formant-corrected pitch shifting. 192 tests.
+extraction, word mapping, and formant-corrected pitch shifting. 419 tests.
 
 Mode B remains deliberately unimplemented.
