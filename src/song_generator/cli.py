@@ -211,13 +211,15 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_OK
 
     words_dir = args.words_dir or Path(config.BANKS[args.bank])
-    if args.bare_syllables:
-        config.PLACE_BARE_SYLLABLES = True
     singing_from, standardised = resolve_bank(
         words_dir, prefer_standardised=not args.raw_clips)
     try:
+        # --bare-syllables travels as an argument, never as a config write: a
+        # module global set here outlives this run, and batch renders many
+        # songs in one process, so every later song would inherit it.
         units = load_bank(words_dir, prefer_standardised=not args.raw_clips,
-                          singable_only=False)
+                          singable_only=False,
+                          place_bare_syllables=True if args.bare_syllables else None)
         if not args.json:
             how = "standardised" if standardised else "as recorded"
             print(f"  bank      {args.bank} ({singing_from}, {how})")

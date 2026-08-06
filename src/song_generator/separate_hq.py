@@ -47,30 +47,37 @@ def sources_needed_by_bank(bank: Path) -> set[str]:
     return needed
 
 
-def separate_one(path: Path, device: str) -> Path | None:
+def make_separator(staging: Path):
+    """One Separator for the whole batch.
+
+    Loading the model weights is the slow part and the model does not change
+    per file, so it used to be absurd that the batch loop paid for it once
+    per source. Built lazily by main, only when at least one source actually
+    needs separating.
+    """
     from audio_separator.separator import Separator
 
+    separator = Separator(output_dir=str(staging), output_format="wav")
+    separator.load_model(model_filename=config.ROFORMER_MODEL)
+    return separator
+
+
+def separate_one(path: Path, separator, staging: Path) -> Path | None:
     work = Path(config.WORK_DIR) / slugify(path.stem)
     work.mkdir(parents=True, exist_ok=True)
     target = work / "vocal_hq.wav"
     if target.is_file():
         return target
 
-    out_dir = work / "_roformer"
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    separator = Separator(output_dir=str(out_dir), output_format="wav")
-    separator.load_model(model_filename=config.ROFORMER_MODEL)
     produced = separator.separate(str(path))
 
-    vocal = next((out_dir / n for n in produced if "vocal" in n.lower()), None)
+    vocal = next((staging / n for n in produced if "vocal" in n.lower()), None)
     if vocal is None or not vocal.is_file():
         return None
 
     audio_io.write_wav(target, audio_io.read_wav(vocal))
-    for leftover in out_dir.glob("*.wav"):
+    for leftover in staging.glob("*.wav"):
         leftover.unlink()
-    out_dir.rmdir()
     return target
 
 
@@ -105,6 +112,9 @@ def main(argv: list[str] | None = None) -> int:
     device = resolve_device(args.device)
     print(f"  {len(paths)} sources on {device}\n")
 
+    staging = Path(config.WORK_DIR) / "_roformer"
+    separator = None
+
     done = failed = skipped = 0
     for i, path in enumerate(paths, start=1):
         work = Path(config.WORK_DIR) / slugify(path.stem)
@@ -113,11 +123,17 @@ def main(argv: list[str] | None = None) -> int:
             continue
         print(f"  [{i:>3}/{len(paths)}] {path.name}", flush=True)
         try:
-            done += 1 if separate_one(path, device) else 0
+            if separator is None:
+                staging.mkdir(parents=True, exist_ok=True)
+                separator = make_separator(staging)
+            done += 1 if separate_one(path, separator, staging) else 0
         except Exception as exc:
             failed += 1
             print(f"      failed: {type(exc).__name__}: {exc}", file=sys.stderr)
             traceback.print_exc(file=sys.stderr)
+
+    if staging.is_dir() and not any(staging.iterdir()):
+        staging.rmdir()
 
     print(f"\n  {done} separated, {skipped} already done, {failed} failed")
     print("  Demucs stems untouched; vocal_hq.wav sits alongside vocal.wav")

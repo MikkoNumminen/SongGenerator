@@ -74,14 +74,20 @@ def mine_one(path: Path, out_root: Path, device: str, thresholds: Thresholds,
     folder = out_root / slugify(path.stem)
     folder.mkdir(parents=True, exist_ok=True)
 
-    for c in candidates:
-        hint = "shout" if looks_like_shout(c) else f"{c.n_syllables}syl"
-        name = f"c{c.i:02d}__{hint}__{c.note}__{c.start_s:.2f}-{c.end_s:.2f}.wav"
-        c.path = audio_io.write_wav(folder / name, cut(vocal, c))
-        if hint == "shout":
-            result.shouts += 1
-
-    write_labels(folder / "labels.tsv", candidates)
+    # labels.tsv lands whatever happens to the cutting. It used to be written
+    # only after every clip, so a run dying halfway left candidates on disk
+    # with no labels file to review them against; now an interrupted run
+    # still records whatever was cut, and a clip not yet written simply has
+    # no filename in its row.
+    try:
+        for c in candidates:
+            hint = "shout" if looks_like_shout(c) else f"{c.n_syllables}syl"
+            name = f"c{c.i:02d}__{hint}__{c.note}__{c.start_s:.2f}-{c.end_s:.2f}.wav"
+            c.path = audio_io.write_wav(folder / name, cut(vocal, c))
+            if hint == "shout":
+                result.shouts += 1
+    finally:
+        write_labels(folder / "labels.tsv", candidates)
     return result
 
 

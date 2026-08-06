@@ -382,3 +382,60 @@ class TestTheMixNeverProducesSomethingUnplayable:
 
         out = mix(self._tone(0.0), self._tone(0.0, 110.0))
         assert float(np.abs(out).max()) == 0.0
+
+
+class TestBareSyllablesIsARequestNotAStateChange:
+    """--bare-syllables once wrote config.PLACE_BARE_SYLLABLES = True as a
+    module global and nothing ever put it back.
+
+    batch renders many songs through the same process, so the moment one run
+    set it, every later load of a bank inherited it. The request now travels
+    into load_bank as an argument and dies with the run that made it.
+    """
+
+    def _bank_on_disk(self, tmp_path):
+        import json
+
+        from song_generator import audio_io
+
+        d = tmp_path / "words"
+        d.mkdir()
+        index = {}
+        n = int(0.4 * SR)
+        tone = (0.3 * np.sin(2 * np.pi * 200 * np.arange(n) / SR)).astype(np.float32)
+        for name, words, syl in (("bravo1.wav", ["bravo"], 2),
+                                 ("bra1.wav", ["bra"], 1)):
+            audio_io.write_wav(d / name, np.stack([tone, tone]))
+            index[name] = {"words": words, "syllables": syl,
+                           "duration_s": 0.4, "midi": 53.0}
+        (d / "words.json").write_text(json.dumps(index), encoding="utf-8")
+        return d
+
+    def test_one_run_asking_does_not_change_the_next_run(self, tmp_path):
+        from song_generator.mapping import load_bank
+
+        bank = self._bank_on_disk(tmp_path)
+
+        loose = load_bank(bank, prefer_standardised=False,
+                          place_bare_syllables=True)
+        assert any(not u.is_word_like for u in loose), \
+            "the run that asked must get its bare syllables"
+        assert config.PLACE_BARE_SYLLABLES is False, \
+            "the request leaked into the config default"
+
+        strict = load_bank(bank, prefer_standardised=False)
+        assert all(u.is_word_like for u in strict), \
+            "a later run inherited the earlier run's request"
+
+    def test_the_cli_never_writes_the_flag_into_config(self):
+        """The mutation itself, pinned at the source: no assignment to any
+        config attribute survives in cli.py. An argument dies with its call;
+        a module global outlives the run that set it."""
+        import inspect
+        import re
+
+        from song_generator import cli
+
+        source = inspect.getsource(cli)
+        assert not re.search(r"config\.[A-Z_]+\s*=[^=]", source), \
+            "cli.py mutates config at runtime again"
