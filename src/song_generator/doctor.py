@@ -175,8 +175,8 @@ def report_bank(bank_name: str) -> list | None:
     smallest = min((u.syllables for u in climax), default=None)
     if smallest:
         print(f"\n  smallest climax unit: {smallest} syllables")
-        print(f"    a phrase shorter than this cannot hold one, and will not be")
-        print(f"    chosen as a peak however loud or high it is")
+        print("    a phrase shorter than this cannot hold one, and will not be")
+        print("    chosen as a peak however loud or high it is")
     return units
 
 
@@ -190,12 +190,12 @@ def report_song(path: Path, units: list | None) -> None:
               f"{[m.parent.name for m in matches][:5]}")
         return
 
-    data = json.loads(analysis_path.read_text(encoding="utf-8"))
-    notes = data["notes"]
+    analysis = json.loads(analysis_path.read_text(encoding="utf-8"))
+    notes = analysis["notes"]
     slots, merged, split = clean_slots(notes)
     groups = group_phrases(slots)
 
-    print(f"  {data['duration_s']:.0f}s, {data['tempo_bpm']:.0f} BPM")
+    print(f"  {analysis['duration_s']:.0f}s, {analysis['tempo_bpm']:.0f} BPM")
     print(f"  {len(notes)} notes -> {len(slots)} slots "
           f"({merged} blips merged, {split} held notes split)")
     print(f"  {len(groups)} phrases, sizes "
