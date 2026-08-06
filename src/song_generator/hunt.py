@@ -199,7 +199,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  {renamed} renamed\n")
 
     if confirmed:
-        print(f"  best matches -- listen to these first:")
+        print("  best matches -- listen to these first:")
         for hit in confirmed[:25]:
             print(f"    {hit.summary}   {hit.path.name}")
     else:
@@ -209,8 +209,8 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"\n  AI_eee-{args.word}__* are the likely hits. Rename one to confirm it:")
     print(f"      ->  aah{args.word}1.wav      (kept whole, shout and word together)")
-    print(f"  Keeping the shout attached is worth it: the clip then carries the")
-    print(f"  real transition into the word, which cannot be rebuilt by splicing.")
+    print("  Keeping the shout attached is worth it: the clip then carries the")
+    print("  real transition into the word, which cannot be rebuilt by splicing.")
     return 0
 
 

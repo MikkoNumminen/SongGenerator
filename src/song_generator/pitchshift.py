@@ -45,7 +45,7 @@ class Segment:
         return max(1e-6, self.src_end_s - self.src_start_s)
 
 
-def fold_shift(semitones: float, cap: float = None) -> float:
+def fold_shift(semitones: float, cap: float | None = None) -> float:
     """Fold a shift beyond the cap by whole octaves.
 
     A 29-semitone jump becomes 5: the same note name, two octaves closer to the

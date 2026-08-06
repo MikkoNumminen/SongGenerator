@@ -436,20 +436,20 @@ def standardise_clip(clip: np.ndarray, entry: dict, mode: str,
     """Trim, fade, level. The order matters: level measures what survives."""
     trim = find_trim(audio_io.to_mono(clip), sr)
     trimmed = apply_trim(clip, trim, sr)
-    levelled, info = level(trimmed, is_shout_entry(entry), mode, sr)
+    levelled, levelling = level(trimmed, is_shout_entry(entry), mode, sr)
 
     duration_s = levelled.shape[1] / sr
     updated = dict(entry)
     updated["duration_s"] = round(duration_s, 4)
     updated["syllable_bounds_s"] = shift_bounds(
         entry.get("syllable_bounds_s") or [], trim.head_s, duration_s)
-    return levelled, updated, trim, info
+    return levelled, updated, trim, levelling
 
 
 def standardise_bank(source: Path, out: Path, mode: str,
                      force: bool = False) -> Report:
     """Build or refresh the derivative tier for one bank."""
-    source = Path(source)
+    source, out = Path(source), Path(out)
     index_path = source / "words.json"
     if not index_path.is_file():
         raise StandardizeError(
@@ -464,8 +464,8 @@ def standardise_bank(source: Path, out: Path, mode: str,
     previous = read_manifest(out)
     previous_clips = previous.get("clips", {}) if previous.get("params_sha256") == fingerprint else {}
     previous_index = {}
-    if (Path(out) / "words.json").is_file():
-        previous_index = json.loads((Path(out) / "words.json").read_text(encoding="utf-8"))
+    if (out / "words.json").is_file():
+        previous_index = json.loads((out / "words.json").read_text(encoding="utf-8"))
 
     protected = {_resolved(source / name) for name in entries}
     report = Report()
@@ -480,7 +480,7 @@ def standardise_bank(source: Path, out: Path, mode: str,
 
         digest = sha256_file(path)
         record = previous_clips.get(name)
-        derivative_exists = (Path(out) / name).is_file()
+        derivative_exists = (out / name).is_file()
 
         if (not force and record and record.get("source_sha256") == digest
                 and derivative_exists and name in previous_index):
@@ -489,7 +489,7 @@ def standardise_bank(source: Path, out: Path, mode: str,
             report.reused.append(name)
             continue
 
-        audio, updated, trim, info = standardise_clip(
+        audio, updated, trim, levelling = standardise_clip(
             audio_io.read_wav(path), entry, mode)
         write_derivative(out, name, audio, [source], protected=protected)
 
@@ -500,16 +500,16 @@ def standardise_bank(source: Path, out: Path, mode: str,
             "source_bytes": path.stat().st_size,
             "trim_head_s": round(trim.head_s, 4),
             "trim_tail_s": round(trim.tail_s, 4),
-            "lufs_before": info.lufs_before,
-            "lufs_after": info.lufs_after,
-            "gain_db": info.gain_db,
-            "ceiling_limited": info.ceiling_limited,
-            "levelled": not info.skipped,
+            "lufs_before": levelling.lufs_before,
+            "lufs_after": levelling.lufs_after,
+            "gain_db": levelling.gain_db,
+            "ceiling_limited": levelling.ceiling_limited,
+            "levelled": not levelling.skipped,
             "group": "shout" if is_shout_entry(entry) else "word",
         }
         report.built.append(name)
         report.trimmed_s += trim.head_s + trim.tail_s
-        if info.ceiling_limited:
+        if levelling.ceiling_limited:
             report.ceiling_limited.append(name)
 
     if not index:
@@ -518,7 +518,6 @@ def standardise_bank(source: Path, out: Path, mode: str,
             f"{index_path} exist on disk."
         )
 
-    out = Path(out)
     report.index_written = _write_if_changed(
         out / "words.json", json.dumps(index, indent=2, ensure_ascii=False))
     report.manifest_written = _write_if_changed(

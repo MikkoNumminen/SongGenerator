@@ -18,7 +18,7 @@ import pytest
 from song_generator import audio_io, config
 from song_generator.mapping import load_bank, resolve_bank
 from song_generator.standardize import (
-    StandardizeError, apply_trim, check_destination, check_tier, clip_lufs,
+    StandardizeError, Trim, apply_trim, check_destination, check_tier, clip_lufs,
     find_trim, level, main, params_fingerprint, sha256_file, shift_bounds,
     standardise_bank, target_lufs, write_derivative,
 )
@@ -194,10 +194,14 @@ def test_trim_never_takes_a_clip_below_the_word_floor():
 
 
 def test_apply_trim_removes_exactly_what_was_asked_for():
+    # The fixture is 0.2 s + 0.5 s + 0.2 s at 44100 Hz: 39690 samples. The
+    # trims below are 4418.82 and 2213.82 samples, chosen so the fraction
+    # sits above one half: rounding to the nearest sample removes 4419 and
+    # 2214, leaving 33057, while a trim that truncated would leave 33059.
     clip = _clip(sound_s=0.5, head_s=0.2, tail_s=0.2)
-    out = apply_trim(clip, Trim := find_trim(_mono(clip)))
-    expected = clip.shape[1] - int(round(Trim.head_s * SR)) - int(round(Trim.tail_s * SR))
-    assert out.shape[1] == expected
+    assert clip.shape[1] == 39690
+    out = apply_trim(clip, Trim(head_s=0.1002, tail_s=0.0502))
+    assert out.shape[1] == 33057
     assert out.shape[0] == clip.shape[0]
 
 

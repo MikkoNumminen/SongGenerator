@@ -1219,8 +1219,8 @@ def report(plan: Plan, units: list[Unit]) -> str:
     add(f"    sings along       {singing} of {len(plan.placements)} units "
         f"({singing / len(plan.placements) * 100:.0f}%), mode {config.SHIFT_MIX_MODE!r}")
     add(f"    ceiling           {ceiling:.2f} -- the most this song can mimic even")
-    add(f"                      with every unit shifted, because octave-folded")
-    add(f"                      syllables only carry the tune in part")
+    add("                      with every unit shifted, because octave-folded")
+    add("                      syllables only carry the tune in part")
 
     shifts = np.array([s for p in plan.placements if p.do_shift for s in p.shifts])
     if shifts.size:

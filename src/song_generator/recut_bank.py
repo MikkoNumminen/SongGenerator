@@ -288,7 +288,7 @@ def main(argv: list[str] | None = None) -> int:
               file=sys.stderr)
 
     print(f"\n  {rebuilt} clips re-cut into {args.out.resolve()}")
-    print(f"  every name, label and syllable boundary preserved")
+    print("  every name, label and syllable boundary preserved")
     print(f"\n  Compare:  song-generator.exe input\\song.mp4 --words-dir {args.out}")
     return 0
 

@@ -136,11 +136,11 @@ def main(argv: list[str] | None = None) -> int:
             known = " (a bank word)" if label in config.WORD_SYLLABLES or "-" in label else ""
             print(f"    {n:>4}  {label}{known}")
 
-    print(f"\n  Sort by name and the guesses group together. Rename a clip to")
+    print("\n  Sort by name and the guesses group together. Rename a clip to")
     print(f"  confirm it -- dropping the {TODO} prefix is what makes it count:")
     print(f"      {TODO}bravo__kirby2__c07__1.42-1.98.wav   ->   bravo1.wav")
-    print(f"  Anything still tagged is ignored by build_bank, so leaving a clip")
-    print(f"  alone is always safe.")
+    print("  Anything still tagged is ignored by build_bank, so leaving a clip")
+    print("  alone is always safe.")
     return 0
 
 
