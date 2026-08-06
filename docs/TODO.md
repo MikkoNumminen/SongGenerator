@@ -243,8 +243,8 @@ never see. Resolve it on a real vocal.
   exactly as it does today.
 
 - **Not every song that has been made records where it came from, and the
-  video is the reason that matters.** Twenty-four songs are indexed. Two have
-  their source written down. For the other twenty-two the only surviving trace
+  video is the reason that matters.** Twenty-three songs are indexed. Two have
+  their source written down. For the other twenty-one the only surviving trace
   of the original is a filename, and `music46.mp4` says nothing about what it
   is, who made it, or which link it came from.
 
@@ -260,13 +260,18 @@ never see. Resolve it on a real vocal.
   |---|---|---|
   | 10 `.mp4` in `input/` | present, h264 | nothing, unless the resolution is too low |
   | 13 `.mp3` | none, cover art only | the link, or there is no picture at all |
-  | 1 `.wav` | none | see below, it may have no source to find |
 
   The ten that still carry video carry it at what was downloaded: three at
   854x480, then 640x360, 492x360, 360x360, two vertical at 406x720, and one at
   **426x238**. Usable for a joke, not for anything anyone would watch twice.
   Re-fetching at a decent resolution needs the link as much as the thirteen
   with no picture at all do.
+
+  `paskaperse.wav` is not in that table and not in the index. It is not a song
+  that was fetched from anywhere: it is the source the first word clips were
+  cut out of, so there is no address to find for it. That is a different answer
+  from one nobody has written down, and worth keeping distinct, because a gap
+  invites somebody to go looking for something that was never there.
 
   The index is `input/SOURCES.md`, one row per song, keyed on the slug the tool
   derives from the input filename. That slug names the `work/` directory
@@ -293,14 +298,6 @@ never see. Resolve it on a real vocal.
   place and clearing the folder loses it. Copying them in costs nothing and is
   the thing to do first, because a link is no help once the file it names is
   gone.
-
-  One open question before the table above is trusted: `paskaperse.wav` is 20.7
-  seconds, PCM, written by a recent ffmpeg, carries no title or artist, and the
-  ceiling table earlier in this file puts its melody at 0.0 semitones above the
-  bank, meaning it sits in the same register as the recorded voice. That is
-  what a home recording looks like rather than something fetched. If it is one,
-  it has no address to find and should say so rather than sit at `unknown`
-  forever.
 
   Every directory involved is gitignored, so a fresh clone has no songs and no
   way to find them. That is right, the repo is the tool and not the media, and
