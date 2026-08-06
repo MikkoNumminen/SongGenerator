@@ -382,6 +382,40 @@ never see. Resolve it on a real vocal.
   prerequisite, a decision about distributing the recordings, and neither is
   worth starting until that is settled.
 
+- **`--bare-syllables` does not reach the render path, and making it would be
+  a feature rather than a fix.** The flag exists, is documented, and changes
+  nothing about what gets sung.
+
+  Two things swallow it. `cli` loads the bank with `singable_only=False`, which
+  skips the filter the flag controls, and `arrange.enrich` then filters to
+  word-like units unconditionally. An audit found the flag being written into
+  module state that outlived the run, and that leak is fixed, but fixing the
+  leak did not make the flag work and was not meant to.
+
+  Deciding what it should do is the actual question, and it is a listening
+  question rather than an engineering one. Bare syllables were deliberately
+  taken out of the pool once already, recorded under Resolved below: a clip of
+  `bra` filled a slot as neatly as one of `bravo` and said nothing. Whether a
+  flag should be able to put them back, and whether the result is funny or just
+  mush, is answered by rendering it and listening, not by reading `enrich`.
+
+  So it stays as it is until somebody wants that sound. The alternative worth
+  considering is removing the flag, since a documented option that does nothing
+  is worse than no option.
+
+- **`doctor.py`'s `_bar` helper stays, and this records why so nobody audits
+  it again.** One line, one call site, and a `width` parameter nothing passes.
+  A smell audit flagged it as the only survivor of sixteen single-use-helper
+  candidates and called it marginal itself.
+
+  It is kept because it names what the line does. `_bar(hist[midi])` reads as a
+  histogram bar; `"#" * min(hist[midi], 28)` reads as string arithmetic that
+  the next person has to decode. The unused `width` is a real wart and one
+  character of the file.
+
+  Deleting a helper because it has one caller is a rule that would also delete
+  every well-named private function in the codebase. Closed, not fixed.
+
 ## Resolved
 
 Kept rather than deleted, because each says what was tried and why the answer
