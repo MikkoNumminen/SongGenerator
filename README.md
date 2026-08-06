@@ -153,6 +153,6 @@ payoff rather than becoming the texture. In the example vocabulary that is
 ## Status
 
 All four build stages are done: separation and mode detection, melody and timing
-extraction, word mapping, and formant-corrected pitch shifting. 419 tests.
+extraction, word mapping, and formant-corrected pitch shifting. 468 tests.
 
 Mode B remains deliberately unimplemented.

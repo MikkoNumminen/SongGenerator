@@ -109,7 +109,8 @@ change, rather than only naming what went wrong. Errors 7→9.
 | 9 | Domain glossary | 1 | 10 |
 | 10 | Runbooks | 3 | 10 |
 
-**Mean: 9.6**, up from 5.0. Tests: 159 → 419.
+**Mean: 9.6**, up from 5.0. The suite was 159 tests at baseline; what it
+is now lives in the README, which is checked against it.
 
 The four remaining 9s are honest rather than modest:
 

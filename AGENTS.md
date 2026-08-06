@@ -12,7 +12,7 @@ there and must not leak into other projects). Always use it explicitly:
 
 ```powershell
 .\.venv\Scripts\song-generator.exe input\song.mp4              # full run, both levels x 7 rungs
-.\.venv\Scripts\python.exe -m pytest tests\ -q                        # 419 tests, ~40s
+.\.venv\Scripts\python.exe -m pytest tests\ -q                        # the whole suite, ~50s
 .\.venv\Scripts\python.exe -m song_generator.build_bank        # rebuild the word bank
 .\.venv\Scripts\python.exe -m song_generator.doctor            # diagnose anything
 ```
