@@ -1,7 +1,12 @@
 ﻿"""Re-separate sources with Mel-Band Roformer, alongside the Demucs stems.
 
     python -m song_generator.separate_hq "sources/*.mp4"
-    python -m song_generator.separate_hq --for-bank
+    python -m song_generator.separate_hq --for-bank "sources/*.mp4"
+
+The second form narrows the given files to the ones the current bank was cut
+from. The sources are still passed, because --for-bank cannot find them on
+its own: the bank records which work directories its clips separated into,
+not where the source media lives.
 
 Writes `vocal_hq.wav` into each source's existing work directory, leaving the
 Demucs `vocal.wav` untouched. Both then sit side by side, so the two can be
@@ -26,8 +31,9 @@ from .util import expand, resolve_device, slugify
 
 def sources_needed_by_bank(bank: Path) -> set[str]:
     """Work-dir names the current bank was cut from."""
-    from .recut_bank import by_correlation, from_name, work_dirs
     import json
+
+    from .recut_bank import by_correlation, from_name, work_dirs
 
     index = bank / "words.json"
     if not index.is_file():
@@ -104,16 +110,38 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
+    # Checked before the bank is even opened: locating the bank's sources can
+    # cost minutes of correlation, and with nothing to filter the answer is
+    # already known.
+    if args.for_bank and not args.sources:
+        print("error: --for-bank narrows the sources you pass; it cannot find "
+              "them alone.\n"
+              "       The bank records which work directories its clips came "
+              "from, not\n"
+              "       where the source media lives, so pass the files or "
+              "globs too:\n"
+              "           python -m song_generator.separate_hq --for-bank "
+              "\"sources/*.mp4\"",
+              file=sys.stderr)
+        return 2
+
     paths = expand(args.sources)
+
+    # Before the bank is opened, so a mistyped glob is reported as a mistyped
+    # glob. Reading the bank can cost minutes of correlation, and paying that
+    # only to be told the sources do not match it points at the wrong thing.
+    if not paths:
+        print("error: nothing to separate. Pass source files or globs.", file=sys.stderr)
+        return 2
 
     if args.for_bank:
         needed = sources_needed_by_bank(args.bank)
         print(f"  bank was cut from {len(needed)} sources")
         paths = [p for p in paths if slugify(p.stem) in needed]
-
-    if not paths:
-        print("error: nothing to separate. Pass source files or globs.", file=sys.stderr)
-        return 2
+        if not paths:
+            print(f"error: none of the given sources is among the "
+                  f"{len(needed)} the bank was cut from.", file=sys.stderr)
+            return 2
 
     device = resolve_device(args.device)
     print(f"  {len(paths)} sources on {device}\n")

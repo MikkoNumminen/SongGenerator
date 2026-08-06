@@ -202,6 +202,33 @@ takes at the same pitch as everything else change nothing.
 
 ---
 
+## Re-cut the bank from cleaner stems
+
+The clips were cut from Demucs stems, so whatever instrumental residue Demucs
+left behind is baked into them. Re-separating with the Roformer and cutting
+again over the same time ranges replaces the audio under every clip without
+losing a name, label or syllable boundary.
+
+```powershell
+.\.venv\Scripts\python.exe -m song_generator.separate_hq --for-bank "sources\*.mp4"
+.\.venv\Scripts\python.exe -m song_generator.recut_bank --out words_hq2
+```
+
+`--for-bank` narrows the files you pass to the ones the current bank was cut
+from. It cannot find them on its own: the bank records which work directories
+its clips separated into, not where the source media lives, so the files or
+globs are always given.
+
+`recut_bank` writes an index that describes exactly what it wrote. A clip it
+could not write, because its span collapsed against the new stem, or would not
+write, because it appeared in the output mid-run and may be hand work, is
+dropped from `words.json` and reported, together with the `build_bank` command
+that puts the words back once the clips are restored. A word only those clips
+carried would otherwise vanish silently at render time, since a render reads
+the index alone.
+
+---
+
 ## The words are too dense / too sparse
 
 All in the `DENSITY` block of `config.py`:

@@ -33,7 +33,6 @@ from pathlib import Path
 import numpy as np
 
 from . import audio_io, config
-from .util import resolve_device
 
 SPAN_RE = re.compile(r"__([A-Za-z0-9]+)__(\d+\.\d+)-(\d+\.\d+)")
 
@@ -248,6 +247,7 @@ def main(argv: list[str] | None = None) -> int:
     args.out.mkdir(parents=True, exist_ok=True)
     rebuilt = 0
     protected: list[str] = []
+    degenerate: list[str] = []
     for name, origin in found.items():
         # The guard above ran against a snapshot taken before this loop, and
         # write_wav overwrites without asking. A clip that appears in --out
@@ -261,6 +261,12 @@ def main(argv: list[str] | None = None) -> int:
         lo = max(0, int(origin.start_s * config.SAMPLE_RATE))
         hi = min(vocal.shape[1], int(origin.end_s * config.SAMPLE_RATE))
         if hi <= lo:
+            # The span collapsed against this stem, usually because the better
+            # stem is shorter than where the clip was located, so nothing was
+            # cut. The entry has to go with the file: an index naming a clip
+            # that was never written would send a render reading audio that is
+            # not there.
+            degenerate.append(name)
             continue
         clip = np.array(vocal[:, lo:hi], dtype=np.float32)
         fade = min(int(config.WORD_FADE_S * config.SAMPLE_RATE), clip.shape[1] // 2)
@@ -271,20 +277,44 @@ def main(argv: list[str] | None = None) -> int:
         audio_io.write_wav(args.out / name, clip)
         rebuilt += 1
 
-    # Clips that were protected mid-run stay out of the index too: their audio
-    # is somebody's hand work, not this tool's cut, and describing it with the
-    # old bank's numbers would be a guess.
-    kept = {k: v for k, v in entries.items() if k in found and k not in protected}
+    # If nothing was written, nothing claims to be there. A protected clip's
+    # audio is somebody's hand work, not this tool's cut, and describing it
+    # with the old bank's numbers would be a guess; a degenerate span left no
+    # file at all, and load_bank believes the index alone.
+    excluded = set(protected) | set(degenerate)
+    kept = {k: v for k, v in entries.items() if k in found and k not in excluded}
     (args.out / "words.json").write_text(
         json.dumps(kept, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    if protected:
-        print(f"\n  {len(protected)} clips appeared in {args.out} while this "
-              "ran and were left untouched:", file=sys.stderr)
-        for name in protected:
-            print(f"           {name}", file=sys.stderr)
-        print("       They may be hand-named recordings. Pass --overwrite only "
-              "if you are\n       certain they are this tool's own output.",
+    if excluded:
+        print(f"\n  {len(excluded)} clips were not re-cut, and their entries "
+              "are out of the rebuilt index:", file=sys.stderr)
+        for name in sorted(protected):
+            print(f"           {name}  (appeared in {args.out} while this ran; "
+                  "left untouched)", file=sys.stderr)
+        for name in sorted(degenerate):
+            print(f"           {name}  (its span collapsed against the new "
+                  "stem; nothing was cut)", file=sys.stderr)
+        print(f"\n       Any word only these clips carried is now absent from "
+              "the rebuilt bank:\n"
+              "       a render reads words.json alone, and no tool back-fills "
+              "an entry for\n"
+              "       audio it did not cut itself. To restore them, copy the "
+              f"clips you still\n       want from {args.bank} into {args.out} "
+              "(the untouched ones are already\n       there), then rebuild "
+              "the index from what is actually on disk:\n\n"
+              f"           python -m song_generator.build_bank "
+              f"--candidates \"{args.out}\" --out \"{args.out}\"\n\n"
+              "       One thing that rebuild cannot do for you. It keeps a "
+              "hand-corrected\n"
+              "       syllable boundary only when the entry is already in the "
+              "index it is\n"
+              f"       merging into, and these entries have just left it. If a "
+              "clip above\n"
+              f"       carries \"hand_corrected\" in {args.bank}\\words.json, "
+              "copy that entry\n"
+              "       across by hand as well, or the bounds are silently "
+              "re-detected.",
               file=sys.stderr)
 
     print(f"\n  {rebuilt} clips re-cut into {args.out.resolve()}")

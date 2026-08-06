@@ -274,3 +274,71 @@ class TestTheGuardRunsAgainAtWriteTime:
 
         assert code == 0
         assert (out / "tango_1.wav").read_bytes() != b"hand work, mid-run"
+
+
+class TestTheIndexOnlyNamesWhatWasWritten:
+    """words.json is what load_bank believes. A span that collapses against
+    the better stem writes no file, so leaving its entry in the index would
+    describe a clip that is not there, and a render would go looking for it.
+
+    The protected mid-run path already dropped its entries; this pins the
+    degenerate-span path doing the same, and the run saying out loud which
+    words the exclusions cost and how to get them back.
+    """
+
+    def _sources(self, tmp_path, monkeypatch):
+        """vocal.wav is the full stem; vocal_hq.wav only its first second,
+        so a clip located late in the source has nowhere to be cut from."""
+        d = tmp_path / "work" / "asource"
+        d.mkdir(parents=True)
+        stem = _stem()
+        audio_io.write_wav(d / "vocal.wav", stem)
+        audio_io.write_wav(d / "vocal_hq.wav", stem[:, :SR])
+        monkeypatch.setattr(config, "WORK_DIR", str(tmp_path / "work"))
+        return stem
+
+    def _bank(self, tmp_path, stem):
+        bank = tmp_path / "words"
+        bank.mkdir()
+        index = {}
+        for name, start in (("bravo_1.wav", 0.0), ("tango_1.wav", 3.0)):
+            audio_io.write_wav(bank / name, _slice(stem, start, 0.8))
+            index[name] = {"words": [name.split("_")[0]], "syllables": 2,
+                           "duration_s": 0.8, "midi": 53.0}
+        (bank / "words.json").write_text(json.dumps(index), encoding="utf-8")
+        return bank
+
+    def test_a_degenerate_span_takes_its_entry_out_of_the_index(
+            self, tmp_path, monkeypatch):
+        from song_generator.recut_bank import main
+
+        stem = self._sources(tmp_path, monkeypatch)
+        bank = self._bank(tmp_path, stem)
+        out = tmp_path / "fresh"
+
+        code = main(["--bank", str(bank), "--out", str(out)])
+
+        assert code == 0
+        assert (out / "bravo_1.wav").is_file(), "the clip that fits is re-cut"
+        assert not (out / "tango_1.wav").exists(), (
+            "nothing can be cut for a span past the end of the stem"
+        )
+        index = json.loads((out / "words.json").read_text(encoding="utf-8"))
+        assert "bravo_1.wav" in index
+        assert "tango_1.wav" not in index, (
+            "the index must not name a file that was never written"
+        )
+
+    def test_the_exclusion_notice_names_the_clip_and_the_fix(
+            self, tmp_path, monkeypatch, capsys):
+        from song_generator.recut_bank import main
+
+        stem = self._sources(tmp_path, monkeypatch)
+        bank = self._bank(tmp_path, stem)
+
+        main(["--bank", str(bank), "--out", str(tmp_path / "fresh")])
+        said = capsys.readouterr().err
+
+        assert "tango_1.wav" in said, "the excluded clip is named"
+        assert "absent" in said, "the consequence is stated, not implied"
+        assert "build_bank" in said, "the fix is a command, not a shrug"
