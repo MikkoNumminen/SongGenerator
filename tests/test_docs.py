@@ -258,3 +258,57 @@ def test_the_readme_describes_both_dials():
     assert "playfulness" in text
     assert "conservative" in text and "wild" in text
     assert "fourteen" in text or "14 " in text
+
+
+def test_a_test_count_in_the_docs_matches_the_suite():
+    """The one claim in these docs that rots on its own.
+
+    Every other statement here goes stale only when somebody changes
+    behaviour. A test count goes stale when somebody adds a test, which is the
+    thing this repo most wants to encourage, so it drifted three times in a
+    single day: 192, then 419, then 467, each correction obsolete before it
+    was merged.
+
+    So the count lives in exactly one place and is checked. Anything else that
+    wants to mention the suite says how long it takes, which does not move.
+
+    Collected rather than run, so this stays cheap. The inner pytest does not
+    execute anything and cannot recurse into running this file.
+    """
+    import re
+    import subprocess
+    import sys
+
+    prose = ["AGENTS.md", "README.md", "docs/GLOSSARY.md",
+             "docs/ARCHITECTURE.md", "docs/WORKFLOWS.md",
+             "docs/DATA-FORMATS.md", "docs/TODO.md", "docs/AI-FIRST.md"]
+    claims = []
+    for name in prose:
+        if name == "docs/AI-FIRST.md":
+            # An iteration log. Its counts are snapshots of what was true at
+            # each step, so correcting them to today's number would falsify
+            # the record rather than fix it.
+            continue
+        for line in read(ROOT / name).splitlines():
+            for match in re.finditer(r"\b(\d+) tests\b", line):
+                claims.append((name, int(match.group(1)), line.strip()))
+
+    assert len(claims) <= 1, (
+        "a test count belongs in one place, and these each have to be edited "
+        f"whenever anyone adds a test: {[(n, c) for n, c, _ in claims]}"
+    )
+    if not claims:
+        return
+
+    out = subprocess.run(
+        [sys.executable, "-m", "pytest", str(ROOT / "tests"), "-q", "--collect-only"],
+        capture_output=True, text=True, cwd=ROOT,
+    ).stdout
+    found = re.search(r"(\d+) tests? collected", out)
+    assert found, f"could not read a collected count from pytest:\n{out[-500:]}"
+
+    path, claimed, line = claims[0]
+    assert claimed == int(found.group(1)), (
+        f"{path} says {claimed} tests, the suite collects {found.group(1)}.\n"
+        f"    {line}"
+    )
