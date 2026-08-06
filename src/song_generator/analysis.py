@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import overload
 
 import numpy as np
 
@@ -33,6 +34,12 @@ A4_MIDI = 69
 A4_HZ = 440.0
 
 
+# The overloads say what the maths already guarantees, an array in gives an
+# array out, so callers indexing the result do not have to prove it themselves.
+@overload
+def hz_to_midi(hz: np.ndarray) -> np.ndarray: ...
+@overload
+def hz_to_midi(hz: float) -> float: ...
 def hz_to_midi(hz: np.ndarray | float) -> np.ndarray | float:
     return A4_MIDI + 12.0 * np.log2(np.asarray(hz, dtype=float) / A4_HZ)
 
@@ -305,7 +312,7 @@ def analyse(
     )[0]
 
     onset_times = detect_onsets(mono, sr, hop_s)
-    onset_frames = set(int(round(t / hop_s)) for t in onset_times)
+    onset_frames = {int(round(t / hop_s)) for t in onset_times}
 
     min_frames = max(2, int(round(0.03 / hop_s)))
     merge_frames = max(1, int(round(config.BOUNDARY_MERGE_S / hop_s)))
@@ -390,7 +397,7 @@ def _group_phrases(notes: list[Note]) -> list[Phrase]:
     for i in range(1, len(notes) + 1):
         ends = i == len(notes)
         gap = None if ends else notes[i].onset_s - notes[i - 1].offset_s
-        if ends or gap > config.PHRASE_GAP_S:
+        if gap is None or gap > config.PHRASE_GAP_S:
             pi = len(phrases)
             for n in notes[start_idx:i]:
                 n.phrase = pi

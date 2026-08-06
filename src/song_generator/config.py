@@ -305,7 +305,7 @@ WORD_SPELLING = {
 # canonical spelling contains. Listing them here lets those names parse instead
 # of being refused, which is the difference between a clip being usable and
 # sitting on disk. They are fragments, never sung alone.
-EXTRA_SYLLABLES = ()
+EXTRA_SYLLABLES: tuple[str, ...] = ()
 
 # Letters a held shout may be spelled with. A shout has no canonical spelling:
 # someone naming clips by ear writes what they heard, so aah, aaah, ahh and
@@ -572,12 +572,12 @@ BEAT_SUBDIVISION = 4
 # Words that must appear somewhere in every song. None means every word in
 # WORD_SYLLABLES. A bank with a word that is deliberately occasional should
 # name the required ones in vocabulary_local.py instead of changing this.
-PLAY_REQUIRED_WORDS = None
+PLAY_REQUIRED_WORDS: tuple[str, ...] | None = None
 
 # The words a song is mostly made of. None means every short word that is
 # neither the shout nor the payoff. A bank whose core is narrower than that
 # should name it in vocabulary_local.py.
-PLAY_CORE_WORDS = None
+PLAY_CORE_WORDS: tuple[str, ...] | None = None
 
 # How many times to redraw an arrangement that failed the coverage rule before
 # repairing it by hand. Each retry is a fresh seed derived from the first, so
@@ -923,7 +923,7 @@ import os as _os
 
 if not _os.environ.get("SONG_GENERATOR_NO_LOCAL_VOCAB"):
     try:  # pragma: no cover - presence depends on the machine, not the code
-        from .vocabulary_local import *  # noqa: F401,F403
+        from .vocabulary_local import *
     except ImportError:
         pass
 

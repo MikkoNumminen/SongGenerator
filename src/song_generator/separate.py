@@ -76,12 +76,12 @@ def _separate_demucs(input_path: str | Path, device: str | None) -> tuple[np.nda
 
     audio = audio_io.decode(input_path, sr=config.SAMPLE_RATE, channels=2)
 
-    kwargs = dict(
-        model=config.DEMUCS_MODEL,
-        device=resolve_device(device),
-        shifts=config.DEMUCS_SHIFTS,
-        progress=True,
-    )
+    kwargs = {
+        "model": config.DEMUCS_MODEL,
+        "device": resolve_device(device),
+        "shifts": config.DEMUCS_SHIFTS,
+        "progress": True,
+    }
     if config.DEMUCS_SEGMENT is not None:
         kwargs["segment"] = config.DEMUCS_SEGMENT
 

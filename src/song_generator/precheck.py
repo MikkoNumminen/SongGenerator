@@ -139,7 +139,9 @@ def measure(path: Path) -> tuple[int, float]:
 
 
 def make_batches(clips: list[Clip]) -> list[list[Clip]]:
-    batches, current, used = [], [], 0.0
+    batches: list[list[Clip]] = []
+    current: list[Clip] = []
+    used = 0.0
     for clip in clips:
         cost = clip.duration_s + GAP_S
         if current and used + cost > BATCH_SECONDS:

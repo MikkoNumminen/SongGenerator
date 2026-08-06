@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import config
-from .build_bank import _find_vocal, LabelError
+from .build_bank import LabelError, _find_vocal
 from .util import resolve_device, word_similarity
 
 # Below this similarity a hit is more likely noise than a mangled target word.
