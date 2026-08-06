@@ -262,8 +262,8 @@ never see. Resolve it on a real vocal.
   | 13 `.mp3` | none, cover art only | the link, or there is no picture at all |
 
   The ten that still carry video carry it at what was downloaded: three at
-  854x480, then 640x360, 492x360, 360x360, two vertical at 406x720, and one at
-  **426x238**. Usable for a joke, not for anything anyone would watch twice.
+  854x480, two at 640x360, then 492x360, 360x360, two vertical at 406x720,
+  and one at **426x238**. Usable for a joke, not for anything anyone would watch twice.
   Re-fetching at a decent resolution needs the link as much as the thirteen
   with no picture at all do.
 
@@ -293,9 +293,10 @@ never see. Resolve it on a real vocal.
   and the encoder version, which identify nothing. For those the only source of
   truth is whoever downloaded them.
 
-  **Eleven songs are not in the repo at all.** They were rendered from a
-  downloads folder and never copied into `input/`, so that audio exists in one
-  place and clearing the folder loses it. Copying them in costs nothing and is
+  **Eleven songs are not in the repo at all.** Ten were rendered straight out
+  of a downloads folder and one, `seija_simola_-_juna_turkuun`, was analysed
+  and never rendered. None was copied into `input/`, so that audio exists in
+  one place and clearing the folder loses it. Copying them in costs nothing and is
   the thing to do first, because a link is no help once the file it names is
   gone.
 
