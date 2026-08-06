@@ -254,44 +254,53 @@ never see. Resolve it on a real vocal.
   best quality available, which means it needs the link. An index of sources is
   really an index of raw material for an edit that has not been made yet.
 
-  Which changes what "lost" means here, because some of it is already in hand:
+  Which changes what is missing, because some of it is already in hand:
 
   | Songs | Video | What is needed |
   |---|---|---|
   | 10 `.mp4` in `input/` | present, h264 | nothing, unless the resolution is too low |
-  | 12 `.mp3` | none, cover art only | the link, or there is no picture at all |
-  | 1 `.wav` | none | the link |
-  | `seija_simola_-_juna_turkuun` | no file of any kind | the link, and it is the only way back |
+  | 13 `.mp3` | none, cover art only | the link, or there is no picture at all |
+  | 1 `.wav` | none | see below, it may have no source to find |
 
-  The ten that still carry video carry it at what was downloaded, and that
-  ranges from 854x480 down to **426x238**. Usable for a joke, not for anything
-  anyone would watch twice. Re-fetching at a decent resolution needs the link
-  as much as the twelve with no picture at all do.
+  The ten that still carry video carry it at what was downloaded: three at
+  854x480, then 640x360, 492x360, 360x360, two vertical at 406x720, and one at
+  **426x238**. Usable for a joke, not for anything anyone would watch twice.
+  Re-fetching at a decent resolution needs the link as much as the thirteen
+  with no picture at all do.
 
-  The index exists: `input/SOURCES.md`, one row per song, keyed on the slug the
-  tool derives from the input filename, which is both the `work/` directory and
-  the `output/` folder and so the only stable name a song has. What is missing
-  is the address column. It lives in `input/` rather than `docs/` because
-  `docs/` is tracked, and a source list there would publish every link and
-  every local path to anyone who clones the repo.
+  The index is `input/SOURCES.md`, one row per song, keyed on the slug the tool
+  derives from the input filename. That slug names the `work/` directory
+  reliably. It does **not** always name the `output/` folder, because `-o`
+  defaults to the raw input stem and several renders were given short names by
+  hand, so `work/avantasia_-_carry_me_over_official_video` is `output/carry_me_over`.
+  The slug is still the stable key; the output folder is not.
+
+  It lives in `input/` rather than `docs/` because `docs/` is tracked, and a
+  source list there would publish every link and every local path to anyone who
+  clones the repo.
 
   **The files were asked and they do not know.** A downloader can stamp the
-  source URL into what it writes. Checked with `ffprobe`: none of these carries
-  one. They do not all fail equally though. The mp3s carry title, uploading
-  channel, album and year, so one tagged `title=Mokoma - Takatalvi
+  source URL into what it writes. Checked with `ffprobe`: not one of these
+  carries a URL. They do not all fail equally though. Every mp3 carries title,
+  uploading channel, album and year, so one tagged `title=Mokoma - Takatalvi
   (Re-recorded 2018)` and `artist=MokomaOfficial` can be found again by
-  searching for exactly that. The ten mp4s carry no metadata at all. For those
-  the only source of truth is whoever downloaded them.
+  searching for exactly that. The mp4s carry only container tags, `major_brand`
+  and the encoder version, which identify nothing. For those the only source of
+  truth is whoever downloaded them.
 
-  **Ten songs are also not in the repo.** They were rendered straight out of a
+  **Eleven songs are not in the repo at all.** They were rendered from a
   downloads folder and never copied into `input/`, so that audio exists in one
   place and clearing the folder loses it. Copying them in costs nothing and is
-  worth doing before any link is chased, because a link is no help once the
-  file it names is gone.
+  the thing to do first, because a link is no help once the file it names is
+  gone.
 
-  `seija_simola_-_juna_turkuun` is what that looks like afterwards. Cached
-  stems and analysis under `work/`, no input file, no render, no address. It is
-  already gone and nobody noticed when.
+  One open question before the table above is trusted: `paskaperse.wav` is 20.7
+  seconds, PCM, written by a recent ffmpeg, carries no title or artist, and the
+  ceiling table earlier in this file puts its melody at 0.0 semitones above the
+  bank, meaning it sits in the same register as the recorded voice. That is
+  what a home recording looks like rather than something fetched. If it is one,
+  it has no address to find and should say so rather than sit at `unknown`
+  forever.
 
   Every directory involved is gitignored, so a fresh clone has no songs and no
   way to find them. That is right, the repo is the tool and not the media, and
