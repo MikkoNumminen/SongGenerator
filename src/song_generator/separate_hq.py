@@ -126,6 +126,13 @@ def main(argv: list[str] | None = None) -> int:
 
     paths = expand(args.sources)
 
+    # Before the bank is opened, so a mistyped glob is reported as a mistyped
+    # glob. Reading the bank can cost minutes of correlation, and paying that
+    # only to be told the sources do not match it points at the wrong thing.
+    if not paths:
+        print("error: nothing to separate. Pass source files or globs.", file=sys.stderr)
+        return 2
+
     if args.for_bank:
         needed = sources_needed_by_bank(args.bank)
         print(f"  bank was cut from {len(needed)} sources")
@@ -134,10 +141,6 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: none of the given sources is among the "
                   f"{len(needed)} the bank was cut from.", file=sys.stderr)
             return 2
-
-    if not paths:
-        print("error: nothing to separate. Pass source files or globs.", file=sys.stderr)
-        return 2
 
     device = resolve_device(args.device)
     print(f"  {len(paths)} sources on {device}\n")

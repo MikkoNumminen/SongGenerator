@@ -305,7 +305,17 @@ def main(argv: list[str] | None = None) -> int:
               "(the untouched ones are already\n       there), then rebuild "
               "the index from what is actually on disk:\n\n"
               f"           python -m song_generator.build_bank "
-              f"--candidates {args.out} --out {args.out}",
+              f"--candidates \"{args.out}\" --out \"{args.out}\"\n\n"
+              "       One thing that rebuild cannot do for you. It keeps a "
+              "hand-corrected\n"
+              "       syllable boundary only when the entry is already in the "
+              "index it is\n"
+              f"       merging into, and these entries have just left it. If a "
+              "clip above\n"
+              f"       carries \"hand_corrected\" in {args.bank}\\words.json, "
+              "copy that entry\n"
+              "       across by hand as well, or the bounds are silently "
+              "re-detected.",
               file=sys.stderr)
 
     print(f"\n  {rebuilt} clips re-cut into {args.out.resolve()}")
