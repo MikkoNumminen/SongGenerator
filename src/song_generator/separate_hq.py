@@ -76,8 +76,14 @@ def separate_one(path: Path, separator, staging: Path) -> Path | None:
         return None
 
     audio_io.write_wav(target, audio_io.read_wav(vocal))
-    for leftover in staging.glob("*.wav"):
-        leftover.unlink()
+    # Only the stems this call produced, never everything in the directory.
+    # Staging is shared now that the model is loaded once, so a glob would
+    # delete a concurrent run's stems in the gap between its separator writing
+    # them and its copy reading them. That run would then find no vocal, return
+    # None, and be counted neither done nor failed: minutes of GPU work gone
+    # with nothing printed.
+    for name in produced:
+        (staging / name).unlink(missing_ok=True)
     return target
 
 
@@ -133,7 +139,13 @@ def main(argv: list[str] | None = None) -> int:
             traceback.print_exc(file=sys.stderr)
 
     if staging.is_dir() and not any(staging.iterdir()):
-        staging.rmdir()
+        # Tidiness, not correctness. Another run may be writing into the shared
+        # directory between the check and the call, and losing an empty
+        # directory is not worth ending a run over.
+        try:
+            staging.rmdir()
+        except OSError:
+            pass
 
     print(f"\n  {done} separated, {skipped} already done, {failed} failed")
     print("  Demucs stems untouched; vocal_hq.wav sits alongside vocal.wav")

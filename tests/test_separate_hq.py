@@ -66,3 +66,32 @@ def test_sources_already_done_do_not_load_the_model_at_all(tmp_path, monkeypatch
     monkeypatch.setattr(separate_hq, "make_separator", exploding_make)
 
     assert separate_hq.main(_sources(tmp_path)) == 0
+
+
+def test_cleanup_leaves_another_run_s_stems_alone(tmp_path, monkeypatch):
+    """Staging is shared, so the sweep must name what it removes.
+
+    The model loads once now, which meant one staging directory for the whole
+    batch. Deleting every wav in it would delete a concurrent run's stems in
+    the gap between its separator writing them and its copy reading them, and
+    that run would find no vocal, return None, and be counted neither done nor
+    failed.
+    """
+    monkeypatch.setattr(config, "WORK_DIR", str(tmp_path / "work"))
+    staging = tmp_path / "staging"
+    staging.mkdir()
+
+    stranger = staging / "someone_elses_(Vocals)_model.wav"
+    audio_io.write_wav(stranger, np.zeros((2, 256), dtype=np.float32))
+
+    source = tmp_path / "mine.mp4"
+    source.write_bytes(b"x")
+
+    out = separate_hq.separate_one(source, _FakeSeparator(staging), staging)
+
+    assert out is not None and out.is_file(), "this run must still succeed"
+    assert stranger.is_file(), (
+        "the sweep removed a file this call did not produce, which is the "
+        "concurrent-run failure the named cleanup exists to prevent"
+    )
+    assert not list(staging.glob("mine_*")), "its own stems are still cleaned up"
