@@ -9,7 +9,8 @@ work is deterministic, and the only decision -- whether a result sounds good --
 cannot be made by anything without ears.
 
 One failure does not end the batch. A song that comes back Mode B, or one whose
-separation dies, is recorded and the rest continue.
+separation dies, is recorded and the rest continue. The exit code is non-zero
+when any song failed, so a script can tell a partial batch from a clean one.
 """
 
 from __future__ import annotations
@@ -134,7 +135,10 @@ def main(argv: list[str] | None = None) -> int:
     if refused:
         print("\n  Mode B songs have no vocal to borrow the melody from, so they are")
         print("  refused rather than botched. See docs/TODO.md.")
-    return 0 if done else 1
+    # Nineteen of twenty songs failing must not exit 0. Mode B refusals alone
+    # do not fail a batch: a song with no vocal was handled as designed. Any
+    # real failure does, and a batch that rendered nothing at all does too.
+    return 1 if failed or not done else 0
 
 
 if __name__ == "__main__":

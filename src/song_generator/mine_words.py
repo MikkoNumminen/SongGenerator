@@ -167,7 +167,9 @@ def main(argv: list[str] | None = None) -> int:
     print("      bravo1.wav   tangodelta2.wav   eee1.wav   huuto3.wav")
     print("      eeecalculator1.wav      (multi-word names are read as sequences)")
     print("\n  Then:  python -m song_generator.build_bank")
-    return 0 if summary.ok else 1
+    # One source failing must not vanish into exit 0 because another mined.
+    # Every source is still attempted; the code only reports what happened.
+    return 1 if summary.failed else 0
 
 
 def _run_asr(summary: MineSummary, sources: list[Path], args) -> None:

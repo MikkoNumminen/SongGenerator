@@ -18,6 +18,14 @@ SAMPLE_RATE = 44100
 # Output mp3 encode settings (passed to ffmpeg).
 MP3_BITRATE = "320k"
 
+# Ceiling on any single ffmpeg call, in seconds. ffmpeg decodes or encodes a
+# full song in a few seconds, so this fires only when a malformed input or a
+# stalled process has hung, which used to freeze a whole batch run forever
+# with no output. Ten minutes is deliberately generous: far above any real
+# call on this material, so a slow disk or a long mix never trips it, while a
+# genuinely hung process still surfaces within the run instead of outliving it.
+FFMPEG_TIMEOUT_S = 600.0
+
 # Where intermediate artifacts (stems, analysis.json) are cached, relative to
 # the repo root. Re-running on the same song reuses these instead of paying for
 # separation again.

@@ -484,10 +484,21 @@ def parse_text(text: str) -> Arrangement:
 
     if not lines:
         raise ArrangementError("no placements in this arrangement")
+    # A file with no seed header reads as seed 0: the meta table above supplies
+    # "0" as the default, so a hand-written file need not carry one. A header
+    # that is present and unreadable is different. Replay rebuilds the pool of
+    # slices and invented orders from this number, so substituting a default
+    # would play a different arrangement under the same filename and say
+    # nothing, which is exactly the failure this parser exists to refuse.
+    # Only ValueError is possible here: every meta value is a string, either
+    # the default or a stripped header field, so int() cannot see a TypeError.
     try:
         seed = int(meta["seed"])
-    except ValueError:
-        seed = 0
+    except ValueError as exc:
+        raise ArrangementError(
+            f"cannot read the seed {meta['seed']!r}. Replay rebuilds its pool "
+            "from this number, so guessing one would play a different "
+            "arrangement than this file records.") from exc
     return Arrangement(meta["song"], meta["bank"], meta["level"], seed, lines)
 
 

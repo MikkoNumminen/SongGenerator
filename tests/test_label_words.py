@@ -97,3 +97,27 @@ def test_merge_adds_a_row_when_nothing_overlaps():
     assert (filled, added) == (0, 1)
     assert len(rows) == 2
     assert [r.start_s for r in rows] == sorted(r.start_s for r in rows)
+
+
+def test_a_bad_timestamp_is_refused_with_file_and_line(tmp_path):
+    """labels.tsv is edited by hand, so a typo in a number is routine. It used
+    to surface as a bare ValueError traceback; build_bank's sibling parser
+    names the file and line, and this one now matches it."""
+    from song_generator.build_bank import LabelError
+    from song_generator.label_words import read_all_rows
+
+    tsv = tmp_path / "labels.tsv"
+    tsv.write_text("word\tvariant\tstart\tend\n"
+                   "bravo\t\t1.o0\t1.60\n", encoding="utf-8")
+    with pytest.raises(LabelError, match=r"labels\.tsv:2"):
+        read_all_rows(tsv)
+
+
+def test_a_well_formed_file_still_reads(tmp_path):
+    from song_generator.label_words import read_all_rows
+
+    tsv = tmp_path / "labels.tsv"
+    tsv.write_text("word\tvariant\tstart\tend\n"
+                   "bravo\tlow\t1.00\t1.60\n", encoding="utf-8")
+    _, rows = read_all_rows(tsv)
+    assert [(r.word, r.start_s, r.end_s) for r in rows] == [("bravo", 1.0, 1.6)]
