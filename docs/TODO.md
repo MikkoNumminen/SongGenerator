@@ -239,33 +239,6 @@ never see. Resolve it on a real vocal.
   than running a model mid-render, and a clone without the extra behaves
   exactly as it does today.
 
-- **`doctor --song` predicts almost no octave folding on songs that then fold
-  heavily.** The prediction is the number someone acts on before spending a
-  render, so it should either be right or say what it is assuming.
-
-  Measured on `tobias_sammets_avantasia_-_misplaced_among_the_angels_feat_floor_jansen_official`,
-  a 5:16 song whose melody spans A#2 to C6, against the 25-unit bank:
-
-  | | `doctor --song` | the render |
-  |---|---|---|
-  | median shift | 1.3 st | 10.9 st requested, 5.2 after folding |
-  | octave-folded | 0% | 46%, 382 of 831 syllables |
-
-  Not specific to that song or that bank. `musichyva` reports 0.9 st and 0%
-  against the previous bank while its ceiling table entry above sits at 0.86,
-  which is a ceiling only a folded song can have.
-
-  Both numbers cannot describe the same job. The report is the fast way to ask
-  whether a song suits the bank, and answering "no folding" for a song that
-  folds half its syllables is worse than not answering, because it points away
-  from the range problem the item above is about.
-
-  Where to start: whether the prediction walks the melody against the whole
-  bank while placement can only choose units that also fit the slot's length
-  and the word being sung, and whether it is measuring per note or per placed
-  syllable. If it turns out to be a best case rather than a prediction, saying
-  so in the output is enough.
-
 - **Nothing records where a song came from.** Eighteen songs have been analysed
   and seventeen rendered, and for most of them the only surviving trace of the
   original is a filename. `music46.mp4` says nothing about what it is, who
@@ -420,6 +393,36 @@ never see. Resolve it on a real vocal.
 
 Kept rather than deleted, because each says what was tried and why the answer
 turned out the way it did.
+
+- **`doctor --song` predicted almost no folding on songs that folded half
+  their syllables.** It measured each note against the NEAREST take in the
+  bank, which let every slot reach whichever single clip sat closest to it.
+  Selection cannot do that: a unit also has to fit the slot's length and say
+  the word being sung, so what a slot really draws from is the bulk of the
+  bank.
+
+  It now measures against the median pitch of the units that ordinarily place,
+  the same pool the ORDINARY row of the bank report counts. Checked against
+  eight rendered songs:
+
+  | song | folded, measured | predicted now | predicted before |
+  |---|---|---|---|
+  | musickorea | 71% | 78% | 0% |
+  | ghostlights | 67% | 71% | 1% |
+  | dawn | 51% | 58% | 1% |
+  | misplaced | 46% | 48% | 0% |
+  | musichyva | 27% | 38% | 0% |
+  | takatalvi | 10% | 11% | 1% |
+  | cardib_up | 9% | 5% | 0% |
+  | rocketman_bluegrass | 2% | 3% | 0% |
+
+  The old number sat at 0 or 1 for every song whatever happened, including the
+  one that folded 71%. The new one never inverts the order. On `misplaced` the
+  median it reports, 10.9 semitones, is the same figure the render asked for.
+
+  It is still an estimate and now says so in its own output. What it cannot
+  know is which unit selection will actually pick for a given slot.
+
 
 - **Syllables turned out to be worth keeping.** They crowded out the words
   when they could be sung on their own: a clip of `bra` filled a slot as

@@ -221,14 +221,46 @@ def report_song(path: Path, units: list | None) -> None:
             print("    calculator cannot appear in this song. Either shorten the climax")
             print("    units or raise MAX_SYLLABLE_S so fewer held notes get split.")
 
-    # What the melody will actually demand of this bank.
-    sources = np.array([u.midi for u in units if u.midi is not None])
-    if sources.size:
-        wanted = np.array([n["midi"] for n in notes])
-        raw = np.abs(wanted[:, None] - sources[None, :]).min(axis=1)
-        folded = float((raw > config.SHIFT_CAP_SEMITONES).mean())
-        print(f"\n  predicted shift: median {np.median(raw):.1f} semitones, "
-              f"{folded * 100:.0f}% would need octave folding")
+    _report_folding(units, notes)
+
+
+
+def _report_folding(units, notes) -> None:
+    """How far this melody sits from where the bank actually lives.
+
+    Measured against the bank's median pitch, NOT against the nearest take.
+    Nearest-take was what this reported for a long time and it was useless: it
+    read 0% folding on songs that then folded half their syllables, because it
+    let every slot reach whichever single clip sat closest to its note.
+    Selection cannot do that. A unit also has to fit the slot's length and say
+    the word being sung, so what a slot really draws from is the bulk of the
+    bank, and the bulk of this bank is about one pitch wide.
+
+    Checked against eight rendered songs, measured folding against this
+    estimate: 71/78, 67/71, 51/58, 46/48, 27/38, 10/11, 9/5, 2/3. It never
+    inverts the order and is close enough to act on. Nearest-take read 0 or 1
+    per cent for every one of them, including the song that folded 71%.
+    """
+    # The same pool the ORDINARY row of the bank report counts, so two sections
+    # of one doctor run cannot disagree about what places.
+    ordinary = np.array([u.midi for u in units
+                         if u.midi is not None
+                         and not u.is_climax and not u.is_bare_shout])
+    if not ordinary.size:  # a bank of nothing but shouts and payoffs
+        ordinary = np.array([u.midi for u in units if u.midi is not None])
+    if not ordinary.size:
+        return
+
+    centre = float(np.median(ordinary))
+    raw = np.abs(np.array([n["midi"] for n in notes]) - centre)
+    folded = float((raw > config.SHIFT_CAP_SEMITONES).mean())
+    print(f"\n  predicted shift: median {np.median(raw):.1f} semitones from "
+          f"the bank's own register ({note_name(int(round(centre)))}), "
+          f"{folded * 100:.0f}% would need octave folding")
+    print("    An estimate, not the arrangement. It assumes a slot draws from "
+          "the bulk of")
+    print("    the bank rather than from whichever single take sits nearest "
+          "its note.")
 
 
 def build_parser() -> argparse.ArgumentParser:
