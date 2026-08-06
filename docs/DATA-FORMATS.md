@@ -141,9 +141,12 @@ or not. That is what makes this the format a "supply your own lyrics" mode
 would read, without that mode existing yet.
 
 Refused rather than guessed: a word the vocabulary does not have, a line that
-cannot be anchored to a slot, and a sequence the bank cannot say. A silently
-misaligned or dropped word would still play, which is why none of them are
-tolerated.
+cannot be anchored to a slot, a sequence the bank cannot say, and a seed that
+does not read as a number. The seed is load-bearing on replay, since the pool
+of slices and invented orders is rebuilt from it; substituting a default would
+play a different arrangement under this file's name. A silently misaligned or
+dropped word would still play, which is why none of them are tolerated. A file
+with no seed line reads as seed 0.
 
 Each level of a run writes its own file, so a run produces two.
 

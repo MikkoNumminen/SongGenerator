@@ -1,24 +1,26 @@
-"""write_wav must be atomic.
+"""What audio_io must guarantee: a write is atomic, and ffmpeg cannot hang.
 
-Every stale-cache check in the pipeline trusts a wav that exists, and the
-word bank gets overwritten in place, so a write interrupted halfway must
-never leave a truncated file at the final name. The clips it would corrupt
-are hand-recorded and cannot be regenerated.
+Two properties, one shape. Both are failures that used to leave no trace of
+themselves. A write interrupted halfway left a truncated wav at the final
+name, which every stale-cache check in the pipeline then trusted, and the
+clips it would corrupt are hand-recorded and cannot be regenerated. An ffmpeg
+call with no ceiling froze a batch run indefinitely with no output at all.
 
 Samples are compared by decoding, never by file bytes: libsndfile stamps the
 wall-clock time of the write into a PEAK chunk, so byte comparison is flaky
 by design (see AGENTS.md).
 """
 
+import subprocess
 from pathlib import Path
 
 import numpy as np
 import pytest
 
 from song_generator import audio_io, config
+from song_generator.audio_io import AudioError
 
 SR = config.SAMPLE_RATE
-
 
 def _clip(freq: float = 200.0, dur: float = 0.1) -> np.ndarray:
     t = np.arange(int(SR * dur)) / SR
@@ -67,3 +69,33 @@ class TestWriteWavIsAtomic:
             audio_io.write_wav(tmp_path / "tango_1.wav", _clip())
 
         assert list(tmp_path.iterdir()) == []
+
+
+def _hang_ffmpeg(monkeypatch):
+    def run(cmd, **kwargs):
+        assert kwargs.get("timeout") == config.FFMPEG_TIMEOUT_S, \
+            "every ffmpeg call must carry the configured timeout"
+        raise subprocess.TimeoutExpired(cmd, kwargs["timeout"])
+
+    monkeypatch.setattr(audio_io.subprocess, "run", run)
+    monkeypatch.setattr(audio_io.shutil, "which", lambda name: "ffmpeg")
+
+
+def test_the_timeout_is_a_config_constant_not_a_hardcoded_number():
+    """Project rule: no tunable lives outside config.py."""
+    assert config.FFMPEG_TIMEOUT_S > 0
+
+
+def test_a_hung_decode_is_an_error_naming_the_file(tmp_path, monkeypatch):
+    _hang_ffmpeg(monkeypatch)
+    stalled = tmp_path / "stalled.mp3"
+    stalled.write_bytes(b"not audio")
+    with pytest.raises(AudioError, match="stalled.mp3"):
+        audio_io.decode(stalled)
+
+
+def test_a_hung_encode_is_an_error_naming_the_file(tmp_path, monkeypatch):
+    _hang_ffmpeg(monkeypatch)
+    with pytest.raises(AudioError, match="out.mp3"):
+        audio_io.encode_mp3(tmp_path / "out.mp3",
+                            np.zeros((2, 64), dtype=np.float32))

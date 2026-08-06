@@ -218,6 +218,7 @@ def main(argv: list[str] | None = None) -> int:
     model = whisper.load_model(args.model, device=device)
     sr = config.SAMPLE_RATE
 
+    failed_batches = 0
     for i, batch in enumerate(batches, start=1):
         audio = render_batch(batch, sr)
         try:
@@ -226,6 +227,9 @@ def main(argv: list[str] | None = None) -> int:
                 condition_on_previous_text=False, initial_prompt=PROMPT,
             )
         except Exception as exc:
+            # One bad batch must not end the run, but it must not vanish
+            # either: its clips stay unguessed, and the exit code says so.
+            failed_batches += 1
             print(f"    batch {i} failed ({exc})", file=sys.stderr)
             continue
 
@@ -276,6 +280,11 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"\n  {AI}* are guesses to check. {TODO}* had no guess at all.")
     print("  Renaming a clip -- dropping the prefix -- is what confirms it.")
+    if failed_batches:
+        print(f"\n  {failed_batches} of {len(batches)} batches failed; their "
+              "clips are still unguessed. Re-run to try them again.",
+              file=sys.stderr)
+        return 1
     return 0
 
 

@@ -47,7 +47,15 @@ def decode(path: str | Path, sr: int = config.SAMPLE_RATE, channels: int = 2) ->
         "-ac", str(channels), "-ar", str(sr),
         "-",
     ]
-    proc = subprocess.run(cmd, capture_output=True)
+    try:
+        proc = subprocess.run(cmd, capture_output=True,
+                              timeout=config.FFMPEG_TIMEOUT_S)
+    except subprocess.TimeoutExpired as exc:
+        raise AudioError(
+            f"ffmpeg did not finish decoding {path.name} within "
+            f"{config.FFMPEG_TIMEOUT_S:.0f}s. A healthy decode takes seconds, "
+            "so the input is probably malformed or the process hung."
+        ) from exc
     if proc.returncode != 0:
         raise AudioError(f"ffmpeg failed to decode {path.name}:\n{proc.stderr.decode(errors='replace')}")
     if not proc.stdout:
@@ -79,7 +87,15 @@ def encode_mp3(
         str(path),
     ]
     raw = np.ascontiguousarray(audio.T).tobytes()
-    proc = subprocess.run(cmd, input=raw, capture_output=True)
+    try:
+        proc = subprocess.run(cmd, input=raw, capture_output=True,
+                              timeout=config.FFMPEG_TIMEOUT_S)
+    except subprocess.TimeoutExpired as exc:
+        raise AudioError(
+            f"ffmpeg did not finish encoding {path.name} within "
+            f"{config.FFMPEG_TIMEOUT_S:.0f}s. A healthy encode takes seconds, "
+            "so the process has probably hung."
+        ) from exc
     if proc.returncode != 0:
         raise AudioError(f"ffmpeg failed to encode {path.name}:\n{proc.stderr.decode(errors='replace')}")
     return path

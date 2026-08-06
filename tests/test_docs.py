@@ -163,7 +163,11 @@ def test_no_assistant_is_credited_as_an_author():
             continue
         try:
             text = (ROOT / rel).read_text(encoding="utf-8").lower()
-        except (UnicodeDecodeError, FileNotFoundError):
+        except UnicodeDecodeError:
+            # Binary files (wav clips, mp3 renders) cannot carry a prose
+            # credit, and undecodable is the only reason to skip one. A
+            # tracked file that is MISSING is not skipped: swallowing
+            # FileNotFoundError here silently shrank this test's coverage.
             continue
         for pattern, what in patterns:
             if re.search(pattern, text):

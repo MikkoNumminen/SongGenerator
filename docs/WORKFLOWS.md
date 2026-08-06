@@ -67,7 +67,14 @@ wanted.
 ```
 
 One song failing does not end the batch. A song with no vocal is refused as
-Mode B, recorded, and the rest continue.
+Mode B, recorded, and the rest continue. The exit code still tells the truth:
+non-zero when any song failed, so a script or CI step sees a partial batch
+rather than a clean one. Mode B refusals alone do not fail a batch, since a
+song with no vocal was handled exactly as designed. The one exception is a
+batch where nothing rendered at all, which exits non-zero whatever the reason:
+a run that produced no audio is not a success worth reporting. A hung ffmpeg
+cannot stall the run either; every call is bounded by `FFMPEG_TIMEOUT_S` in
+`config.py`.
 
 Each song writes both playfulness levels, so twenty songs is 280 files.
 `--play conservative` narrows it to one level when that is more listening than
@@ -166,6 +173,18 @@ listening. It is the one part that cannot be automated.
 # 4. Build
 .\.venv\Scripts\python.exe -m song_generator.build_bank
 ```
+
+`mine_words` and `precheck` report like `batch` does. One bad source does not
+stop the rest, and the exit code is non-zero when a source failed to mine, so a
+partial run cannot pass for a complete one.
+
+Two limits worth knowing rather than discovering. A failed `--asr` pass does
+**not** make `mine_words` exit non-zero: recognition is a labelling hint that
+gets checked by ear regardless, so a source whose clips were cut correctly has
+not failed because the recogniser fell over. It is counted and reported, and
+the clips are there to name by hand. In `precheck`, a failed transcription
+batch is survived and reported, but a wav that cannot be rendered at all still
+ends the run, because that happens before the part with the handler around it.
 
 **Naming.** A variant label may begin with something the bank knows: `_low`
 starts with the syllable `lo`, and the name is still read as one word plus a

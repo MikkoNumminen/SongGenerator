@@ -147,8 +147,7 @@ def main(argv: list[str] | None = None) -> int:
             traceback.print_exc(file=sys.stderr)
         summary.sources.append(result)
 
-    if args.asr:
-        _run_asr(summary, sources, args)
+    asr_failed = _run_asr(summary, sources, args) if args.asr else 0
 
     total = sum(s.candidates for s in summary.ok)
     shouts = sum(s.shouts for s in summary.ok)
@@ -160,6 +159,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  {named} pre-named by the recogniser")
     for s in summary.failed:
         print(f"    FAILED {s.name}: {s.error}")
+    if asr_failed:
+        print(f"  recognition failed on {asr_failed} of them, so their clips "
+              f"are unnamed. The clips are still there to name by ear.")
 
     print(f"\n  folder    {args.out.resolve()}")
     print("  One subfolder per source. Play them, delete the junk, and rename")
@@ -167,13 +169,24 @@ def main(argv: list[str] | None = None) -> int:
     print("      bravo1.wav   tangodelta2.wav   eee1.wav   huuto3.wav")
     print("      eeecalculator1.wav      (multi-word names are read as sequences)")
     print("\n  Then:  python -m song_generator.build_bank")
-    return 0 if summary.ok else 1
+    # One source failing must not vanish into exit 0 because another mined.
+    # Every source is still attempted; the code only reports what happened.
+    return 1 if summary.failed else 0
 
 
-def _run_asr(summary: MineSummary, sources: list[Path], args) -> None:
+def _run_asr(summary: MineSummary, sources: list[Path], args) -> int:
+    """Run the recogniser over each vocal. Returns how many sources it failed on.
+
+    A failure here is deliberately NOT counted into summary.failed. Mining is
+    what this tool does; recognition is a labelling hint that gets checked by
+    ear afterwards either way, so a source whose clips were cut correctly has
+    not failed just because the recogniser fell over on it. It is reported
+    rather than swallowed, and it leaves the exit code alone.
+    """
     from .label_words import rename_candidates, transcribe
 
     device = resolve_device(args.device)
+    failed = 0
     print("\n  running speech recognition over each separated vocal")
     for i, path in enumerate(sources, start=1):
         folder = args.out / slugify(path.stem)
@@ -191,8 +204,10 @@ def _run_asr(summary: MineSummary, sources: list[Path], args) -> None:
             print(f"  [{i:>3}/{len(sources)}] {path.name}: "
                   f"{confident} named, {maybe} uncertain", flush=True)
         except Exception as exc:
+            failed += 1
             print(f"  [{i:>3}/{len(sources)}] {path.name}: ASR failed ({exc})",
                   file=sys.stderr)
+    return failed
 
 
 if __name__ == "__main__":

@@ -143,7 +143,7 @@ class LabelRow:
 
 def read_all_rows(path: Path) -> tuple[list[str], list[LabelRow]]:
     header, rows = [], []
-    for raw in path.read_text(encoding="utf-8-sig").splitlines():
+    for n, raw in enumerate(path.read_text(encoding="utf-8-sig").splitlines(), start=1):
         if raw.startswith("#") or not raw.strip():
             header.append(raw)
             continue
@@ -154,8 +154,16 @@ def read_all_rows(path: Path) -> tuple[list[str], list[LabelRow]]:
         if len(parts) < 4:
             continue
         parts += [""] * (7 - len(parts))
+        # The file is edited by hand, so a typo in a timestamp is routine.
+        # Refused by file and line, like build_bank's read_labels, rather than
+        # left to surface as a bare traceback.
+        try:
+            start_s, end_s = float(parts[2]), float(parts[3])
+        except ValueError as exc:
+            raise LabelError(
+                f"{path}:{n}: start/end must be numbers ({exc})") from exc
         rows.append(LabelRow(parts[0].strip(), parts[1].strip(),
-                             float(parts[2]), float(parts[3]),
+                             start_s, end_s,
                              parts[4].strip(), parts[5].strip(), parts[6].strip()))
     return header, rows
 

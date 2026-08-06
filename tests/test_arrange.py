@@ -774,9 +774,24 @@ class TestMalformedLinesAreRefusedByNumber:
         with pytest.raises(ArrangementError, match="line 2"):
             parse_text("phrase 0\n  soon  x2  delta\n")
 
-    def test_an_unreadable_seed_does_not_stop_the_file_loading(self):
-        """The seed is provenance, not instruction. A bad one must not throw
-        away an otherwise good arrangement."""
-        arrangement = parse_text("# seed    later\nphrase 0\n  0:00.00  x2  delta\n")
+    def test_an_unreadable_seed_is_refused_by_value(self):
+        """The seed is instruction, not provenance: realise() rebuilds the
+        pool of slices and invented orders from it. Substituting a default
+        used to replay a DIFFERENT arrangement under the same filename and
+        say nothing, which is the failure parse_text exists to refuse."""
+        with pytest.raises(ArrangementError) as exc:
+            parse_text("# seed    later\nphrase 0\n  0:00.00  x2  delta\n")
+        message = str(exc.value)
+        assert "'later'" in message, "the refusal must name the offending value"
+        assert message.startswith("line 1"), (
+            "every other refusal in this parser names its line, and a header "
+            "buried in a long file is no easier to find than a placement"
+        )
+
+    def test_a_missing_seed_header_still_reads_as_zero(self):
+        """Only a seed that is present and unreadable is refused. A file
+        written by hand need not carry one; the default is stated, not
+        guessed."""
+        arrangement = parse_text("phrase 0\n  0:00.00  x2  delta\n")
         assert arrangement.seed == 0
         assert len(arrangement.lines) == 1
