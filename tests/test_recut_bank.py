@@ -11,6 +11,7 @@ the stem, so the right position scores near 1.0 and nothing else comes close.
 """
 
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -192,3 +193,84 @@ class TestRecutWillNotClobberHandNamedClips:
         source = self._bank(tmp_path / "words", ["bravo_1.wav"])
         code = main(["--bank", str(source), "--out", str(tmp_path / "fresh")])
         assert code != 2
+
+
+class TestTheGuardRunsAgainAtWriteTime:
+    """The clash check snapshots --out once, before the write loop, and
+    write_wav overwrites without asking.
+
+    A clip renamed by ear into --out while the loop runs is the same hand
+    work the snapshot guard exists to protect, and it appeared after the
+    snapshot, so without a second check at write time it was clobbered with
+    the guard never having seen it.
+    """
+
+    def _sources(self, tmp_path, monkeypatch):
+        """A work directory with both stems, and WORK_DIR pointed at it."""
+        d = tmp_path / "work" / "asource"
+        d.mkdir(parents=True)
+        stem = _stem()
+        audio_io.write_wav(d / "vocal.wav", stem)
+        audio_io.write_wav(d / "vocal_hq.wav", stem)
+        monkeypatch.setattr(config, "WORK_DIR", str(tmp_path / "work"))
+        return stem
+
+    def _bank(self, tmp_path, stem):
+        bank = tmp_path / "words"
+        bank.mkdir()
+        index = {}
+        for name, start in (("bravo_1.wav", 1.0), ("tango_1.wav", 3.0)):
+            audio_io.write_wav(bank / name, _slice(stem, start, 0.8))
+            index[name] = {"words": [name.split("_")[0]], "syllables": 2,
+                           "duration_s": 0.8, "midi": 53.0}
+        (bank / "words.json").write_text(json.dumps(index), encoding="utf-8")
+        return bank
+
+    def _plant_during_the_write_loop(self, monkeypatch, out):
+        """Drop a hand-named clip into --out the moment the loop starts.
+
+        The loop's first read of the better stem is the earliest point that
+        is provably after the snapshot was taken.
+        """
+        real = audio_io.read_wav
+
+        def read_and_plant(path):
+            if Path(path).name == "vocal_hq.wav" and not (out / "tango_1.wav").exists():
+                (out / "tango_1.wav").write_bytes(b"hand work, mid-run")
+            return real(path)
+
+        monkeypatch.setattr(audio_io, "read_wav", read_and_plant)
+
+    def test_a_clip_that_appears_mid_run_is_not_clobbered(self, tmp_path, monkeypatch, capsys):
+        from song_generator.recut_bank import main
+
+        stem = self._sources(tmp_path, monkeypatch)
+        bank = self._bank(tmp_path, stem)
+        out = tmp_path / "fresh"
+        self._plant_during_the_write_loop(monkeypatch, out)
+
+        code = main(["--bank", str(bank), "--out", str(out)])
+
+        assert code == 0
+        assert (out / "tango_1.wav").read_bytes() == b"hand work, mid-run"
+        assert "left untouched" in capsys.readouterr().err
+        assert (out / "bravo_1.wav").is_file(), "the clean clip is still re-cut"
+
+        index = json.loads((out / "words.json").read_text(encoding="utf-8"))
+        assert "bravo_1.wav" in index
+        assert "tango_1.wav" not in index, (
+            "the index must not describe hand work with this tool's numbers"
+        )
+
+    def test_overwrite_still_means_overwrite(self, tmp_path, monkeypatch):
+        from song_generator.recut_bank import main
+
+        stem = self._sources(tmp_path, monkeypatch)
+        bank = self._bank(tmp_path, stem)
+        out = tmp_path / "fresh"
+        self._plant_during_the_write_loop(monkeypatch, out)
+
+        code = main(["--bank", str(bank), "--out", str(out), "--overwrite"])
+
+        assert code == 0
+        assert (out / "tango_1.wav").read_bytes() != b"hand work, mid-run"

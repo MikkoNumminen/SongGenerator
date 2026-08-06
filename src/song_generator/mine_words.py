@@ -20,7 +20,6 @@ suggestion for you to confirm, correct or delete by ear.
 from __future__ import annotations
 
 import argparse
-import glob
 import sys
 import traceback
 from dataclasses import dataclass, field
@@ -29,7 +28,7 @@ from pathlib import Path
 from . import audio_io, config
 from .extract_words import Thresholds, cut, find_candidates, write_labels
 from .separate import separate
-from .util import resolve_device, slugify, work_dir_for
+from .util import expand, resolve_device, slugify, work_dir_for
 
 
 @dataclass
@@ -75,14 +74,20 @@ def mine_one(path: Path, out_root: Path, device: str, thresholds: Thresholds,
     folder = out_root / slugify(path.stem)
     folder.mkdir(parents=True, exist_ok=True)
 
-    for c in candidates:
-        hint = "shout" if looks_like_shout(c) else f"{c.n_syllables}syl"
-        name = f"c{c.i:02d}__{hint}__{c.note}__{c.start_s:.2f}-{c.end_s:.2f}.wav"
-        c.path = audio_io.write_wav(folder / name, cut(vocal, c))
-        if hint == "shout":
-            result.shouts += 1
-
-    write_labels(folder / "labels.tsv", candidates)
+    # labels.tsv lands whatever happens to the cutting. It used to be written
+    # only after every clip, so a run dying halfway left candidates on disk
+    # with no labels file to review them against; now an interrupted run
+    # still records whatever was cut, and a clip not yet written simply has
+    # no filename in its row.
+    try:
+        for c in candidates:
+            hint = "shout" if looks_like_shout(c) else f"{c.n_syllables}syl"
+            name = f"c{c.i:02d}__{hint}__{c.note}__{c.start_s:.2f}-{c.end_s:.2f}.wav"
+            c.path = audio_io.write_wav(folder / name, cut(vocal, c))
+            if hint == "shout":
+                result.shouts += 1
+    finally:
+        write_labels(folder / "labels.tsv", candidates)
     return result
 
 
@@ -103,25 +108,6 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--gap", type=float, default=config.WORD_GAP_S)
     p.add_argument("--min-dur", type=float, default=config.WORD_MIN_S)
     return p
-
-
-def expand(patterns: list[str]) -> list[Path]:
-    found: list[Path] = []
-    for pattern in patterns:
-        hits = [Path(p) for p in glob.glob(pattern)]
-        if hits:
-            found.extend(sorted(hits))
-        elif Path(pattern).is_file():
-            found.append(Path(pattern))
-        else:
-            print(f"  warning: nothing matched {pattern!r}", file=sys.stderr)
-    # Dedupe while keeping order.
-    seen, out = set(), []
-    for p in found:
-        if p.resolve() not in seen:
-            seen.add(p.resolve())
-            out.append(p)
-    return out
 
 
 def main(argv: list[str] | None = None) -> int:

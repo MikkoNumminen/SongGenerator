@@ -332,6 +332,24 @@ COMPOSE_CROSSFADE_S = 0.02
 # probably a held shout rather than a clipped word, and gets flagged as such.
 SHOUT_MIN_S = 0.35
 
+# How recogniser output is scored against a bank word. Two stages score the
+# same clips with the one function in util.py: label_words against a
+# transcript of the whole vocal, precheck against per-clip guesses. The
+# numbers live here so retuning one stage cannot leave the other behind.
+#
+# A clean prefix of a target word scores at least MATCH_PREFIX_SCORE. A long
+# word heard as its own first syllables ("kilo" for "kilometer") does poorly
+# on whole-word ratio yet is very likely that word. 0.75 clears the accept
+# threshold in label_words (0.55), so the hit is kept as a hint, and stays
+# below its confident-rename bar (0.85), so a prefix alone can never rename a
+# clip to a bank name without someone listening to it first.
+MATCH_PREFIX_SCORE = 0.75
+
+# The prefix reward needs at least this many letters heard. Two or three
+# letters are the start of half the recogniser's noise; four is the shortest
+# run that is plausibly the beginning of the word rather than a coincidence.
+MATCH_PREFIX_MIN_LEN = 4
+
 
 # ---------------------------------------------------------------------------
 # BANK STANDARDISATION -- assembling clips that sit together

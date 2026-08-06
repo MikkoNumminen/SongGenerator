@@ -204,7 +204,16 @@ def resolve_bank(words_dir: Path, prefer_standardised: bool = True) -> tuple[Pat
 
 def load_bank(words_dir: Path = Path("words"),
               prefer_standardised: bool = True,
-              singable_only: bool = True) -> list[Unit]:
+              singable_only: bool = True,
+              place_bare_syllables: bool | None = None) -> list[Unit]:
+    """Read a bank off disk into units.
+
+    place_bare_syllables is a per-run request (the --bare-syllables flag) and
+    travels here as an argument on purpose. It used to be written into config
+    as a module global, which outlived the run that asked for it: batch calls
+    the render path once per song in one process, so every later song
+    inherited the first one's flag. None means the config default.
+    """
     words_dir, standardised = resolve_bank(words_dir, prefer_standardised)
     index = words_dir / "words.json"
     if not index.is_file():
@@ -240,11 +249,14 @@ def load_bank(words_dir: Path = Path("words"),
 
     units.extend(compose_words(units))
 
+    if place_bare_syllables is None:
+        place_bare_syllables = config.PLACE_BARE_SYLLABLES
+
     # A clip of syllables is not singable on its own, but it is raw material:
     # arrange.py cuts it into its syllables and spells whole words out of them.
     # Dropping it here threw that material away before anything could use it,
     # which silently wasted every syllable clip somebody cut by hand.
-    if singable_only and not config.PLACE_BARE_SYLLABLES:
+    if singable_only and not place_bare_syllables:
         singable = [u for u in units if u.is_word_like]
         if singable:
             return singable

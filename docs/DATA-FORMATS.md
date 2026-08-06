@@ -249,6 +249,10 @@ case-insensitive, so `Low` and `low` name one file, and without folding them
 together two rows would validate, neither would trigger the collision counter,
 and the second clip would replace the first while `words.json` claimed both.
 
+`mine_words` writes this file even when a run dies mid-cut, so whatever was
+cut is still reviewable: every candidate keeps its row, and a clip that was
+never written simply has no filename in the last column.
+
 ---
 
 ## Filename conventions

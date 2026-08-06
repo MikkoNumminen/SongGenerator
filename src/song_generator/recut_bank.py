@@ -247,7 +247,16 @@ def main(argv: list[str] | None = None) -> int:
 
     args.out.mkdir(parents=True, exist_ok=True)
     rebuilt = 0
+    protected: list[str] = []
     for name, origin in found.items():
+        # The guard above ran against a snapshot taken before this loop, and
+        # write_wav overwrites without asking. A clip that appears in --out
+        # while the loop runs, say somebody renaming a keeper by ear into the
+        # bank mid-run, is the same hand work the snapshot guard protects, so
+        # the check has to happen again at write time.
+        if (args.out / name).exists() and not args.overwrite:
+            protected.append(name)
+            continue
         vocal = audio_io.read_wav(origin.work_dir / args.stem)
         lo = max(0, int(origin.start_s * config.SAMPLE_RATE))
         hi = min(vocal.shape[1], int(origin.end_s * config.SAMPLE_RATE))
@@ -262,9 +271,21 @@ def main(argv: list[str] | None = None) -> int:
         audio_io.write_wav(args.out / name, clip)
         rebuilt += 1
 
-    kept = {k: v for k, v in entries.items() if k in found}
+    # Clips that were protected mid-run stay out of the index too: their audio
+    # is somebody's hand work, not this tool's cut, and describing it with the
+    # old bank's numbers would be a guess.
+    kept = {k: v for k, v in entries.items() if k in found and k not in protected}
     (args.out / "words.json").write_text(
         json.dumps(kept, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    if protected:
+        print(f"\n  {len(protected)} clips appeared in {args.out} while this "
+              "ran and were left untouched:", file=sys.stderr)
+        for name in protected:
+            print(f"           {name}", file=sys.stderr)
+        print("       They may be hand-named recordings. Pass --overwrite only "
+              "if you are\n       certain they are this tool's own output.",
+              file=sys.stderr)
 
     print(f"\n  {rebuilt} clips re-cut into {args.out.resolve()}")
     print(f"  every name, label and syllable boundary preserved")

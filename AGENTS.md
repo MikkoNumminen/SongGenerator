@@ -46,8 +46,9 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   clips in a bank get renamed by ear and added to over time, and none of that
   is regenerable. `recut_bank --out` defaulted to `words_hq` from when it
   created that directory, and would have written over eighteen hand-named
-  recordings; it now refuses unless told otherwise. Any new tool that writes
-  clips needs the same refusal.
+  recordings; it now refuses unless told otherwise, and checks again at write
+  time, since a clip renamed into the folder mid-run is the same hand work.
+  Any new tool that writes clips needs the same refusal.
 - **Never re-separate needlessly.** Stems are cached under `work/<song>/`.
   Separation is by far the slowest stage; everything else is seconds.
 

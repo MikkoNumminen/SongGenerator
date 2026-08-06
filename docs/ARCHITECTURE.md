@@ -61,7 +61,7 @@ song.mp4
 | `mapping.py` | Every arrangement decision, plus render and mix | `load_bank`, `plan_words`, `render`, `mix` |
 | `pitchshift.py` | WORLD or Rubber Band; octave folding | `render_unit`, `fold_shift` |
 | `config.py` | Every tunable, grouped by stage, with the reasoning |, |
-| `util.py` | Device resolution, work-dir naming, formatting | `resolve_device`, `work_dir_for` |
+| `util.py` | Device resolution, work-dir naming, glob expansion, word scoring | `resolve_device`, `work_dir_for`, `expand`, `word_similarity` |
 
 ### Building the bank
 
