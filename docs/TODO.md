@@ -242,41 +242,60 @@ never see. Resolve it on a real vocal.
   than running a model mid-render, and a clone without the extra behaves
   exactly as it does today.
 
-- **Nothing records where a song came from.** Eighteen songs have been analysed
-  and seventeen rendered, and for most of them the only surviving trace of the
-  original is a filename. `music46.mp4` says nothing about what it is, who
-  recorded it or where it was fetched from, and no amount of reading the repo
-  recovers that.
+- **Not every song that has been made records where it came from, and the
+  video is the reason that matters.** Twenty-four songs are indexed. Two have
+  their source written down. For the other twenty-two the only surviving trace
+  of the original is a filename, and `music46.mp4` says nothing about what it
+  is, who made it, or which link it came from.
 
-  This matters more than it looks, because every directory the sources live in
-  is gitignored: `input/`, `work/` and `output/` are all excluded, so a fresh
-  clone has no songs and no way to find them again. Four of the current songs
-  were rendered straight out of a downloads folder and are not even in
-  `input/`. Losing that folder loses the source.
+  **The point is not provenance, it is the picture.** A rendered song is new
+  audio over the original instrumental, and the obvious next thing to do with
+  one is cut the original music video to fit it. That needs the video, at the
+  best quality available, which means it needs the link. An index of sources is
+  really an index of raw material for an edit that has not been made yet.
 
-  What to record, one row per song: the name the tool knows it by (which is the
-  `work/` directory and the `output/` folder), the original address, and what
-  that address is. An address is a web link for anything fetched, or a path for
-  anything ripped, recorded or received as a file. The tool derives its own
-  name by slugifying the input filename, so the name is a stable key.
+  Which changes what "lost" means here, because some of it is already in hand:
 
-  What is already knowable, and what is not:
-
-  | Songs | Local source | Original address |
+  | Songs | Video | What is needed |
   |---|---|---|
-  | 13 in `input/` | present | unknown, only the owner has these |
-  | 4 rendered from downloads | present, outside the repo | unknown |
-  | `seija_simola_-_juna_turkuun` | analysed, no input file left | unknown |
+  | 10 `.mp4` in `input/` | present, h264 | nothing, unless the resolution is too low |
+  | 12 `.mp3` | none, cover art only | the link, or there is no picture at all |
+  | 1 `.wav` | none | the link |
+  | `seija_simola_-_juna_turkuun` | no file of any kind | the link, and it is the only way back |
 
-  So the local half can be filled in by listing directories, and the half worth
-  having cannot. That part is a sitting-down-and-writing job for whoever has the
-  links.
+  The ten that still carry video carry it at what was downloaded, and that
+  ranges from 854x480 down to **426x238**. Usable for a joke, not for anything
+  anyone would watch twice. Re-fetching at a decent resolution needs the link
+  as much as the twelve with no picture at all do.
 
-  One decision to make first: whether the file is tracked. `docs/` is tracked,
-  so a file there publishes every link to anyone who clones the repo. If this is
-  a private index of where the audio came from, it belongs beside the audio in a
-  gitignored location instead, and the tracked docs need only say that it exists
-  and what shape it has.
+  The index exists: `input/SOURCES.md`, one row per song, keyed on the slug the
+  tool derives from the input filename, which is both the `work/` directory and
+  the `output/` folder and so the only stable name a song has. What is missing
+  is the address column. It lives in `input/` rather than `docs/` because
+  `docs/` is tracked, and a source list there would publish every link and
+  every local path to anyone who clones the repo.
+
+  **The files were asked and they do not know.** A downloader can stamp the
+  source URL into what it writes. Checked with `ffprobe`: none of these carries
+  one. They do not all fail equally though. The mp3s carry title, uploading
+  channel, album and year, so one tagged `title=Mokoma - Takatalvi
+  (Re-recorded 2018)` and `artist=MokomaOfficial` can be found again by
+  searching for exactly that. The ten mp4s carry no metadata at all. For those
+  the only source of truth is whoever downloaded them.
+
+  **Ten songs are also not in the repo.** They were rendered straight out of a
+  downloads folder and never copied into `input/`, so that audio exists in one
+  place and clearing the folder loses it. Copying them in costs nothing and is
+  worth doing before any link is chased, because a link is no help once the
+  file it names is gone.
+
+  `seija_simola_-_juna_turkuun` is what that looks like afterwards. Cached
+  stems and analysis under `work/`, no input file, no render, no address. It is
+  already gone and nobody noticed when.
+
+  Every directory involved is gitignored, so a fresh clone has no songs and no
+  way to find them. That is right, the repo is the tool and not the media, and
+  it is exactly why the index has to carry the addresses.
 
 - **A live site: drop a song in, get a paskaperse back.** Nothing about the
   pipeline needs a person once the bank exists, so the interesting question is
