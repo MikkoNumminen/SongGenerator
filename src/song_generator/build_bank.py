@@ -523,10 +523,14 @@ def main(argv: list[str] | None = None) -> int:
             continue
 
         # Belt and braces over the variant check in read_labels: nothing built
-        # from data may ever name a path outside the bank directory.
+        # from data may ever name a path outside the bank directory. Reported
+        # like any other label problem rather than raised, because escaping
+        # main() as a traceback would say less than the message does.
         target = (args.out / name).resolve()
         if not target.is_relative_to(out_dir):
-            raise LabelError(f"clip {name!r} would be written outside {args.out}")
+            print(f"error: clip {name!r} would be written outside {args.out}",
+                  file=sys.stderr)
+            return 2
 
         audio_io.write_wav(target, clip)
         midi, dur = measure(clip, config.SAMPLE_RATE, device)
