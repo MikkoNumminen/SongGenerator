@@ -24,9 +24,13 @@ import argparse
 import sys
 import traceback
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from . import audio_io, config
 from .util import expand, resolve_device, slugify
+
+if TYPE_CHECKING:  # only for the cache annotation; numpy is not needed at runtime here
+    import numpy as np
 
 
 def sources_needed_by_bank(bank: Path) -> set[str]:
@@ -41,7 +45,10 @@ def sources_needed_by_bank(bank: Path) -> set[str]:
 
     entries = json.loads(index.read_text(encoding="utf-8"))
     dirs = work_dirs()
-    cache: dict[Path, object] = {}
+    # by_correlation stores decimated stems here and reads them back, so the
+    # value type is load-bearing rather than decorative: object hid the fact
+    # that this dict is the correlation cache.
+    cache: dict[Path, np.ndarray] = {}
     needed: set[str] = set()
 
     for name, e in entries.items():
