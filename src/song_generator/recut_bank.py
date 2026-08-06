@@ -12,8 +12,11 @@ cannot unmix two things a better separator never mixes, and speech-enhancement
 models smooth away exactly the crack and rasp that make shouted singing funny.
 So the clips are cut again, from better stems, over the identical time ranges.
 
-Nothing needs re-listening. Every name, label and syllable boundary survives,
-because only the audio underneath is replaced.
+Nothing needs re-listening. Every clip it re-cuts keeps its name, label and
+syllable boundary, because only the audio underneath is replaced. A clip it
+refuses to touch, because somebody put a file of that name in the output while
+it ran or because the span collapsed against the new stem, is named on stderr
+and left out of the rebuilt index.
 
 Provenance comes from two places:
   - most clips carry their source and timestamps in the name they were cut with
@@ -318,7 +321,14 @@ def main(argv: list[str] | None = None) -> int:
               file=sys.stderr)
 
     print(f"\n  {rebuilt} clips re-cut into {args.out.resolve()}")
-    print("  every name, label and syllable boundary preserved")
+    # Qualified when anything was skipped. Printing the absolute claim directly
+    # under a notice that just listed dropped clips reads as though the notice
+    # did not count.
+    if excluded:
+        print(f"  name, label and syllable boundary preserved on all of them; "
+              f"{len(excluded)} other clips were skipped, listed above")
+    else:
+        print("  every name, label and syllable boundary preserved")
     print(f"\n  Compare:  song-generator.exe input\\song.mp4 --words-dir {args.out}")
     return 0
 
