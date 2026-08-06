@@ -88,7 +88,7 @@ Every arrangement is logged, so nothing good is lost to a re-roll.
 
 ```powershell
 .\.venv\Scripts\song-generator.exe input\song.mp4 `
-    --arrangement work\songrrangementsţ686-wild.arr
+    --arrangement work\song\arrangements\543686-wild.arr
 ```
 
 The file is readable and editable. Change the words on a line, delete a line,

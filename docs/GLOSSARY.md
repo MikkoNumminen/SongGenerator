@@ -59,9 +59,14 @@ run.
 `calculator`. Plus `aah`, the shout.
 
 **Syllable**. A fragment of a word (`bra`, `vo`, `me`, `ter`). Kept for
-*spelling* words that were never recorded intact, not for singing on its own
+*spelling* words that were never recorded intact, not for singing on its own:
 a clip of `bra` fills a slot as neatly as one of `bravo` and says nothing.
-Currently set aside with a `SYL_` prefix.
+
+They are in the bank and stay there. The pool a song is chosen from is
+filtered to whole words, so a bare syllable is never placed, and `arrange`
+cuts them apart to spell words no recording contains. `set_aside` exists for a
+bank whose syllables really are junk, and reports which words would stop being
+spellable first.
 
 **Shout** `aah`. Treated unlike everything else: never pitch-shifted,
 never time-stretched, never resynthesised, because a vocoder smooths away

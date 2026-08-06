@@ -190,10 +190,10 @@ never see. Resolve it on a real vocal.
   |---|---|---|---|
   | 0 st | 1.001 | +0.1 | 0.051 |
   | 6 st | 1.023 | +0.9 | 0.053 |
-  | **7 st, the cap** | 1.022 | +0.8 | 0.058 |
+  | **7 st, the cap then** | 1.022 | +0.8 | 0.058 |
   | **9 st** | 1.001 | +0.7 | 0.062 |
   | 10 st | 1.015 | +2.1 | 0.061 |
-  | **12 st** | 0.986 | +3.3 | 0.126 |
+  | **12 st, the cap now** | 0.986 | +3.3 | 0.126 |
   | 14 st | 1.034 | +3.6 | 0.080 |
 
   Formants never drift: WORLD holds the vocal tract within 4% of its own size
@@ -205,15 +205,18 @@ never see. Resolve it on a real vocal.
   flat out to 9 semitones and then climbs.
 
   So the cap is not where the damage begins. **9 is nearly free**: same
-  harmonicity as 7, envelope error a hair above it, and on the ceiling table
-  above it takes rocketman from 0.87 to 0.96 and musicwtf from 0.86 to 0.96.
-  **12 is not free**: harmonicity up 2.5 dB over the cap and envelope error
-  more than doubled, which is the smoothing that would cost the voice its
-  roughness.
+  harmonicity as 7 and envelope error a hair above it. **12 is not free**:
+  harmonicity up 2.5 dB and envelope error more than doubled, which is the
+  smoothing that would cost the voice its roughness.
 
-  Raising the cap to 9 looks defensible on measurement alone. Going past that
-  is an ear question, and scratch/cap holds two songs rendered at 7 and at 12
-  for exactly that.
+  **This is what the measurement said, and the ear overruled it.** On
+  measurement alone 9 was the defensible number and 12 looked expensive. The
+  two songs in scratch/cap were rendered at 7 and at 12 to settle it, and 12
+  sounded better on both, so that is where SHIFT_CAP_SEMITONES is. What the
+  numbers above priced was resynthesis damage to one clip; what they could not
+  price is a whole song landing an octave out, which is what the cap was
+  buying at 7. The table is kept because it is still the honest cost of a big
+  shift, not because the question is open.
 
   **The arithmetic above proves what is reachable, not that it is reachable.**
   It assumes a +12 variant sounds like a recording. Generating those variants
