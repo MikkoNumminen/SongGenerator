@@ -302,3 +302,21 @@ class TestLabelVariantIsConfined:
         message = str(exc.value)
         assert message.startswith(f"{path}:2"), "the error must name the file and line"
         assert repr(variant) in message, "the error must name the offending value"
+
+    def test_case_only_variants_collapse_to_one_name(self, tmp_path):
+        """Windows names one file for Low and low, but the collision counter
+        compares names case-sensitively. Left as written, both rows would pass
+        validation, neither would get a counter, the second clip would replace
+        the first, and words.json would describe two clips over one file."""
+        path = tmp_path / "labels.tsv"
+        path.write_text(
+            "word\tvariant\tstart\tend\n"
+            "bravo\tLow\t0.090\t0.480\n"
+            "bravo\tlow\t0.500\t0.900\n",
+            encoding="utf-8",
+        )
+        rows = read_labels(path)
+        assert [r.variant for r in rows] == ["low", "low"], (
+            "both rows must reduce to the same variant, so the collision "
+            "counter downstream can see that they clash"
+        )

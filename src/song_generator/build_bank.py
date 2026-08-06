@@ -92,11 +92,19 @@ def read_labels(path: Path) -> list[Row]:
         if end_s <= start_s:
             raise LabelError(f"{path}:{n}: end ({end_s}) must be after start ({start_s})")
 
-        variant = parts[1].strip()
+        # Lowercased like the word column above, and for a sharper reason:
+        # Windows filenames are case-insensitive, so "Low" and "low" name one
+        # file while the collision check a few hundred lines down compares
+        # names case-sensitively. Both rows would validate, neither would
+        # trigger the counter, the second write would replace the first, and
+        # words.json would describe two clips where one file exists.
+        variant = parts[1].strip().lower()
         if not _VARIANT_RE.fullmatch(variant):
             raise LabelError(
                 f"{path}:{n}: variant {variant!r} is not usable in a filename. "
-                f"Only letters, digits, _ and - are allowed (or leave it empty)."
+                f"Only the letters a-z, digits, _ and - are allowed "
+                f"(or leave it empty). Accents are not: ä has no place in a "
+                f"name every tool downstream has to read."
             )
 
         rows.append(Row(word, variant, start_s, end_s, n))

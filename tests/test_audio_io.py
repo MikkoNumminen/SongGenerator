@@ -10,6 +10,8 @@ wall-clock time of the write into a PEAK chunk, so byte comparison is flaky
 by design (see AGENTS.md).
 """
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -37,7 +39,12 @@ class TestWriteWavIsAtomic:
         original = _clip(freq=200.0)
         dest = audio_io.write_wav(tmp_path / "bravo_1.wav", original)
 
-        def boom(*args, **kwargs):
+        def boom(target, *args, **kwargs):
+            # Writes before it fails, which is the whole point: a fake that
+            # raises without touching the file passes on the old code too,
+            # since that also left the destination alone. Only a partial write
+            # tells the two apart.
+            Path(target).write_bytes(b"half a wav and then the power went")
             raise RuntimeError("disk full")
 
         monkeypatch.setattr(audio_io.sf, "write", boom)
@@ -47,7 +54,12 @@ class TestWriteWavIsAtomic:
         np.testing.assert_allclose(audio_io.read_wav(dest), original, atol=1e-6)
 
     def test_a_failed_write_leaves_no_temp_file_behind(self, tmp_path, monkeypatch):
-        def boom(*args, **kwargs):
+        def boom(target, *args, **kwargs):
+            # Writes before it fails, which is the whole point: a fake that
+            # raises without touching the file passes on the old code too,
+            # since that also left the destination alone. Only a partial write
+            # tells the two apart.
+            Path(target).write_bytes(b"half a wav and then the power went")
             raise RuntimeError("disk full")
 
         monkeypatch.setattr(audio_io.sf, "write", boom)

@@ -71,7 +71,11 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   interrupted write must never leave a truncated file at the final name.
   `write_wav` writes to a temp file beside the destination and renames it into
   place. Any new code that writes a wav goes through it, never through
-  `sf.write` straight onto the final path.
+  `sf.write` straight onto the final path. The temp is named `.<clip>-XXXX.tmp`
+  and is removed on any failure, but a process killed outright leaves one
+  behind. It is hidden from every `*.wav` glob by that suffix, which also means
+  nothing will ever report it: a stray `.tmp` in a bank directory is safe to
+  delete.
 - **A float WAV is not a pure function of its samples.** libsndfile writes a
   PEAK chunk holding the wall-clock time of the write, at byte 60. Two runs
   producing bit-identical audio therefore produce files that differ by that one
