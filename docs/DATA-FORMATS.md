@@ -233,6 +233,19 @@ bravo		0.090	0.480	2	F3	c01.wav
 
 `?` or `-` skips a row. Lines beginning `#` are comments.
 
+`variant` becomes part of the output filename (`<word>_<variant>.wav`), so it
+may only contain the letters `a-z`, digits, `_` and `-`. Empty is fine; a
+counter is substituted. Anything else, a slash or `..` in particular, is
+refused with the line number, because it would let a hand-edited row write
+outside the bank directory. The letter range is meant literally and excludes
+accents, so `hä` is refused: a bank filename has to survive every tool that
+reads it.
+
+It is lowercased on the way in, like the word column. Windows filenames are
+case-insensitive, so `Low` and `low` name one file, and without folding them
+together two rows would validate, neither would trigger the collision counter,
+and the second clip would replace the first while `words.json` claimed both.
+
 ---
 
 ## Filename conventions
