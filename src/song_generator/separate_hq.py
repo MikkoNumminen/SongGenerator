@@ -16,13 +16,12 @@ anything wrong with the recording.
 from __future__ import annotations
 
 import argparse
-import glob
 import sys
 import traceback
 from pathlib import Path
 
 from . import audio_io, config
-from .util import resolve_device, slugify
+from .util import expand, resolve_device, slugify
 
 
 def sources_needed_by_bank(bank: Path) -> set[str]:
@@ -92,11 +91,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
-    paths: list[Path] = []
-    for pattern in args.sources:
-        hits = [Path(p) for p in glob.glob(pattern)]
-        paths.extend(sorted(hits) if hits else
-                     ([Path(pattern)] if Path(pattern).is_file() else []))
+    paths = expand(args.sources)
 
     if args.for_bank:
         needed = sources_needed_by_bank(args.bank)

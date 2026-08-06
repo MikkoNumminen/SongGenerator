@@ -22,12 +22,11 @@ import re
 import sys
 import unicodedata
 from dataclasses import dataclass
-from difflib import SequenceMatcher
 from pathlib import Path
 
 from . import config
 from .build_bank import _find_vocal, LabelError
-from .util import resolve_device
+from .util import resolve_device, word_similarity
 
 # Below this similarity a hit is more likely noise than a mangled target word.
 MATCH_THRESHOLD = 0.55
@@ -72,12 +71,9 @@ def best_target(heard: str) -> tuple[str | None, float]:
         # mine_words finds these instead.
         if target in config.SHOUT_WORDS:
             continue
-        ratio = SequenceMatcher(None, heard, target).ratio()
-        # A long target heard as one of its own syllables ("porno" for
-        # "kilometer") scores poorly on whole-word ratio but is still very
-        # likely that word, so reward a clean prefix too.
-        if len(heard) >= 4 and target.startswith(heard):
-            ratio = max(ratio, 0.75)
+        # Shared with precheck, which scores the same clips at its own stage.
+        # The prefix reward and its reasoning live with MATCH_PREFIX_SCORE.
+        ratio = word_similarity(heard, target)
         if ratio > score:
             best, score = target, ratio
     return best, score

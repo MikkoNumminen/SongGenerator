@@ -31,7 +31,6 @@ from __future__ import annotations
 import argparse
 import sys
 from dataclasses import dataclass, field
-from difflib import SequenceMatcher
 from pathlib import Path
 
 import numpy as np
@@ -40,7 +39,7 @@ from . import audio_io, config
 from .build_bank import parse_phrase
 from .extract_words import _count_syllables, _envelope_db
 from .label_words import normalise
-from .util import resolve_device
+from .util import resolve_device, word_similarity
 
 AI = "AI_"
 TODO = "TODO_"
@@ -99,9 +98,9 @@ def match_single(heard: str, syllables: int) -> tuple[list[str], float]:
         return [], 0.0
     best, score = None, 0.0
     for target in candidates_for(syllables):
-        ratio = SequenceMatcher(None, heard, target).ratio()
-        if len(heard) >= 4 and target.startswith(heard):
-            ratio = max(ratio, 0.75)
+        # Shared with label_words, which scores the same clips at its own
+        # stage. The prefix reward lives with MATCH_PREFIX_SCORE in config.
+        ratio = word_similarity(heard, target)
         if ratio > score:
             best, score = target, ratio
     return ([best], score) if best and score >= WEAK else ([], score)

@@ -16,12 +16,13 @@ when any song failed, so a script can tell a partial batch from a clean one.
 from __future__ import annotations
 
 import argparse
-import glob
 import sys
 import time
 import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from .util import expand
 
 
 @dataclass
@@ -34,26 +35,6 @@ class Result:
     slots: str = ""
     mimicry: float = 0.0
     error: str = ""
-
-
-def expand(patterns: list[str]) -> list[Path]:
-    found: list[Path] = []
-    for pattern in patterns:
-        hits = [Path(p) for p in glob.glob(pattern)]
-        if hits:
-            found.extend(sorted(hits))
-        elif Path(pattern).is_file():
-            found.append(Path(pattern))
-        else:
-            print(f"  warning: nothing matched {pattern!r}", file=sys.stderr)
-
-    seen, out = set(), []
-    for p in found:
-        key = p.resolve()
-        if key not in seen:
-            seen.add(key)
-            out.append(p)
-    return out
 
 
 def build_parser() -> argparse.ArgumentParser:
