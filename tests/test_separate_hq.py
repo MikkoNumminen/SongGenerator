@@ -95,3 +95,57 @@ def test_cleanup_leaves_another_run_s_stems_alone(tmp_path, monkeypatch):
         "concurrent-run failure the named cleanup exists to prevent"
     )
     assert not list(staging.glob("mine_*")), "its own stems are still cleaned up"
+
+
+class TestForBankStillTakesSources:
+    """--for-bank is a filter over the sources you pass, not a way to find
+    them. The bank records which work directories its clips separated into,
+    not where the source media lives, so the module cannot invent the paths.
+
+    The docstring used to show a bare `--for-bank` invocation, which printed
+    "nothing to separate" and exited 2 before the flag was ever consulted.
+    """
+
+    def test_the_documented_invocations_all_carry_sources(self):
+        examples = [line.strip() for line in separate_hq.__doc__.splitlines()
+                    if "python -m song_generator.separate_hq" in line]
+        assert examples, "the docstring shows how to run this"
+        for example in examples:
+            tail = example.split("separate_hq", 1)[1]
+            positional = [a for a in tail.split() if not a.startswith("--")]
+            assert positional, f"documented with nothing to separate: {example}"
+
+    def test_bare_for_bank_says_what_is_missing_before_opening_the_bank(
+            self, tmp_path, capsys):
+        """The generic "nothing to separate" hid the real problem. And the
+        answer is knowable without paying for correlation over the bank, so
+        it must arrive before that starts."""
+        code = separate_hq.main(["--for-bank", "--bank", str(tmp_path)])
+        assert code == 2
+        err = capsys.readouterr().err
+        assert "--for-bank" in err, "the flag at fault is named"
+        assert "separate_hq --for-bank" in err, "a working invocation is shown"
+
+    def test_for_bank_filters_to_what_the_bank_was_cut_from(
+            self, tmp_path, monkeypatch):
+        monkeypatch.setattr(config, "WORK_DIR", str(tmp_path / "work"))
+        monkeypatch.setattr(separate_hq, "sources_needed_by_bank",
+                            lambda bank: {"song0"})
+        monkeypatch.setattr(separate_hq, "make_separator",
+                            lambda staging: _FakeSeparator(staging))
+
+        code = separate_hq.main(["--for-bank", *_sources(tmp_path)])
+
+        assert code == 0
+        assert (tmp_path / "work" / "song0" / "vocal_hq.wav").is_file()
+        assert not (tmp_path / "work" / "song1" / "vocal_hq.wav").exists(), (
+            "a source the bank was not cut from is not paid for"
+        )
+
+    def test_for_bank_with_no_matching_sources_says_so(
+            self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setattr(separate_hq, "sources_needed_by_bank",
+                            lambda bank: {"somethingelse"})
+        code = separate_hq.main(["--for-bank", *_sources(tmp_path)])
+        assert code == 2
+        assert "none of the given sources" in capsys.readouterr().err

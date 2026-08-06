@@ -77,6 +77,19 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   behind. It is hidden from every `*.wav` glob by that suffix, which also means
   nothing will ever report it: a stray `.tmp` in a bank directory is safe to
   delete.
+- **An index entry is a claim that the file exists.** `load_bank` reads
+  `words.json` alone and nothing re-checks the directory, so an entry for a
+  clip that was never written fails at render time, and a dropped entry
+  silently removes the word from every later render. A tool that decides not
+  to write a clip must drop its entry in the same run and say which clips
+  that excluded; `recut_bank` shows the shape, including the `build_bank`
+  command it prints as the fix.
+- **A `finally` that writes a file also writes it while unwinding from a
+  failure**, straight over whatever a person put there. `mine_words` used to
+  replace a hand-edited `labels.tsv` that way when a re-run died mid-cut; its
+  failure path now writes `labels.partial.tsv` beside the file instead, and
+  numbers later partials rather than clobbering earlier ones. Any new unwind
+  path that writes where hand work can live needs the same sidestep.
 - **A float WAV is not a pure function of its samples.** libsndfile writes a
   PEAK chunk holding the wall-clock time of the write, at byte 60. Two runs
   producing bit-identical audio therefore produce files that differ by that one

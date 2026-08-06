@@ -88,6 +88,14 @@ keeps your boundaries instead of re-detecting them.
 internal melody does not carry that movement along and land later syllables off
 their targets.
 
+The index is what a render believes: `load_bank` reads `words.json` alone, and
+nothing back-fills an entry for a wav it did not cut itself. A wav in the
+directory with no entry is invisible, and an entry with no wav fails at render
+time. `recut_bank` therefore drops the entry for any clip it did not write,
+whether the span collapsed against the new stem or the clip was left untouched
+because it appeared in `--out` mid-run, and prints which clips that removed
+together with the `build_bank` command that restores them.
+
 ---
 
 ## `work/<song>/arrangements/<seed>-<level>.arr`
@@ -252,6 +260,14 @@ and the second clip would replace the first while `words.json` claimed both.
 `mine_words` writes this file even when a run dies mid-cut, so whatever was
 cut is still reviewable: every candidate keeps its row, and a clip that was
 never written simply has no filename in the last column.
+
+When the folder already holds a `labels.tsv`, an interrupted run does not
+replace it, because the existing file may carry the hand-typed words above and
+fresh auto rows would erase them. The partial rows go to `labels.partial.tsv`
+beside it instead (`labels.partial2.tsv` and so on when earlier interruptions
+already claimed the name), and the run says so on stderr. A run that finishes
+still overwrites `labels.tsv` as it always has, since its rows then describe
+every clip on disk.
 
 ---
 

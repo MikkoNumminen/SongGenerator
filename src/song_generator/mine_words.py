@@ -58,6 +58,21 @@ def looks_like_shout(cand) -> bool:
     return cand.n_syllables <= 1 and cand.dur_s >= config.SHOUT_MIN_S
 
 
+def partial_labels_path(folder: Path) -> Path:
+    """A labels filename no earlier interrupted run has claimed.
+
+    Numbered rather than fixed, because two interrupted runs over the same
+    folder would otherwise leave the second one clobbering the first's rows,
+    which is the exact failure this path exists to avoid on labels.tsv.
+    """
+    p = folder / "labels.partial.tsv"
+    n = 2
+    while p.exists():
+        p = folder / f"labels.partial{n}.tsv"
+        n += 1
+    return p
+
+
 def mine_one(path: Path, out_root: Path, device: str, thresholds: Thresholds,
              asr_matches=None) -> SourceResult:
     result = SourceResult(name=path.name)
@@ -79,6 +94,12 @@ def mine_one(path: Path, out_root: Path, device: str, thresholds: Thresholds,
     # with no labels file to review them against; now an interrupted run
     # still records whatever was cut, and a clip not yet written simply has
     # no filename in its row.
+    #
+    # The failure path must not land on labels.tsv when one is already there.
+    # A re-run over a reviewed folder dying halfway used to replace a file
+    # that may carry hand-typed words with fresh auto rows, so the partial
+    # rows go to a name of their own instead. A successful run still
+    # overwrites, as it always has: its rows describe every clip on disk.
     try:
         for c in candidates:
             hint = "shout" if looks_like_shout(c) else f"{c.n_syllables}syl"
@@ -86,8 +107,24 @@ def mine_one(path: Path, out_root: Path, device: str, thresholds: Thresholds,
             c.path = audio_io.write_wav(folder / name, cut(vocal, c))
             if hint == "shout":
                 result.shouts += 1
-    finally:
-        write_labels(folder / "labels.tsv", candidates)
+    except BaseException:
+        labels = folder / "labels.tsv"
+        target = partial_labels_path(folder) if labels.exists() else labels
+        # Guarded on its own: a write failing here must not replace the
+        # exception that stopped the cut, which is the one worth reading.
+        try:
+            write_labels(target, candidates)
+        except Exception as exc:
+            print(f"  the cut failed and no labels file could be written "
+                  f"either ({exc}); the rows for {folder} are lost",
+                  file=sys.stderr)
+        else:
+            if target != labels:
+                print(f"  interrupted mid-cut. {labels} already exists and "
+                      "may be hand-edited, so it was left alone; this run's "
+                      f"rows went to {target}", file=sys.stderr)
+        raise
+    write_labels(folder / "labels.tsv", candidates)
     return result
 
 
