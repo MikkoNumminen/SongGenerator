@@ -779,8 +779,14 @@ class TestMalformedLinesAreRefusedByNumber:
         pool of slices and invented orders from it. Substituting a default
         used to replay a DIFFERENT arrangement under the same filename and
         say nothing, which is the failure parse_text exists to refuse."""
-        with pytest.raises(ArrangementError, match="'later'"):
+        with pytest.raises(ArrangementError) as exc:
             parse_text("# seed    later\nphrase 0\n  0:00.00  x2  delta\n")
+        message = str(exc.value)
+        assert "'later'" in message, "the refusal must name the offending value"
+        assert message.startswith("line 1"), (
+            "every other refusal in this parser names its line, and a header "
+            "buried in a long file is no easier to find than a placement"
+        )
 
     def test_a_missing_seed_header_still_reads_as_zero(self):
         """Only a seed that is present and unreadable is refused. A file
