@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -48,6 +49,12 @@ class Row:
 
 class LabelError(RuntimeError):
     pass
+
+
+# The variant goes straight into an output filename, and labels.tsv is edited
+# by hand, so a stray slash or .. in this column would walk the write out of
+# the bank directory. Empty is legal; a counter is substituted later.
+_VARIANT_RE = re.compile(r"[A-Za-z0-9_-]*\Z")
 
 
 def read_labels(path: Path) -> list[Row]:
@@ -85,7 +92,14 @@ def read_labels(path: Path) -> list[Row]:
         if end_s <= start_s:
             raise LabelError(f"{path}:{n}: end ({end_s}) must be after start ({start_s})")
 
-        rows.append(Row(word, parts[1].strip(), start_s, end_s, n))
+        variant = parts[1].strip()
+        if not _VARIANT_RE.fullmatch(variant):
+            raise LabelError(
+                f"{path}:{n}: variant {variant!r} is not usable in a filename. "
+                f"Only letters, digits, _ and - are allowed (or leave it empty)."
+            )
+
+        rows.append(Row(word, variant, start_s, end_s, n))
     return rows
 
 
@@ -490,6 +504,7 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     args.out.mkdir(parents=True, exist_ok=True)
+    out_dir = args.out.resolve()
     seen: dict[str, int] = {}
     bank: dict[str, dict] = {}
 
@@ -507,7 +522,13 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  skipped {name}: clip is too short to use")
             continue
 
-        audio_io.write_wav(args.out / name, clip)
+        # Belt and braces over the variant check in read_labels: nothing built
+        # from data may ever name a path outside the bank directory.
+        target = (args.out / name).resolve()
+        if not target.is_relative_to(out_dir):
+            raise LabelError(f"clip {name!r} would be written outside {args.out}")
+
+        audio_io.write_wav(target, clip)
         midi, dur = measure(clip, config.SAMPLE_RATE, device)
         per_word = [syllables_of(w) for w in words]
         n_syl = sum(per_word) or len(words)

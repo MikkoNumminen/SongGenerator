@@ -7,8 +7,10 @@ rate are established, so the rest of the code can assume both.
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -84,10 +86,30 @@ def encode_mp3(
 
 
 def write_wav(path: str | Path, audio: np.ndarray, sr: int = config.SAMPLE_RATE) -> Path:
+    """Write (channels, samples) float32 to wav, atomically.
+
+    The file appears at `path` complete or not at all. Everything downstream
+    trusts an existing wav (the stale-cache checks only test is_file(), and
+    recut_bank overwrites curated clips in place), so an interrupted write
+    must never leave a truncated file at the final name. The temp file lives
+    in the destination directory because os.replace is only atomic within one
+    filesystem.
+    """
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     audio = np.atleast_2d(np.asarray(audio, dtype=np.float32))
-    sf.write(str(path), audio.T, sr, subtype="FLOAT")
+
+    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.stem}-", suffix=".tmp")
+    os.close(fd)
+    tmp = Path(tmp_name)
+    try:
+        # The .tmp suffix keeps half-written files out of *.wav globs, so the
+        # format cannot be inferred from the name and is passed explicitly.
+        sf.write(str(tmp), audio.T, sr, subtype="FLOAT", format="WAV")
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
     return path
 
 

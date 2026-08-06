@@ -10,7 +10,8 @@ import pytest
 
 from song_generator import config
 from song_generator.build_bank import (
-    parse_name, parse_phrase, scan_folder, syllable_boundaries,
+    LabelError, parse_name, parse_phrase, read_labels, scan_folder,
+    syllable_boundaries,
 )
 
 
@@ -261,3 +262,43 @@ class TestTheParserDoesNotDriftSilently:
         for stem in self.REFUSED:
             parsed = parse_phrase(stem)
             assert parsed is None or parsed[0] == [], f"{stem!r} should not parse"
+
+
+class TestLabelVariantIsConfined:
+    """The variant column becomes part of an output filename.
+
+    labels.tsv is hand-edited by design, and the variant is interpolated into
+    the name a clip is written under. A slash or .. in that column would walk
+    the write out of the bank directory, so anything beyond letters, digits,
+    _ and - is refused with the line it came from.
+    """
+
+    def _labels(self, tmp_path, variant):
+        path = tmp_path / "labels.tsv"
+        path.write_text(
+            "word\tvariant\tstart\tend\n"
+            f"bravo\t{variant}\t0.090\t0.480\n",
+            encoding="utf-8",
+        )
+        return path
+
+    @pytest.mark.parametrize("variant", ["low", "2", "re_take-3", ""])
+    def test_legal_variants_still_parse(self, tmp_path, variant):
+        rows = read_labels(self._labels(tmp_path, variant))
+        assert len(rows) == 1
+        assert rows[0].variant == variant
+
+    @pytest.mark.parametrize("variant", [
+        "../escape",
+        "..\\escape",
+        "up/../../and-out",
+        "sub/dir",
+        "..",
+    ])
+    def test_a_path_shaped_variant_is_refused(self, tmp_path, variant):
+        path = self._labels(tmp_path, variant)
+        with pytest.raises(LabelError) as exc:
+            read_labels(path)
+        message = str(exc.value)
+        assert message.startswith(f"{path}:2"), "the error must name the file and line"
+        assert repr(variant) in message, "the error must name the offending value"

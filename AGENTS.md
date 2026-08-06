@@ -66,6 +66,12 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   to `temperature=0.0` with beam search. Do not remove that.
 - **The venv has no Triton.** The recogniser falls back to a slower DTW path and
   warns about it. Harmless.
+- **A wav that exists is trusted.** The stale-cache checks only test
+  `is_file()`, and `recut_bank` overwrites curated clips in place, so an
+  interrupted write must never leave a truncated file at the final name.
+  `write_wav` writes to a temp file beside the destination and renames it into
+  place. Any new code that writes a wav goes through it, never through
+  `sf.write` straight onto the final path.
 - **A float WAV is not a pure function of its samples.** libsndfile writes a
   PEAK chunk holding the wall-clock time of the write, at byte 60. Two runs
   producing bit-identical audio therefore produce files that differ by that one

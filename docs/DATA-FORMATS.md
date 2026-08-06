@@ -233,6 +233,12 @@ bravo		0.090	0.480	2	F3	c01.wav
 
 `?` or `-` skips a row. Lines beginning `#` are comments.
 
+`variant` becomes part of the output filename (`<word>_<variant>.wav`), so it
+may only contain letters, digits, `_` and `-`. Empty is fine; a counter is
+substituted. Anything else, a slash or `..` in particular, is refused with the
+line number, because it would let a hand-edited row write outside the bank
+directory.
+
 ---
 
 ## Filename conventions
