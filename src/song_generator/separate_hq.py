@@ -31,8 +31,9 @@ from .util import expand, resolve_device, slugify
 
 def sources_needed_by_bank(bank: Path) -> set[str]:
     """Work-dir names the current bank was cut from."""
-    from .recut_bank import by_correlation, from_name, work_dirs
     import json
+
+    from .recut_bank import by_correlation, from_name, work_dirs
 
     index = bank / "words.json"
     if not index.is_file():

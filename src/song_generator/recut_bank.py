@@ -33,7 +33,6 @@ from pathlib import Path
 import numpy as np
 
 from . import audio_io, config
-from .util import resolve_device
 
 SPAN_RE = re.compile(r"__([A-Za-z0-9]+)__(\d+\.\d+)-(\d+\.\d+)")
 
