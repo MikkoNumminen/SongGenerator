@@ -252,7 +252,14 @@ def main(argv: list[str] | None = None) -> int:
     # needs more than a shouted one to be heard over a band. banks resolves
     # a standardised tier back to the bank beside it, so --words-dir pointed
     # at either finds the same declaration.
-    bus_lufs = banks.mix_for(words_dir).get("word_bus_lufs")
+    # This is also where a malformed bank.json is refused: banks validates
+    # the whole file on every read, so catching its refusal here turns it
+    # into an error with the error exit code rather than a traceback.
+    try:
+        bus_lufs = banks.mix_for(words_dir).get("word_bus_lufs")
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_ERROR
     singing_from, standardised = resolve_bank(
         words_dir, prefer_standardised=not args.raw_clips)
     try:
@@ -294,7 +301,13 @@ def main(argv: list[str] | None = None) -> int:
     for level in levels:
         try:
             if level is None:
-                described = arrange.load(args.arrangement)
+                # The arrangement belongs to the bank it was rendered from,
+                # and the bank decides what words exist: a bank cut with
+                # build_bank --raw calls every unit "raw", which no
+                # vocabulary holds, and its own log has to replay.
+                described = arrange.load(
+                    args.arrangement,
+                    bank_words={w for u in units for w in u.words})
                 # The bank's declaration travels into replay too, so a
                 # sequence bank's own log comes back whole and paced rather
                 # than re-pitched per syllable and cut to its slots.

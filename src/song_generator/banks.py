@@ -28,9 +28,13 @@ Two strategies exist:
              mapping.plan_sequence.
 
 "overrides" sit on top of the level's parameters from PLAY_LEVELS, so a bank
-can lean a level without redefining it. "sequence" reads exactly one of them,
-reading_speed, the pace the bank is recited at: 1.0 is as spoken, lower is
-slower. The rest mean nothing to it.
+can lean a level without redefining it. Only the knobs the level itself
+defines may appear, plus reading_speed; an override nothing reads would leave
+the level's own value in force with no complaint, so an unknown knob is
+refused by name, like an unknown level or strategy. "sequence" reads exactly
+one of them, reading_speed, the pace the bank is recited at: 1.0 is as
+spoken, lower is slower, and it must lie within what the stretch engine can
+deliver, the reciprocal of TIME_STRETCH_RANGE. The rest mean nothing to it.
 
 "never_split" keeps every clip whole, and "mix" holds word_bus_lufs, the
 level the bank's words sit at against the bed; see never_split and mix_for
@@ -83,6 +87,48 @@ def _a_number(value) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool)
 
 
+def _an_object(value) -> bool:
+    """A JSON object. Everything in bank.json that nests must be one, and a
+    section of the wrong shape used to surface as a bare AttributeError
+    traceback rather than a refusal that names the file."""
+    return isinstance(value, dict)
+
+
+def _a_boolean(value) -> bool:
+    """A JSON boolean. The string "false" is not one, and read loosely it
+    counted as true, so a bank meaning to allow splitting kept every clip
+    whole. The refusal is a ValueError like every other refusal here: the
+    problem is the declared value, and one handler catches them all."""
+    return isinstance(value, bool)
+
+
+def reading_speed_range() -> tuple[float, float]:
+    """The paces the stretch engine can deliver, slowest to fastest.
+
+    A recited clip is rendered as one stretch whose ratio is the reciprocal
+    of the pace, clamped to TIME_STRETCH_RANGE, so the deliverable paces are
+    the reciprocals of that range. A declared pace outside it would pass the
+    plan a duration the renderer will not produce: the clip would sound at
+    the clamped pace while the planner's cursor advanced at the declared
+    one, and every word would land on top of the word after it.
+    """
+    lo, hi = config.TIME_STRETCH_RANGE
+    return 1.0 / hi, 1.0 / lo
+
+
+def deliverable_speed(reading_speed: float) -> float:
+    """reading_speed bounded to what the engine delivers.
+
+    Declarations are validated against the same range, so for a declared
+    bank this changes nothing. It exists for the programmatic callers of
+    plan_sequence and realise, which take a speed directly: bounding it
+    here keeps the cursor and the rendered sound agreeing at every entry
+    point rather than only the declared one.
+    """
+    slowest, fastest = reading_speed_range()
+    return min(max(float(reading_speed), slowest), fastest)
+
+
 def _declared(bank_dir: Path) -> dict:
     """What this bank declares, or an empty dict when it declares nothing.
 
@@ -105,11 +151,36 @@ def _declared(bank_dir: Path) -> dict:
         settings = json.loads(path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as exc:
         raise ValueError(f"{path} is not valid JSON: {exc}") from exc
+    if not _an_object(settings):
+        raise ValueError(
+            f"{path} must hold a JSON object of settings,"
+            f" got {type(settings).__name__}."
+        )
 
-    # Every declared strategy is checked, not only the one being asked for.
-    # A typo in the level this run does not render would otherwise sit
+    levels = settings.get("levels", {})
+    if not _an_object(levels):
+        raise ValueError(
+            f'"levels" in {path} must be an object mapping level names to'
+            f" declarations, got {levels!r}."
+        )
+
+    # Every declared level is checked whole, not only the one being asked
+    # for. A typo in the level this run does not render would otherwise sit
     # unnoticed until the day that level runs.
-    for level, declared in settings.get("levels", {}).items():
+    for level, declared in levels.items():
+        if level not in config.PLAY_LEVELS:
+            raise ValueError(
+                f"unknown level {level!r} in {path}.\n"
+                f"    Expected one of: {', '.join(sorted(config.PLAY_LEVELS))}.\n"
+                "    A declaration under a level that does not exist would be"
+                " ignored silently, and the level it meant would render"
+                " arranged, in the wrong order."
+            )
+        if not _an_object(declared):
+            raise ValueError(
+                f"level {level!r} in {path} must be an object,"
+                f" got {declared!r}."
+            )
         strategy = declared.get("strategy", "arranged")
         if strategy not in STRATEGIES:
             raise ValueError(
@@ -117,20 +188,62 @@ def _declared(bank_dir: Path) -> dict:
                 f"    Expected one of: {', '.join(STRATEGIES)}.\n"
                 "    A bank that declares nothing gets 'arranged'."
             )
-        speed = declared.get("overrides", {}).get("reading_speed")
-        if speed is not None and (not _a_number(speed) or speed <= 0):
+        overrides = declared.get("overrides", {})
+        if not _an_object(overrides):
             raise ValueError(
-                f"reading_speed for level {level!r} in {path} must be a number"
-                f" above zero, got {speed!r}.\n"
-                "    It is the pace the bank is recited at: 1.0 is as spoken,"
-                " lower is slower. Write 0.8, not \"0.8\"."
+                f'"overrides" for level {level!r} in {path} must be an object'
+                f" of knob names to values, got {overrides!r}."
             )
+        # Only knobs something reads. The level's own parameters may be
+        # leant on, and reading_speed is the one knob the sequence strategy
+        # reads on top of them. Anything else would sit in the merged dict
+        # unread, leaving the level's own value in force with no complaint,
+        # which is the same silent failure as a misspelled level.
+        knobs = set(config.PLAY_LEVELS[level]) | {"reading_speed"}
+        unknown = sorted(set(overrides) - knobs)
+        if unknown:
+            raise ValueError(
+                f"unknown override {', '.join(repr(k) for k in unknown)} for"
+                f" level {level!r} in {path}.\n"
+                f"    Expected knobs the level defines in PLAY_LEVELS, or"
+                " reading_speed.\n"
+                "    An override nothing reads changes nothing and says"
+                " nothing, which is the failure this file exists to prevent."
+            )
+        speed = overrides.get("reading_speed")
+        if speed is not None:
+            slowest, fastest = reading_speed_range()
+            if not _a_number(speed) or not slowest <= speed <= fastest:
+                raise ValueError(
+                    f"reading_speed for level {level!r} in {path} must be a"
+                    f" number between {slowest:g} and {fastest:g},"
+                    f" got {speed!r}.\n"
+                    "    It is the pace the bank is recited at: 1.0 is as"
+                    " spoken, lower is slower. The bounds are what the"
+                    " stretch engine delivers (TIME_STRETCH_RANGE): outside"
+                    " them the renderer would clamp the stretch while the"
+                    " planner kept the declared pace, and the words would"
+                    " land on top of each other. Write 0.8, not \"0.8\"."
+                )
 
-    lufs = settings.get("mix", {}).get("word_bus_lufs")
+    mix = settings.get("mix", {})
+    if not _an_object(mix):
+        raise ValueError(f'"mix" in {path} must be an object, got {mix!r}.')
+    lufs = mix.get("word_bus_lufs")
     if lufs is not None and not _a_number(lufs):
         raise ValueError(
             f"word_bus_lufs in {path} must be a number, in LUFS, got {lufs!r}.\n"
             "    Write -11.0, not \"-11.0\"."
+        )
+
+    keep_whole = settings.get("never_split", False)
+    if not _a_boolean(keep_whole):
+        raise ValueError(
+            f"never_split in {path} must be true or false,"
+            f" got {keep_whole!r}.\n"
+            "    Write false, not \"false\": a JSON string is not a boolean,"
+            " and read loosely it counted as true, so a bank meaning to"
+            " allow splitting kept every clip whole."
         )
     return settings
 

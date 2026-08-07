@@ -408,7 +408,7 @@ class ArrangementError(RuntimeError):
     pass
 
 
-def parse_text(text: str) -> Arrangement:
+def parse_text(text: str, bank_words: set[str] | None = None) -> Arrangement:
     """Read an arrangement file back, including one edited by hand.
 
     Deliberately forgiving about spacing and about a missing take, and strict
@@ -416,7 +416,19 @@ def parse_text(text: str) -> Arrangement:
     word, or a slot count that is not a number. A typo that silently dropped a
     word would be the worst possible failure here, because the result would
     still play.
+
+    An arrangement belongs to a bank, and the bank decides what words exist,
+    so bank_words is the words the bank being replayed actually holds. A bank
+    cut with build_bank --raw calls every unit "raw", which no vocabulary
+    has, and without this its own log could not be read back. The check is
+    the union of the bank's words and the vocabulary, not a replacement: a
+    vocabulary word the bank never recorded can still be spelled from slices
+    at realise time, and refusing it here would close the hand-editing door
+    the format exists for. None keeps the vocabulary-only check.
     """
+    known = set(config.WORD_SYLLABLES)
+    if bank_words:
+        known |= set(bank_words)
     meta = {"song": "", "bank": "", "level": config.PLAY_DEFAULT_LEVEL, "seed": "0"}
     # Where each header was read, so a refusal can name its line like every
     # other refusal in this parser does.
@@ -481,11 +493,11 @@ def parse_text(text: str) -> Arrangement:
             rest_fields = rest_fields[1:]
 
         words = rest_fields
-        unknown = [w for w in words if w not in config.WORD_SYLLABLES]
+        unknown = [w for w in words if w not in known]
         if unknown:
             raise ArrangementError(
                 f"line {number}: not words in this bank: {', '.join(unknown)}."
-                f" Available: {', '.join(sorted(config.WORD_SYLLABLES))}")
+                f" Available: {', '.join(sorted(known))}")
         if not words:
             raise ArrangementError(f"line {number}: no words given")
 
@@ -701,8 +713,11 @@ def realise(arrangement: Arrangement, slots, units: list[Unit],
     if (bank_dir is not None
             and banks.strategy_for(bank_dir, arrangement.level) == "sequence"):
         recited = True
-        speed = max(float(banks.overrides_for(bank_dir, arrangement.level)
-                          .get("reading_speed", 1.0)), 0.05)
+        # Bounded exactly as plan_sequence bounds it, so a replayed target
+        # is the target the original plan carried.
+        speed = banks.deliverable_speed(
+            banks.overrides_for(bank_dir, arrangement.level)
+            .get("reading_speed", 1.0))
 
     # Rebuild the pool the run had, not merely the recorded clips. A take can
     # be a word cut out of a phrase, a word spelled from syllables, or an order
@@ -810,8 +825,11 @@ def save(arrangement: Arrangement, work: Path) -> Path:
     return path
 
 
-def load(path: Path) -> Arrangement:
+def load(path: Path, bank_words: set[str] | None = None) -> Arrangement:
+    """Read an arrangement file. bank_words is what parse_text takes: the
+    words the bank being replayed holds, so its own log reads back whatever
+    the vocabulary thinks of them."""
     path = Path(path)
     if not path.is_file():
         raise ArrangementError(f"{path} not found")
-    return parse_text(path.read_text(encoding="utf-8"))
+    return parse_text(path.read_text(encoding="utf-8"), bank_words)

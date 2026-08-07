@@ -981,14 +981,22 @@ def plan_sequence(slots: list[Slot], units: list[Unit],
     reading_speed is the pace of the reciting: 1.0 is the pace the words were
     spoken at, lower is slower. A slower pace widens every span, so it also
     advances through the bank more slowly, which means fewer times around for
-    the same song.
+    the same song. It is bounded to the paces the stretch engine delivers,
+    the reciprocals of TIME_STRETCH_RANGE, because the cursor advances by
+    each unit's duration at this pace and the renderer clamps its stretch to
+    that range: an unbounded pace would advance the cursor by a duration the
+    renderer refuses to produce, and every word would sound on top of the
+    next. bank.json refuses an out-of-range declaration by name; this bound
+    is for the callers that pass a speed directly.
     """
+    from .banks import deliverable_speed
+
     plan = Plan(slots_total=len(slots))
     ordered = sorted(units, key=lambda u: (u.variant, u.name))
     if not ordered:
         return plan
 
-    speed = max(float(reading_speed), 0.05)
+    speed = deliverable_speed(reading_speed)
     flat = [slot for group in group_phrases(slots) for slot in group]
 
     at = 0                  # where the rotation has got to in the bank

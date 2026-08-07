@@ -324,6 +324,39 @@ def test_an_unknown_word_is_refused_rather_than_dropped():
         parse_text("phrase 0\n  0:00.00  x2  banana\n")
 
 
+def test_the_banks_own_words_are_accepted_when_supplied():
+    """An arrangement belongs to a bank, and the bank decides what words
+    exist. A bank cut with build_bank --raw calls every unit "raw", which is
+    in no vocabulary, so rendering wrote its .arr happily and replaying it
+    was refused before realise was ever reached."""
+    text = "phrase 0\n  0:00.00  x2  raw\n"
+    with pytest.raises(ArrangementError, match="not words in this bank"):
+        parse_text(text)
+    back = parse_text(text, bank_words={"raw"})
+    assert back.lines[0].words == ["raw"]
+
+
+def test_bank_words_extend_the_vocabulary_rather_than_replace_it():
+    """A vocabulary word the bank never recorded can still be spelled from
+    slices at realise time, so supplying bank words must not refuse it, and
+    the refusal must name both kinds as available."""
+    assert parse_text("phrase 0\n  0:00.00  x2  delta\n",
+                      bank_words={"raw"}).lines[0].words == ["delta"]
+    with pytest.raises(ArrangementError, match="banana") as caught:
+        parse_text("phrase 0\n  0:00.00  x2  banana\n", bank_words={"raw"})
+    said = str(caught.value)
+    assert "raw" in said and "delta" in said
+
+
+def test_load_passes_the_banks_words_through(tmp_path):
+    path = tmp_path / "7-conservative.arr"
+    path.write_text("# seed 7\nphrase 0\n  0:00.00  x2  raw\n",
+                    encoding="utf-8")
+    with pytest.raises(ArrangementError, match="not words in this bank"):
+        load(path)
+    assert load(path, bank_words={"raw"}).lines[0].words == ["raw"]
+
+
 def test_a_malformed_line_is_refused_by_number():
     with pytest.raises(ArrangementError, match="line 2"):
         parse_text("phrase 0\n  nonsense here\n")

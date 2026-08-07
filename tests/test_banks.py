@@ -11,13 +11,14 @@ for the next song in a batch.
 
 import copy
 import json
+import types
 from pathlib import Path
 
 import numpy as np
 import pytest
 from test_arrange import _unit
 
-from song_generator import arrange, audio_io, banks, config
+from song_generator import arrange, audio_io, banks, cli, config
 from song_generator.mapping import (
     Placement, Plan, Slot, build_segments, group_phrases, load_bank,
     mix as mix_buses, plan_sequence, render,
@@ -31,6 +32,15 @@ def _spoken(n=3):
         u = _unit(["delta"], name=f"raw_{i + 1:04d}.wav")
         u.variant = f"{i + 1:04d}"
         units.append(u)
+    return units
+
+
+def _raw_spoken(n=3):
+    """The same bank as its own log records it: every unit's word is "raw",
+    which is what build_bank --raw writes and what no vocabulary holds."""
+    units = _spoken(n)
+    for u in units:
+        u.words = ["raw"]
     return units
 
 
@@ -126,6 +136,21 @@ class TestPlanSequence:
                                  reading_speed=speed)
             assert plan.slots_used == plan.slots_total == 48
             assert plan.slots_dropped == 0
+
+    def test_the_cursor_never_advances_by_a_time_the_renderer_refuses(self):
+        """Defect: a pace outside the engine's range advanced the cursor by
+        the unclamped duration_s / speed while build_segments clamped the
+        sound to TIME_STRETCH_RANGE, so at reading_speed 3.0 every clip
+        sounded at natural * 0.5 and the cursor moved natural / 3:
+        systematic overlap. The plan may only promise what the renderer
+        will produce."""
+        for speed in (5.0, 0.3):
+            plan = plan_sequence(_slots(), _spoken(3), reading_speed=speed)
+            assert plan.placements
+            for p in plan.placements:
+                _, total = build_segments(p)
+                assert total == pytest.approx(p.play_s), \
+                    f"planned {p.play_s}, renders {total} (speed={speed})"
 
     def test_names_break_variant_ties(self):
         a = _unit(["delta"], name="b.wav")
@@ -413,6 +438,27 @@ class TestSequenceReplay:
             _slots(), units, bank_dir=bank_dir)
         assert self._fingerprint(replayed) == self._fingerprint(plan)
 
+    def test_a_raw_banks_own_log_replays(self, tmp_path):
+        """The bank this replay machinery was built for: build_bank --raw
+        gives every unit the word "raw", which no vocabulary holds, so the
+        bank's own log was refused at parsing and none of the replay work
+        was reachable for it. The bank's words make the file readable, and
+        the replay must be the plan that was rendered."""
+        bank_dir = self._bank_dir(tmp_path)
+        units = _raw_spoken(5)
+        plan, arrangement, _ = arrange.build(
+            _slots(), units, "conservative", 7,
+            song="fixture", bank="fixture", bank_dir=bank_dir)
+        text = arrange.render_text(arrangement)
+        with pytest.raises(arrange.ArrangementError,
+                           match="not words in this bank"):
+            arrange.parse_text(text)
+        replayed = arrange.realise(
+            arrange.parse_text(text, bank_words={w for u in units
+                                                 for w in u.words}),
+            _slots(), units, bank_dir=bank_dir)
+        assert self._fingerprint(replayed) == self._fingerprint(plan)
+
     def test_replay_does_not_slice_a_never_split_bank(self, tmp_path):
         bank_dir = self._bank_dir(tmp_path)
         units = _spoken(5)
@@ -478,6 +524,36 @@ class TestWordBusLufs:
         }), encoding="utf-8")
         with pytest.raises(ValueError, match="reading_speed"):
             banks.overrides_for(tmp_path, "conservative")
+
+    def test_a_pace_the_engine_cannot_deliver_is_refused(self, tmp_path):
+        """A reading_speed of 3.0 used to pass validation, every clip then
+        sounded at the clamped pace while the planner's cursor kept the
+        declared one, and the words landed on top of each other. What the
+        file accepts must be what the engine delivers."""
+        for speed in (3.0, 0.3):
+            (tmp_path / "bank.json").write_text(json.dumps({
+                "levels": {"conservative": {
+                    "strategy": "sequence",
+                    "overrides": {"reading_speed": speed}}}
+            }), encoding="utf-8")
+            with pytest.raises(ValueError, match="reading_speed") as caught:
+                banks.overrides_for(tmp_path, "conservative")
+            assert "bank.json" in str(caught.value)
+
+    def test_the_accepted_range_is_the_engines_own(self, tmp_path):
+        """Derived from TIME_STRETCH_RANGE rather than typed beside it, so
+        retuning the engine cannot leave the validation refusing paces it
+        now delivers. Both endpoints are deliverable, so both pass."""
+        lo, hi = config.TIME_STRETCH_RANGE
+        assert banks.reading_speed_range() == (1.0 / hi, 1.0 / lo)
+        for speed in banks.reading_speed_range():
+            (tmp_path / "bank.json").write_text(json.dumps({
+                "levels": {"conservative": {
+                    "strategy": "sequence",
+                    "overrides": {"reading_speed": speed}}}
+            }), encoding="utf-8")
+            got = banks.overrides_for(tmp_path, "conservative")
+            assert got["reading_speed"] == speed
 
     def test_the_level_reaches_the_mix(self):
         """mix() must honour a bank's declared bus level, or the whole
@@ -592,6 +668,85 @@ class TestBankSettings:
         with pytest.raises(ValueError, match="bank.json"):
             banks.strategy_for(tmp_path, "wild")
 
+    def test_a_misspelled_level_is_refused_by_name(self, tmp_path):
+        """"conservativ" declared sequence and the conservative level
+        rendered arranged, silently, in the wrong order: exactly the
+        failure this file exists to prevent, reached through the key
+        instead of the value."""
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "levels": {"conservativ": {"strategy": "sequence"}}
+        }), encoding="utf-8")
+        with pytest.raises(ValueError, match="conservativ") as caught:
+            banks.strategy_for(tmp_path, "conservative")
+        said = str(caught.value)
+        assert "bank.json" in said
+        assert "conservative" in said and "wild" in said
+
+    def test_a_misspelled_override_knob_is_refused_by_name(self, tmp_path):
+        """"reading_sped": 0.8 left the pace at 1.0 with no complaint. An
+        override nothing reads changes nothing and says nothing."""
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "levels": {"conservative": {"strategy": "sequence",
+                                        "overrides": {"reading_sped": 0.8}}}
+        }), encoding="utf-8")
+        with pytest.raises(ValueError, match="reading_sped") as caught:
+            banks.overrides_for(tmp_path, "conservative")
+        assert "bank.json" in str(caught.value)
+
+    def test_every_knob_a_level_defines_may_be_overridden(self, tmp_path):
+        """The control for the refusal above: the legitimate set is the
+        level's own parameters plus reading_speed, so leaning on all of
+        them at once passes."""
+        knobs = dict(config.PLAY_LEVELS["wild"])
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "levels": {"wild": {"strategy": "arranged", "overrides": knobs}}
+        }), encoding="utf-8")
+        assert banks.overrides_for(tmp_path, "wild") == knobs
+
+    def test_a_levels_section_of_the_wrong_shape_is_refused(self, tmp_path):
+        """"levels": [] used to surface as a bare AttributeError traceback,
+        blaming nothing, which is outside the refuse-by-name contract."""
+        (tmp_path / "bank.json").write_text(json.dumps({"levels": []}),
+                                            encoding="utf-8")
+        with pytest.raises(ValueError, match="levels") as caught:
+            banks.strategy_for(tmp_path, "wild")
+        assert "bank.json" in str(caught.value)
+
+    def test_a_level_that_is_not_an_object_is_refused(self, tmp_path):
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "levels": {"wild": "sequence"}
+        }), encoding="utf-8")
+        with pytest.raises(ValueError, match="wild") as caught:
+            banks.strategy_for(tmp_path, "wild")
+        assert "bank.json" in str(caught.value)
+
+    def test_overrides_of_the_wrong_shape_are_refused(self, tmp_path):
+        """Named as a shape problem. Without the shape check the knob check
+        reads the string as its characters and refuses those, which blames
+        four knobs called 'f', 'a', 's' and 't' instead of the mistake."""
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "levels": {"wild": {"strategy": "arranged", "overrides": "fast"}}
+        }), encoding="utf-8")
+        with pytest.raises(ValueError, match="must be an object") as caught:
+            banks.overrides_for(tmp_path, "wild")
+        assert "bank.json" in str(caught.value)
+
+    def test_a_file_that_is_not_an_object_is_refused(self, tmp_path):
+        (tmp_path / "bank.json").write_text("[]", encoding="utf-8")
+        with pytest.raises(ValueError, match="bank.json"):
+            banks.strategy_for(tmp_path, "wild")
+
+    def test_a_never_split_string_is_refused_not_read_as_true(self, tmp_path):
+        """The two numeric settings got type checks; the boolean did not,
+        and bool("false") is True, so a bank meaning to allow splitting
+        kept every clip whole."""
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "never_split": "false"
+        }), encoding="utf-8")
+        with pytest.raises(ValueError, match="never_split") as caught:
+            banks.never_split(tmp_path)
+        assert "bank.json" in str(caught.value)
+
 
 # ---------------------------------------------------------------------------
 # The wiring through arrange.build
@@ -674,6 +829,90 @@ class TestOverrides:
         arrange.build(_slots(), _arranged_bank(), "conservative", 1987,
                       song="fixture", bank="fixture", bank_dir=tmp_path)
         assert config.PLAY_LEVELS == before
+
+
+# ---------------------------------------------------------------------------
+# The declaration at the command line
+# ---------------------------------------------------------------------------
+
+class TestCommandLine:
+    """cli.main with the pipeline stubbed out around the declaration layer.
+
+    Decoding, separation, detection and analysis are fixtures; what actually
+    runs is bank.json, the arrangement, and the render. That is the slice
+    these two contracts live in: a refusal must arrive as an error with the
+    error exit code, and a sequence bank must be able to replay the log it
+    wrote.
+    """
+
+    def _stub_pipeline(self, monkeypatch):
+        sr = config.SAMPLE_RATE
+        silence = np.zeros((2, 6 * sr), dtype=np.float32)
+
+        monkeypatch.setattr(audio_io, "decode", lambda path: silence)
+        written = []
+        monkeypatch.setattr(audio_io, "encode_mp3",
+                            lambda path, audio: written.append(Path(path)))
+        stems = types.SimpleNamespace(vocal=silence, instrumental=silence,
+                                      cached=True, backend="demucs")
+        monkeypatch.setattr(cli, "separate", lambda *a, **k: stems)
+        found = types.SimpleNamespace(
+            vocal_lufs=-20.0, mix_lufs=-14.0, rel_lu=6.0, voiced_frac=0.5,
+            f0_backend="fixture", vocal_present=True, reasons=[],
+            as_dict=lambda: {})
+        monkeypatch.setattr(cli, "detect_vocal", lambda *a, **k: found)
+        notes = [types.SimpleNamespace(
+            onset_s=i * 0.25, offset_s=(i + 1) * 0.25, dur_s=0.25,
+            midi=53.0 + (i % 5), phrase=i // 8, rms_db=-20.0)
+            for i in range(16)]
+        analysis = types.SimpleNamespace(
+            notes=notes, to_json=lambda path, include_f0=True: None)
+        monkeypatch.setattr(cli, "analyse", lambda *a, **k: analysis)
+        monkeypatch.setattr(cli, "analysis_report", lambda *a, **k: "")
+        return written
+
+    def _song_and_bank(self, tmp_path, declaration):
+        song = tmp_path / "song.mp4"
+        song.write_bytes(b"x")
+        words = tmp_path / "spoken"
+        words.mkdir()
+        (words / "bank.json").write_text(json.dumps(declaration),
+                                         encoding="utf-8")
+        return ([str(song), "--words-dir", str(words),
+                 "--work-dir", str(tmp_path / "work"),
+                 "-o", str(tmp_path / "out.mp3")])
+
+    def test_a_malformed_declaration_is_an_error_not_a_traceback(
+            self, tmp_path, monkeypatch, capsys):
+        """The deliberate refusals in banks.py arrived at the command line
+        as uncaught ValueError tracebacks with exit 1, instead of the
+        error: line and the error exit code every other refusal gets."""
+        self._stub_pipeline(monkeypatch)
+        argv = self._song_and_bank(tmp_path, {"never_split": "false"})
+        assert cli.main(argv) == 2
+        assert "error:" in capsys.readouterr().err
+
+    def test_a_sequence_bank_replays_its_own_log_at_the_command_line(
+            self, tmp_path, monkeypatch):
+        """The whole loop the log exists for: render once, then feed the
+        .arr the run wrote straight back with --arrangement. With a raw
+        bank this failed at parsing, before realise was reached, because
+        "raw" is in no vocabulary."""
+        self._stub_pipeline(monkeypatch)
+        argv = self._song_and_bank(tmp_path, {
+            "levels": {"conservative": {"strategy": "sequence",
+                                        "overrides": {"reading_speed": 0.8}}},
+            "never_split": True,
+        }) + ["--no-shift"]
+        units = _raw_spoken(3)
+        monkeypatch.setattr(cli, "load_bank", lambda *a, **k: units)
+        monkeypatch.setattr(cli, "resolve_bank",
+                            lambda d, prefer_standardised=True: (d, False))
+
+        assert cli.main(argv + ["--play", "conservative", "--seed", "7"]) == 0
+        logs = list((tmp_path / "work").rglob("*.arr"))
+        assert len(logs) == 1
+        assert cli.main(argv + ["--arrangement", str(logs[0])]) == 0
 
 
 # ---------------------------------------------------------------------------
