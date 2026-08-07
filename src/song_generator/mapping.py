@@ -128,6 +128,15 @@ class Placement:
     slots: list[Slot] = field(default_factory=list)   # the notes to land on
     shifts: list[float] = field(default_factory=list)  # semitones, after folding
     do_shift: bool = True     # False = leave it at its own recorded pitch
+    # False when this clip must sound whole: one segment, one shift, no
+    # syllable ever landing on its own note. Half a spoken name is not a
+    # shorter name, it is a different sound.
+    split: bool = True
+    # How fast this unit is said, against how fast it was actually said.
+    # 1.0 pins every syllable to its own slot, which is what a sung bank
+    # wants. Below 1.0 the syllables are laid end to end and stretched
+    # instead, so the words are drawn out rather than spaced apart.
+    pace: float = 1.0
 
     def raw_distance(self) -> float:
         """Furthest any of this unit's syllables would have to move, unfolded."""
@@ -930,7 +939,8 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None,
     return plan
 
 
-def plan_sequence(slots: list[Slot], units: list[Unit]) -> Plan:
+def plan_sequence(slots: list[Slot], units: list[Unit],
+                  reading_speed: float = 1.0, split: bool = True) -> Plan:
     """Replay the bank in the order it was recorded. plan_words chooses;
     this recites.
 
@@ -953,6 +963,14 @@ def plan_sequence(slots: list[Slot], units: list[Unit]) -> Plan:
     Phrases come from group_phrases and placements never cross a group, the
     same as plan_words, so a phrase number in the log means the same thing
     whichever planner wrote it.
+
+    reading_speed sets the pace. A unit is compressed to whatever span its
+    slots give it, so a clip laid on exactly as many slots as it has syllables
+    reads at whatever speed the melody happens to move, which for a busy song
+    is faster than anybody speaks. Below 1.0 the unit is given proportionally
+    more slots, so its span grows, less is compressed out of it, and the words
+    are recited more slowly. It also advances through the bank more slowly,
+    which means fewer times around for the same song.
     """
     plan = Plan(slots_total=len(slots))
     ordered = sorted(units, key=lambda u: (u.variant, u.name))
@@ -960,20 +978,66 @@ def plan_sequence(slots: list[Slot], units: list[Unit]) -> Plan:
         return plan
 
     at = 0
-    for group in group_phrases(slots):
+    groups = group_phrases(slots)
+    for g, group in enumerate(groups):
+        # A word running past the last slot of a phrase runs into the gap the
+        # singer left, which is silence and collides with nothing. Treating
+        # that gap as available is what stops the last word of a phrase
+        # landing on top of the first word of the next one.
+        after = groups[g + 1][0].onset_s if g + 1 < len(groups) else group[-1].offset_s
         i = 0
         while i < len(group):
             unit = ordered[at % len(ordered)]
             at += 1
-            covered = group[i:i + max(1, unit.syllables)]
+            # Enough slots to hold the unit once stretched, chosen by time
+            # rather than by syllable count. Counting syllables was the first
+            # attempt and it was wrong: a unit given more slots than it has
+            # syllables left every spare slot silent, so slowing the reading
+            # inserted a gap after every word instead of drawing the word out.
+            #
+            # At least one slot per syllable, because build_segments gives the
+            # i-th syllable the i-th slot's pitch and stops when it runs out.
+            want = max(1, unit.syllables)
+            if reading_speed < 1.0:
+                # Only when slowing down. At natural pace a unit takes one slot
+                # per syllable and is allowed to overrun, which is the whole
+                # point of reciting rather than singing, and widening coverage
+                # here would quietly change that.
+                # Enough span, never merely close to it. Stopping short was
+                # tried, on the reasoning that overshoot became silence after
+                # the word. It does not any more: build_segments stretches the
+                # syllables to fill whatever span they are given, so overshoot
+                # is absorbed as a little extra slowness. Stopping short only
+                # starves the unit and lets the next entry cut it off.
+                need_s = unit.duration_s / max(reading_speed, 0.05)
+                while (want < len(group) - i
+                       and group[i + want - 1].offset_s - group[i].onset_s < need_s):
+                    want += 1
+            covered = group[i:i + want]
+            # The tail of a phrase may borrow its gap; anywhere else the span
+            # ends where the slots end.
+            ends_phrase = i + want >= len(group)
+            end_s = after if ends_phrase else covered[-1].offset_s
+            span_s = end_s - covered[0].onset_s
+
+            # Still not enough room, and this is not the only thing in the
+            # phrase: leave the rest of the phrase alone and let this unit
+            # open the next one. Silence for a beat is better than two words
+            # at once, which is what the overrun used to produce.
+            if span_s + 0.02 < unit.duration_s and plan.placements and not ends_phrase:
+                at -= 1
+                break
+
             plan.placements.append(Placement(
                 unit=unit,
                 onset_s=covered[0].onset_s,
-                slot_span_s=covered[-1].offset_s - covered[0].onset_s,
-                play_s=unit.duration_s,
+                slot_span_s=span_s,
+                play_s=unit.duration_s / max(reading_speed, 0.05),
                 n_slots=len(covered),
                 phrase=covered[0].phrase,
                 slots=list(covered),
+                pace=reading_speed,
+                split=split,
             ))
             plan.slots_used += len(covered)
             i += len(covered)
@@ -1101,6 +1165,47 @@ def build_segments(p: Placement) -> tuple[list, float]:
     segments, shifts = [], []
     origin = p.onset_s
 
+    # Where the next syllable starts when the unit is being recited rather
+    # than sung. Pinning each one to its own slot is right for a melody and
+    # wrong for speech: a slot longer than the syllable leaves a hole after
+    # every word, which reads as a stutter rather than as slow speech.
+    cursor = 0.0
+
+    # How much the syllables have to be drawn out to reach the end of the span
+    # this unit was allotted. Computed over the syllables that will actually
+    # sound, so a unit whose spans run short does not stretch the rest to cover
+    # for them.
+    sounding = sum(b - a for a, b in spans[:len(p.slots)]) or p.unit.duration_s
+    fill_ratio = (p.slot_span_s / sounding) if sounding > 0 else 1.0
+
+    if not p.split:
+        # One segment for the whole clip. It still lands on the first slot and
+        # still takes that slot's pitch, so it follows the tune; it simply is
+        # not taken apart to do so.
+        source = p.unit.midi
+        first = p.slots[0] if p.slots else None
+        shift = 0.0 if (source is None or first is None) else fold_shift(first.midi - source)
+        p.shifts = [shift]
+        # Measured against the whole clip, because the whole clip is what is
+        # being stretched. fill_ratio is computed over the sounding syllables,
+        # which is the right number when each one is placed separately and the
+        # wrong one here: applying it to the full duration made the clip end
+        # past its span and land on the next word.
+        lo, hi = config.TIME_STRETCH_RANGE
+        whole = p.unit.duration_s or 1e-3
+        # Clamped to the engine's range but NOT floored at 1.0. A phrase too
+        # short to hold the clip used to leave it at natural length, which
+        # meant it played over the word after it. A word said a little faster
+        # is better than two words at once, and better than one cut off.
+        ratio = 1.0 if p.pace >= 1.0 else min(max(p.slot_span_s / whole, lo), hi)
+        return [Segment(
+            src_start_s=0.0,
+            src_end_s=p.unit.duration_s,
+            out_start_s=0.0,
+            out_dur_s=p.unit.duration_s * ratio,
+            semitones=shift,
+        )], max(p.unit.duration_s * ratio, 1e-3)
+
     for i, (src_a, src_b) in enumerate(spans):
         if i >= len(p.slots):
             break
@@ -1112,13 +1217,33 @@ def build_segments(p: Placement) -> tuple[list, float]:
         raw = config.SHOUT_KEEP_RAW and p.unit.is_shout_syllable(i)
         shift = 0.0 if raw else fold_shift(slot.midi - source)
         shifts.append(shift)
+
+        if p.pace < 1.0 and not raw:
+            # Stretched to fill the span this unit was given, rather than to a
+            # fixed multiple of how it was spoken. Those differ by whatever the
+            # slot grid rounded off, and that difference used to be left as
+            # silence after the word, which is heard as a pause rather than as
+            # slow speech. Filling it removes the pause and changes the pace by
+            # only the rounding.
+            #
+            # Never below 1.0, so this can only ever slow a word down, and
+            # never past what the engine will stretch cleanly.
+            lo, hi = config.TIME_STRETCH_RANGE
+            ratio = min(max(fill_ratio, 1.0), hi)
+            out_dur = (src_b - src_a) * ratio
+            out_start = cursor
+            cursor += out_dur
+        else:
+            out_dur = (src_b - src_a) if raw else slot.dur_s
+            out_start = slot.onset_s - origin
+
         segments.append(Segment(
             src_start_s=src_a,
             src_end_s=src_b,
-            out_start_s=slot.onset_s - origin,
+            out_start_s=out_start,
             # A shout keeps its own length as well as its own pitch: stretching
             # it to fit a slot smooths out the attack that makes it a shout.
-            out_dur_s=(src_b - src_a) if raw else slot.dur_s,
+            out_dur_s=out_dur,
             semitones=shift,
         ))
 
@@ -1218,8 +1343,15 @@ def _normalise(audio: np.ndarray, target_lufs: float, sr: int) -> np.ndarray:
 
 
 def mix(word_bus: np.ndarray, instrumental: np.ndarray,
-        sr: int = config.SAMPLE_RATE) -> np.ndarray:
-    words = _normalise(word_bus, config.WORD_BUS_LUFS, sr)
+        sr: int = config.SAMPLE_RATE,
+        word_bus_lufs: float | None = None) -> np.ndarray:
+    """Words over the bed. word_bus_lufs lets a bank sit at its own level.
+
+    None keeps config.WORD_BUS_LUFS, which is what every bank did before one
+    of them needed to be louder, so passing nothing changes nothing.
+    """
+    target = config.WORD_BUS_LUFS if word_bus_lufs is None else word_bus_lufs
+    words = _normalise(word_bus, target, sr)
     bed = _normalise(instrumental, config.INSTRUMENTAL_LUFS, sr)
 
     n = min(words.shape[1], bed.shape[1])

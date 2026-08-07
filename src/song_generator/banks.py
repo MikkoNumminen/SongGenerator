@@ -88,3 +88,35 @@ def overrides_for(bank_dir: Path, level: str) -> dict:
     """
     levels = _declared(bank_dir).get("levels", {})
     return dict(levels.get(level, {}).get("overrides", {}))
+
+
+def mix_for(bank_dir: Path | None) -> dict:
+    """This bank's mix adjustments. Empty when it has not said.
+
+    Separate from the level overrides because loudness is a property of the
+    recordings, not of how playfully they are arranged. A speaking voice and a
+    shouted one do not sit at the same level against a band, and the bank is
+    the thing that knows which it is.
+
+    A fresh dict, so a caller cannot end up sharing state with the settings.
+    """
+    if bank_dir is None:
+        return {}
+    return dict(_declared(bank_dir).get("mix", {}))
+
+
+def never_split(bank_dir: Path | None) -> bool:
+    """True when no clip in this bank may be cut into pieces.
+
+    A sung bank is cut apart constantly: syllables are re-pitched one by one
+    onto their own notes, and slice_words takes single words out of recorded
+    phrases so an order nobody sang can still be said. Both are wrong for a
+    bank of spoken names, where half a word is not a shorter word, it is a
+    different sound.
+
+    Off by default, so a bank that has not said anything keeps being cut apart
+    exactly as before.
+    """
+    if bank_dir is None:
+        return False
+    return bool(_declared(bank_dir).get("never_split", False))

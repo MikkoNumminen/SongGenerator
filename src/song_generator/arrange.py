@@ -255,7 +255,7 @@ def invent_units(by_word: dict[str, list[Unit]], how_many: int,
     return out
 
 
-def enrich(units: list[Unit], level: str, rng) -> list[Unit]:
+def enrich(units: list[Unit], level: str, rng, split: bool = True) -> list[Unit]:
     """The pool the planner gets to choose from, for one run.
 
     Recorded clips first and always: they are the reason this sounds like a
@@ -264,6 +264,13 @@ def enrich(units: list[Unit], level: str, rng) -> list[Unit]:
     it better than anything real.
     """
     from .mapping import compose_words
+
+    if not split:
+        # Nothing derived at all. Slices, spellings and invented orders are
+        # every way this module has of cutting a clip up or gluing pieces
+        # together, and a bank of spoken names wants none of them: half a name
+        # is not a shorter name, and two names crossfaded is neither.
+        return list(units)
 
     params = level_params(level)
     if not params["slice_words"]:
@@ -570,14 +577,23 @@ def build(slots, units: list[Unit], level: str, seed: int,
         )
 
     strategy = "arranged" if bank_dir is None else banks.strategy_for(bank_dir, level)
-    if strategy == "sequence":
+    # The bank_dir test is not redundant: a strategy other than "arranged" can
+    # only come from a bank that declared one, so this says in code what the
+    # line above says in logic.
+    if strategy == "sequence" and bank_dir is not None:
         # Nothing to redraw: the sequence has no draws in it, and there are
         # no required words because the order IS the content. One plan, and
         # it is the plan. Described the same way as any other, so the .arr
         # log reads identically and replay keeps working.
-        plan = plan_sequence(slots, units)
+        # Pace is a property of the bank, not of the song: how fast a voice
+        # reads is a fact about that recording, and a busy melody would
+        # otherwise decide it.
+        pace = float(banks.overrides_for(bank_dir, level).get("reading_speed", 1.0))
+        plan = plan_sequence(slots, units, reading_speed=pace,
+                             split=not banks.never_split(bank_dir))
         return plan, describe(plan, song, bank, level, seed), 1
 
+    whole = banks.never_split(bank_dir)
     params = level_params(level)
     if bank_dir is not None:
         # Merged onto the copy level_params returned, never onto
@@ -619,9 +635,16 @@ def build(slots, units: list[Unit], level: str, seed: int,
                          "slice_cost", "joined_cost", "spelled_cost"):
                 drawing[knob] = float(drawing.get(knob, 0.0)) * relax
 
-        pool = enrich(units, level, random.Random(this_seed))
+        pool = enrich(units, level, random.Random(this_seed), split=not whole)
         plan = plan_words(slots, pool, seed=this_seed,
                           play=None if level == "off" else drawing)
+        if whole:
+            # Marked after planning rather than threaded through plan_words,
+            # which every bank shares. The planner's job is which clip goes
+            # where; whether that clip may be taken apart to sound is the
+            # bank's business, and build_segments is where it is read.
+            for placement in plan.placements:
+                placement.split = False
         arrangement = describe(plan, song, bank, level, this_seed)
 
         covered = wanted <= arrangement.words_used()

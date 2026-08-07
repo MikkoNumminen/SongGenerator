@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import __version__, arrange, audio_io, config
+from . import __version__, arrange, audio_io, banks, config
 from .analysis import analyse, report as analysis_report
 from .detect import detect_vocal
 from .mapping import (
@@ -228,6 +228,9 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_OK
 
     words_dir = args.words_dir or Path(config.BANKS[args.bank])
+    # A bank may sit at its own level against the bed. A speaking voice
+    # needs more than a shouted one to be heard over a band.
+    bus_lufs = banks.mix_for(words_dir).get("word_bus_lufs")
     singing_from, standardised = resolve_bank(
         words_dir, prefer_standardised=not args.raw_clips)
     try:
@@ -282,7 +285,11 @@ def main(argv: list[str] | None = None) -> int:
                 word_plan, described, tries = arrange.build(
                     slots, units, level, seed,
                     song=args.input.stem, bank=str(singing_from),
-                    bank_dir=singing_from)
+                    # The bank as declared, never the tier being sung from.
+                    # A standardised tier is a derivative of the bank, so the
+                    # settings belong to the bank: reading them from the tier
+                    # made every setting vanish the moment one was built.
+                    bank_dir=words_dir)
                 saved = arrange.save(described, work)
                 label = level
                 if not args.json:
@@ -318,16 +325,22 @@ def main(argv: list[str] | None = None) -> int:
                 decide_shifts(word_plan, mode=args.mix_mode, seed=args.seed,
                               target_mimicry=target)
                 tag = f"{target:.2f}".replace(".", "p")
-                # The level goes in the name only when there is more than one
-                # to tell apart. Appending it unconditionally doubled it onto
-                # an --output that already named a level.
-                stem = f"{output.stem}.{label}" if len(levels) > 1 else output.stem
+                # The level always goes in the name. Leaving it out when a run
+                # asked for a single level meant two runs of one song, one per
+                # level, wrote the same filenames and the second silently
+                # replaced the first. The guard against doubling it stays, but
+                # it now checks the name rather than counting the levels.
+                stem = output.stem
+                if label and not stem.endswith(f".{label}"):
+                    stem = f"{stem}.{label}"
+
                 path = output.with_name(f"{stem}.mim{tag}{output.suffix}")
 
             word_bus = render(word_plan, stems.instrumental.shape[1], config.SAMPLE_RATE,
                               shift=not args.no_shift, engine=args.engine, cache=cache)
             audio_io.encode_mp3(path, mix_buses(word_bus, stems.instrumental,
-                                                config.SAMPLE_RATE))
+                                                config.SAMPLE_RATE,
+                                                word_bus_lufs=bus_lufs))
             written.append((path, label, mimicry(word_plan),
                             sum(1 for p in word_plan.placements if p.do_shift)))
 
