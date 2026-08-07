@@ -16,7 +16,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
-from test_arrange import _unit
+from factories import make_unit as _unit
 
 from song_generator import arrange, audio_io, banks, cli, config
 from song_generator.mapping import (
