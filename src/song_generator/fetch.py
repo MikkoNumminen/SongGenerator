@@ -17,8 +17,8 @@ Two jobs beyond the convenience of not downloading by hand:
 
 2. **The origin is recorded, twice.** Nothing else in this repo does, and 21
    of the 23 indexed songs have no known address today. The download embeds
-   the page URL into the file itself (yt-dlp writes it as the `purl` tag, so
-   ffprobe recovers it from the file alone), and a row is appended to
+   the page URL into the file itself (in the `comment` tag, so ffprobe
+   recovers it from the file alone), and a row is appended to
    `input/SOURCES.md` so the index fills itself for everything fetched from
    now on.
 
@@ -32,7 +32,10 @@ abandoned an entire source; this path cannot produce one.
 
 An existing target is never overwritten and never duplicated with a "(1)"
 name. It is reported as already present and returned as-is, so fetching the
-same address twice is idempotent rather than destructive.
+same address twice is idempotent rather than destructive. Two different
+pages can slugify to the same name; when the index already records a
+different address for the slug, the fetch flags the conflict and records
+nothing, instead of pairing one song's file with another song's address.
 
 The GUI-facing surface is `fetch()`, which returns a `FetchResult` rather
 than printing, and `main()` is a thin argparse wrapper over it. `--json`
@@ -89,7 +92,11 @@ class FetchResult:
     `width` and `height` are None when the source had no video stream, and
     `duration_s` is None on the rare page that does not state one.
     `already_present` means the target existed and nothing was downloaded;
-    `path` then points at the existing file.
+    `path` then points at the existing file. `conflicting_url` is the
+    address the index already records for the slug when it differs from
+    `url`: the file on disk belongs to that recorded address, two titles
+    merely slugified to the same name, and nothing was downloaded or
+    recorded.
     """
 
     path: Path
@@ -101,6 +108,7 @@ class FetchResult:
     width: int | None
     height: int | None
     already_present: bool
+    conflicting_url: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -113,6 +121,7 @@ class FetchResult:
             "width": self.width,
             "height": self.height,
             "already_present": self.already_present,
+            "conflicting_url": self.conflicting_url,
         }
 
 
@@ -129,10 +138,13 @@ def _probe(url: str) -> dict[str, Any]:
 def _download(url: str, target: Path) -> None:
     """Download best video plus audio, merged to mp4 at `target`. Network.
 
-    The page URL is embedded into the file's own metadata (the `purl` tag),
-    so the file carries its origin even if the index row is lost. yt-dlp
-    downloads to `.part` files and renames on completion, so an interrupted
-    run never leaves a truncated file at the final name.
+    The page URL is embedded into the file's own metadata, so the file
+    carries its origin even if the index row is lost. It survives only as
+    the `comment` tag: yt-dlp writes the URL to both `purl` and `comment`,
+    but ffmpeg's mp4 muxer has no mapping for `purl` and silently drops it,
+    and every file here is merged to mp4. yt-dlp downloads to `.part` files
+    and renames on completion, so an interrupted run never leaves a
+    truncated file at the final name.
     """
     import yt_dlp
 
@@ -148,6 +160,25 @@ def _download(url: str, target: Path) -> None:
     }
     with yt_dlp.YoutubeDL(opts) as ydl:
         ydl.download([url])
+
+
+def recorded_address(slug: str, sources: Path) -> str | None:
+    """The address the index already holds for `slug`, or None.
+
+    `unknown` counts as None: it is the documented placeholder for an
+    address nobody has written down, not an address that could contradict
+    a probed one.
+    """
+    if not sources.is_file():
+        return None
+    for line in sources.read_text(encoding="utf-8").splitlines():
+        if not line.lstrip().startswith(f"| `{slug}` |"):
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) >= 3 and cells[2] and cells[2] != "unknown":
+            return cells[2]
+        return None
+    return None
 
 
 def record_source(slug: str, local: Path, address: str, sources: Path) -> bool:
@@ -215,6 +246,15 @@ def fetch(url: str, out_dir: str | Path = "input") -> FetchResult:
     width, height = info.get("width"), info.get("height")
 
     already = target.exists()
+    conflict: str | None = None
+    if already:
+        # Two different pages can slugify to the same name. When the index
+        # already ties this slug to another address, the file on disk is
+        # that other song, and pairing it with this address would
+        # misattribute both.
+        recorded = recorded_address(slug, out / SOURCES_NAME)
+        if recorded is not None and recorded != address:
+            conflict = recorded
     if not already:
         try:
             _download(url, target)
@@ -234,10 +274,12 @@ def fetch(url: str, out_dir: str | Path = "input") -> FetchResult:
         width=int(width) if width is not None else None,
         height=int(height) if height is not None else None,
         already_present=already,
+        conflicting_url=conflict,
     )
-    # Recorded even when the file was already there: the index row may be
-    # the missing half, and this call knows the address.
-    record_source(slug, target, address, out / SOURCES_NAME)
+    if conflict is None:
+        # Recorded even when the file was already there: the index row may
+        # be the missing half, and this call knows the address.
+        record_source(slug, target, address, out / SOURCES_NAME)
     return result
 
 
@@ -265,13 +307,28 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_ERROR
 
+    conflicted = result.conflicting_url is not None
+    if conflicted:
+        # The name is taken by another song. The usual advice, delete the
+        # file to fetch again, would destroy that song, so it is withheld
+        # and the exit code says the fetch did not happen.
+        print(f"warning: {result.path} is already taken by another song",
+              file=sys.stderr)
+        print(f"  recorded address   {result.conflicting_url}",
+              file=sys.stderr)
+        print(f"  requested address  {result.url}", file=sys.stderr)
+        print("  two titles share one slug; nothing was downloaded or "
+              "recorded, and deleting the file would lose the recorded "
+              "song", file=sys.stderr)
+
     if args.json:
         print(json.dumps(result.as_dict(), indent=2))
-        return EXIT_OK
+        return EXIT_ERROR if conflicted else EXIT_OK
 
     if result.already_present:
         print(f"  already here  {result.path}")
-        print("  nothing downloaded; delete the file first to fetch it again")
+        if not conflicted:
+            print("  nothing downloaded; delete the file first to fetch it again")
     else:
         print(f"  fetched   {result.path}")
     print(f"  title     {result.title}")
@@ -282,8 +339,9 @@ def main(argv: list[str] | None = None) -> int:
     if result.width and result.height:
         print(f"  video     {result.width}x{result.height}")
     print(f"  source    {result.url}")
-    print(f"  recorded  {args.out / SOURCES_NAME}")
-    return EXIT_OK
+    if not conflicted:
+        print(f"  recorded  {args.out / SOURCES_NAME}")
+    return EXIT_ERROR if conflicted else EXIT_OK
 
 
 if __name__ == "__main__":

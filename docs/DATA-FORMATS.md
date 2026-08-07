@@ -369,8 +369,11 @@ yet, which is a different answer from an address that does not exist.
 `fetch.py` creates the file with its header when absent, inserts new rows
 after the last existing table row so prose sections below the table stay
 below it, and never adds a second row for a slug already listed. A fetched
-file also carries its own address internally as the `purl` metadata tag, so
-the index and the file each survive losing the other.
+file also carries its own address internally as the `comment` metadata tag,
+so the index and the file each survive losing the other. It is `comment`,
+not `purl`: yt-dlp writes the address to both, but ffmpeg's mp4 muxer has no
+mapping for `purl` and drops it during the merge, so `comment` is the tag
+that survives in the file.
 
 
 Filenames carry meaning in `words/candidates/`, and the parsing is real code

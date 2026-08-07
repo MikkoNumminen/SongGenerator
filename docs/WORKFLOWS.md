@@ -76,14 +76,19 @@ because the plan for a rendered song is to cut the original music video to fit
 it. Several early songs were downloaded as convenience files at 426x238 and
 cannot be cut into anything.
 
-The origin is recorded twice: embedded in the file itself as the `purl` tag,
-where `ffprobe` can always recover it, and as a row in `input\SOURCES.md`, the
+The origin is recorded twice: embedded in the file itself as the `comment`
+tag, where `ffprobe` recovers it as long as you know which tag to read, and
+as a row in `input\SOURCES.md`, the
 gitignored index of where every song came from. See `docs/DATA-FORMATS.md`
 for its shape. Songs that arrived before this command exist have no recorded
 address; fetching does not fix history, it stops the gap growing.
 
 A file that is already there is reported and left alone: no overwrite, no
-`(1)` duplicate. Delete it first to fetch it again. `--json` prints the same
+`(1)` duplicate. Delete it first to fetch it again. The exception is when
+`input\SOURCES.md` already records a different address for that name, which
+means two titles slugified to the same slug; the fetch then warns on stderr,
+records nothing and exits nonzero, because deleting the file would lose the
+song the index describes. `--json` prints the same
 fields the `fetch()` function returns, and `--out` redirects everything,
 index included, somewhere other than `input\`.
 

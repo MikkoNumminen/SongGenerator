@@ -161,9 +161,11 @@ def test_json_emits_the_documented_fields(offline, tmp_path, capsys):
     assert set(payload) == {
         "path", "slug", "title", "uploader", "url",
         "duration_s", "width", "height", "already_present",
+        "conflicting_url",
     }
     assert payload["title"] == INFO["title"]
     assert payload["already_present"] is False
+    assert payload["conflicting_url"] is None
     assert Path(payload["path"]).is_file()
 
 
@@ -176,3 +178,68 @@ def test_cli_reports_already_present_and_still_exits_zero(offline, tmp_path, cap
     out = capsys.readouterr().out
     assert "already here" in out
     assert offline["download"] == 1
+
+
+URL_B = "https://elsewhere.example.com/watch?v=zzz999"
+
+
+def test_a_slug_collision_keeps_the_first_songs_address(offline, tmp_path):
+    """Two different videos can slugify to the same name. The second fetch
+    must not pair its address with the first video's file, and the first
+    video's row must keep the address it had."""
+    fetch.fetch(URL, out_dir=tmp_path)
+
+    offline["info"].update({"webpage_url": URL_B,
+                            "uploader": "Another Channel"})
+    result = fetch.fetch(URL_B, out_dir=tmp_path)
+
+    assert result.already_present is True
+    assert result.conflicting_url == URL
+    assert offline["download"] == 1  # the first video's file is untouched
+    text = (tmp_path / "SOURCES.md").read_text(encoding="utf-8")
+    assert URL in text
+    assert URL_B not in text
+
+
+def test_collision_cli_warns_on_stderr_and_exits_nonzero(offline, tmp_path, capsys):
+    """The warning names both addresses and the file, and the usual advice
+    to delete the file is withheld, because deleting it would destroy the
+    song the index describes."""
+    assert fetch.main([URL, "--out", str(tmp_path)]) == 0
+    capsys.readouterr()
+
+    offline["info"]["webpage_url"] = URL_B
+    code = fetch.main([URL_B, "--out", str(tmp_path)])
+    captured = capsys.readouterr()
+
+    assert code == fetch.EXIT_ERROR
+    assert URL in captured.err
+    assert URL_B in captured.err
+    assert f"{slugify(INFO['title'])}.mp4" in captured.err
+    assert "delete the file" not in captured.out
+
+
+def test_refetching_the_same_address_is_not_a_collision(offline, tmp_path):
+    fetch.fetch(URL, out_dir=tmp_path)
+    result = fetch.fetch(URL, out_dir=tmp_path)
+
+    assert result.already_present is True
+    assert result.conflicting_url is None
+
+
+def test_an_unknown_recorded_address_is_not_a_collision(offline, tmp_path):
+    """`unknown` is the placeholder for an address nobody wrote down, not an
+    address that can contradict the probed one."""
+    slug = slugify(INFO["title"])
+    (tmp_path / f"{slug}.mp4").write_bytes(b"hand-copied, no known address")
+    (tmp_path / "SOURCES.md").write_text(
+        "# Where each song came from\n\n## Songs\n\n"
+        "| Name | Local file | Address |\n|---|---|---|\n"
+        f"| `{slug}` | `input\\{slug}.mp4` | unknown |\n",
+        encoding="utf-8",
+    )
+
+    result = fetch.fetch(URL, out_dir=tmp_path)
+
+    assert result.already_present is True
+    assert result.conflicting_url is None
