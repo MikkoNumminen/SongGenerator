@@ -344,7 +344,34 @@ every clip on disk.
 
 ---
 
-## Filename conventions
+## `input/SOURCES.md`
+
+Where each song came from. Appended to by `fetch.py` on every successful
+download, and edited by hand for anything that arrived another way. It lives
+in `input/`, which is gitignored, so cloning the repo publishes none of the
+addresses; the tracked docs only describe its shape.
+
+```markdown
+| Name | Local file | Address |
+|---|---|---|
+| `example_song_official_video` | `input\example_song_official_video.mp4` | https://example.com/watch?v=abc123 |
+| `some_older_song` | `input\some_older_song.mp3` | unknown |
+```
+
+**Name** is the slug the whole tool keys on: `util.slugify` of the input
+filename, which names the `work/` directory. A fetched file is named by its
+slug on disk, so for those the two are identical by construction.
+
+**Address** is a web link for anything fetched, a path or a note for anything
+ripped, recorded or handed over. `unknown` means nobody has written it down
+yet, which is a different answer from an address that does not exist.
+
+`fetch.py` creates the file with its header when absent, inserts new rows
+after the last existing table row so prose sections below the table stay
+below it, and never adds a second row for a slug already listed. A fetched
+file also carries its own address internally as the `purl` metadata tag, so
+the index and the file each survive losing the other.
+
 
 Filenames carry meaning in `words/candidates/`, and the parsing is real code
 `parse_phrase` in `build_bank.py`, with the edge cases pinned by tests.

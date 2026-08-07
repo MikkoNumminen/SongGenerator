@@ -59,6 +59,36 @@ wanted.
 
 ---
 
+## Fetch a song from the web
+
+```powershell
+.\.venv\Scripts\python.exe -m song_generator.fetch "https://example.com/watch?v=abc123"
+```
+
+Lands in `input\<slug>.mp4`, best video plus audio merged, named by the same
+slug the renderer would derive, so the filename on disk is already the key the
+whole tool uses. Then render it as usual; the renderer never takes a URL
+itself, because the network stays out of the render path on purpose. A render
+must not be able to fail because a site changed.
+
+The video is kept at the best resolution the site holds, not just the audio,
+because the plan for a rendered song is to cut the original music video to fit
+it. Several early songs were downloaded as convenience files at 426x238 and
+cannot be cut into anything.
+
+The origin is recorded twice: embedded in the file itself as the `purl` tag,
+where `ffprobe` can always recover it, and as a row in `input\SOURCES.md`, the
+gitignored index of where every song came from. See `docs/DATA-FORMATS.md`
+for its shape. Songs that arrived before this command exist have no recorded
+address; fetching does not fix history, it stops the gap growing.
+
+A file that is already there is reported and left alone: no overwrite, no
+`(1)` duplicate. Delete it first to fetch it again. `--json` prints the same
+fields the `fetch()` function returns, and `--out` redirects everything,
+index included, somewhere other than `input\`.
+
+---
+
 ## Make many tracks at once
 
 ```powershell

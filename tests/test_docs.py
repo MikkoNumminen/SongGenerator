@@ -83,7 +83,7 @@ def test_constants_named_in_docs_actually_exist(doc):
         "AGENTS", "README", "GLOSSARY", "ARCHITECTURE", "WORKFLOWS", "CLAUDE",
         "DEMUCS", "WORLD", "PATH", "JSON", "LUFS", "PYTHONPATH", "GPU",
         "NVIDIA", "TSV", "BOM", "DENSITY", "CLIMAXES", "STAGE", "LISTEN",
-        "FIRST", "FORMATS", "BRAVO", "OTHER", "PLAYFULNESS",
+        "FIRST", "FORMATS", "BRAVO", "OTHER", "PLAYFULNESS", "SOURCES",
     }
     missing = sorted(_referenced_constants(read(ROOT / doc)) - known - allowed)
     assert not missing, f"{doc} names constants that do not exist: {missing}"

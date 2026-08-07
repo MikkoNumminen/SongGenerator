@@ -26,6 +26,10 @@ dependencies = [
     "pyloudnorm>=0.2",
     "pyworld>=0.3.5",
     "pylibrb>=0.1.2",
+    # Fetching songs from URLs (fetch.py). Sites change constantly and yt-dlp
+    # tracks them, so no version ceiling: old pins here rot into "site not
+    # supported" errors. Needs ffmpeg on PATH to merge video and audio.
+    "yt-dlp",
 ]
 
 [project.optional-dependencies]
@@ -91,5 +95,6 @@ module = [
     "torch.*",
     "torchcrepe",
     "whisper",
+    "yt_dlp",
 ]
 ignore_missing_imports = true

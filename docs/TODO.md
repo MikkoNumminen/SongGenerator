@@ -304,6 +304,13 @@ never see. Resolve it on a real vocal.
   way to find them. That is right, the repo is the tool and not the media, and
   it is exactly why the index has to carry the addresses.
 
+  **The gap has stopped growing.** `python -m song_generator.fetch <url>`
+  downloads a song into `input/`, keeps the video, writes the page address into
+  the file itself as the `comment` tag, and appends the row, so anything
+  fetched from now on records its own origin without anyone remembering to.
+  What it does not fix is the backlog: those rows are a sitting-down-and-writing
+  job for whoever has the links, and nothing can automate it.
+
 - **A live site: drop a song in, get a paskaperse back.** Nothing about the
   pipeline needs a person once the bank exists, so the interesting question is
   not whether it can be a web service but what it costs and what it hands a
