@@ -135,8 +135,9 @@ roles and origins.
 
 All of that describes the `arranged` strategy, which is what every bank gets
 unless it says otherwise. A bank may say otherwise in a `bank.json` beside its
-clips, read by `banks.py` from whichever directory is actually being sung
-from, so `--words-dir` gets the declared behaviour too. The other strategy is
+clips, read by `banks.py` and always resolved to the bank as declared, so
+`--words-dir` pointed at a bank or at its standardised tier gets the declared
+behaviour either way. The other strategy is
 `sequence`: the recordings replayed in the order they were spoken, sorted by
 the variant index `build_bank --raw` writes, looping when they run out, with
 no seed, no draws and no coverage redraw, because the order is the content. A

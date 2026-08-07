@@ -13,11 +13,15 @@ import copy
 import json
 from pathlib import Path
 
+import numpy as np
 import pytest
 from test_arrange import _unit
 
 from song_generator import arrange, audio_io, banks, config
-from song_generator.mapping import Slot, group_phrases, load_bank, plan_sequence
+from song_generator.mapping import (
+    Placement, Plan, Slot, build_segments, group_phrases, load_bank,
+    mix as mix_buses, plan_sequence, render,
+)
 
 
 def _spoken(n=3):
@@ -79,14 +83,49 @@ class TestPlanSequence:
         assert fingerprint() == fingerprint()
 
     def test_a_unit_is_never_shortened_to_fit_its_slots(self):
-        # 0.1s slots leave a 2-syllable placement 0.2s of span against a
-        # 0.4s clip. A spoken word cut in half stops being the word, so the
-        # unit keeps its full duration and overruns.
+        # 0.1s slots give a 2-syllable, 0.4s clip less span than it needs. A
+        # spoken word cut in half stops being the word, so every unit keeps
+        # its full duration and takes the slots its own time covers. Asserted
+        # over the WHOLE plan: the version of this test that looked only at
+        # the first placement stayed green while a backtracking guard starved
+        # every phrase after the first down to nothing.
         plan = plan_sequence(_slots(dur=0.1), _spoken(3))
-        first = plan.placements[0]
-        assert first.slot_span_s == pytest.approx(0.2)
-        assert first.play_s == pytest.approx(first.unit.duration_s)
-        assert first.play_s > first.slot_span_s
+        assert len(plan.placements) == 12
+        for p in plan.placements:
+            assert p.play_s == pytest.approx(p.unit.duration_s)
+            assert p.target_s == pytest.approx(p.unit.duration_s)
+
+    def test_short_slots_do_not_starve_the_song(self):
+        """Defect: when a unit did not fit its slots, a backtrack guard keyed
+        on plan.placements, which is global, so after the first placement it
+        fired at slot 0 of every later phrase and blocked the rest of the
+        song: 1 placement over 2 of 48 slots. Every phrase must be sung."""
+        plan = plan_sequence(_slots(dur=0.1), _spoken(3))
+        assert plan.slots_used == plan.slots_total == 48
+        assert plan.slots_dropped == 0
+        assert {p.phrase for p in plan.placements} == set(range(6))
+
+    def test_no_word_sounds_on_top_of_the_next(self):
+        """The cursor is the one authority on collision, at any slot size and
+        any pace: a word that needs more time than its slots give delays the
+        next word instead of playing underneath it."""
+        for dur in (0.1, 0.25):
+            for speed in (0.3, 0.5, 1.0):
+                plan = plan_sequence(_slots(dur=dur), _spoken(3),
+                                     reading_speed=speed)
+                assert plan.placements
+                for a, b in zip(plan.placements, plan.placements[1:]):
+                    assert b.onset_s >= a.onset_s + a.play_s - 1e-6, \
+                        f"overlap at {b.onset_s} (dur={dur}, speed={speed})"
+
+    def test_every_slot_is_accounted_for_at_any_pace(self):
+        """A slot the cursor has already passed is sung over, not silent, so
+        used and total stay equal however far a word overruns its phrase."""
+        for speed in (0.3, 0.5, 1.0):
+            plan = plan_sequence(_slots(dur=0.1), _spoken(3),
+                                 reading_speed=speed)
+            assert plan.slots_used == plan.slots_total == 48
+            assert plan.slots_dropped == 0
 
     def test_names_break_variant_ties(self):
         a = _unit(["delta"], name="b.wav")
@@ -115,6 +154,395 @@ class TestPlanSequence:
                           singable_only=False)
         assert {u.name: u.variant for u in units} == {
             "raw_0001.wav": "0001", "raw_0002.wav": "0002"}
+
+
+# ---------------------------------------------------------------------------
+# The pace of the reciting
+# ---------------------------------------------------------------------------
+
+class TestReadingSpeed:
+    def test_a_slower_pace_widens_every_span(self):
+        # 0.4s units at half speed need 0.8s each, which is four 0.25s slots
+        # instead of two, and half as many trips through the bank.
+        natural = plan_sequence(_slots(), _spoken(3))
+        slow = plan_sequence(_slots(), _spoken(3), reading_speed=0.5)
+        assert len(slow.placements) == len(natural.placements) / 2
+        for p in slow.placements:
+            assert p.n_slots == 4
+            assert p.target_s == pytest.approx(0.8)
+            assert p.play_s == pytest.approx(0.8)
+
+    def test_the_pace_comes_from_the_bank_not_the_song(self, tmp_path):
+        """reading_speed declared in bank.json must reach every placement as
+        its target duration; how fast a voice reads is a fact about the
+        recording, not something the melody's slot grid decides."""
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "levels": {"conservative": {"strategy": "sequence",
+                                        "overrides": {"reading_speed": 0.5}}}
+        }), encoding="utf-8")
+        plan = arrange.build(_slots(), _spoken(3), "conservative", 1,
+                             song="fixture", bank="fixture",
+                             bank_dir=tmp_path)[0]
+        assert plan.placements
+        for p in plan.placements:
+            assert p.target_s == pytest.approx(p.unit.duration_s / 0.5)
+
+    def test_the_pace_holds_when_nothing_is_shifted(self):
+        """Defect: the unshifted render branch truncated to play_s and
+        clamped to the clip's natural length, so at --no-shift or mimicry
+        0.00 reading_speed did nothing and the trailing-silence stutter came
+        back. The target duration must be honoured with shifting off."""
+        unit = _spoken(1)[0]  # a 0.4s clip
+        slots = [Slot(0.0, 0.25, 53.0, 0), Slot(0.25, 0.5, 53.0, 0)]
+        paced = Placement(unit=unit, onset_s=0.0, slot_span_s=0.5, play_s=0.8,
+                          n_slots=2, phrase=0, slots=slots, split=False,
+                          target_s=0.8)
+        plan = Plan(placements=[paced], slots_used=2, slots_total=2)
+
+        sr = config.SAMPLE_RATE
+        bus = render(plan, int(2 * sr), sr, shift=False)
+        tail = bus[:, int(0.55 * sr):int(0.75 * sr)]
+        assert float(np.abs(tail).max()) > 0.01, \
+            "the pace was dropped the moment shifting was off"
+
+    def test_without_a_target_the_unshifted_branch_still_truncates(self):
+        """The control for the test above, and the pinned old behaviour for
+        every sung placement: no target, no stretching, the clip stops where
+        play_s says."""
+        unit = _spoken(1)[0]
+        slots = [Slot(0.0, 0.25, 53.0, 0), Slot(0.25, 0.5, 53.0, 0)]
+        p = Placement(unit=unit, onset_s=0.0, slot_span_s=0.5, play_s=0.3,
+                      n_slots=2, phrase=0, slots=slots)
+        plan = Plan(placements=[p], slots_used=2, slots_total=2)
+
+        sr = config.SAMPLE_RATE
+        bus = render(plan, int(2 * sr), sr, shift=False)
+        tail = bus[:, int(0.35 * sr):]
+        assert float(np.abs(tail).max()) == pytest.approx(0.0, abs=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# What the sequence strategy sings, pinned exactly
+# ---------------------------------------------------------------------------
+
+# The counterpart of tests/test_determinism.py, for the other strategy: the
+# same fixture slots, three spoken units, one exact expectation. If this
+# fails, the question is not "is the new expectation right", it is "did I
+# mean to change what a sequence bank recites".
+SEQUENCE_1987 = [
+    "phrase 0",
+    "   0:00.00  x2  =0.50  delta                             [raw_0001.wav]",
+    "   0:00.50  x2  =0.50  delta                             [raw_0002.wav]",
+    "   0:01.00  x2  =0.50  delta                             [raw_0003.wav]",
+    "   0:01.50  x2  =0.50  delta                             [raw_0001.wav]",
+    "phrase 1",
+    "   0:02.50  x2  =0.50  delta                             [raw_0002.wav]",
+    "   0:03.00  x2  =0.50  delta                             [raw_0003.wav]",
+    "   0:03.50  x2  =0.50  delta                             [raw_0001.wav]",
+    "   0:04.00  x2  =0.50  delta                             [raw_0002.wav]",
+    "phrase 2",
+    "   0:05.00  x2  =0.50  delta                             [raw_0003.wav]",
+    "   0:05.50  x2  =0.50  delta                             [raw_0001.wav]",
+    "   0:06.00  x2  =0.50  delta                             [raw_0002.wav]",
+    "   0:06.50  x2  =0.50  delta                             [raw_0003.wav]",
+    "phrase 3",
+    "   0:07.50  x2  =0.50  delta                             [raw_0001.wav]",
+    "   0:08.00  x2  =0.50  delta                             [raw_0002.wav]",
+    "   0:08.50  x2  =0.50  delta                             [raw_0003.wav]",
+    "   0:09.00  x2  =0.50  delta                             [raw_0001.wav]",
+    "phrase 4",
+    "   0:10.00  x2  =0.50  delta                             [raw_0002.wav]",
+    "   0:10.50  x2  =0.50  delta                             [raw_0003.wav]",
+    "   0:11.00  x2  =0.50  delta                             [raw_0001.wav]",
+    "   0:11.50  x2  =0.50  delta                             [raw_0002.wav]",
+    "phrase 5",
+    "   0:12.50  x2  =0.50  delta                             [raw_0003.wav]",
+    "   0:13.00  x2  =0.50  delta                             [raw_0001.wav]",
+    "   0:13.50  x2  =0.50  delta                             [raw_0002.wav]",
+    "   0:14.00  x2  =0.50  delta                             [raw_0003.wav]",
+]
+
+
+def test_the_recitation_for_a_given_bank_does_not_move(tmp_path):
+    (tmp_path / "bank.json").write_text(json.dumps({
+        "levels": {"conservative": {"strategy": "sequence"}}
+    }), encoding="utf-8")
+    arr = arrange.build(_slots(), _spoken(3), "conservative", 1987,
+                        song="fixture", bank="fixture", bank_dir=tmp_path)[1]
+    got = [l.rstrip() for l in arrange.render_text(arr).splitlines()
+           if l.strip() and not l.lstrip().startswith("#")]
+    assert got == SEQUENCE_1987
+
+
+# ---------------------------------------------------------------------------
+# Keeping a clip whole
+# ---------------------------------------------------------------------------
+
+class TestNeverSplit:
+    def test_a_whole_clip_is_fitted_to_its_target(self):
+        """Defect: the whole-clip branch switched its fitting off whenever
+        pace read 1.0, and an arranged planner never set pace, so a clip
+        rendered at natural length over a fraction of the time and played
+        over the next word. The target must be honoured, whoever planned."""
+        unit = _unit(["tango", "bravo"])  # 0.8s
+        slots = [Slot(0.0, 0.2, 60.0, 0), Slot(0.2, 0.4, 60.0, 0)]
+        p = Placement(unit=unit, onset_s=0.0, slot_span_s=0.4, play_s=0.4,
+                      n_slots=2, phrase=0, slots=slots, split=False,
+                      target_s=0.4)
+        segments, total = build_segments(p)
+        assert len(segments) == 1
+        assert total == pytest.approx(0.4)
+        assert segments[0].out_dur_s == pytest.approx(0.4)
+
+    def test_the_engine_range_bounds_the_fitting(self):
+        """A clip is never compressed past what the engine stretches cleanly;
+        beyond that a slight overrun beats an unrecognisable word."""
+        unit = _unit(["tango", "bravo"])  # 0.8s
+        slots = [Slot(0.0, 0.1, 60.0, 0)]
+        p = Placement(unit=unit, onset_s=0.0, slot_span_s=0.1, play_s=0.1,
+                      n_slots=1, phrase=0, slots=slots, split=False,
+                      target_s=0.1)
+        _, total = build_segments(p)
+        lo, _ = config.TIME_STRETCH_RANGE
+        assert total == pytest.approx(0.8 * lo)
+
+    def test_an_arranged_level_of_a_never_split_bank_is_marked(self, tmp_path):
+        """The live case: a bank that recites one level and arranges another.
+        Every arranged placement must carry the no-split flag AND the time
+        plan_words actually gave it, or build_segments has nothing to fit
+        the whole clip to."""
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "levels": {"wild": {"strategy": "arranged"}},
+            "never_split": True,
+        }), encoding="utf-8")
+        plan = arrange.build(_slots(), _arranged_bank(), "wild", 1987,
+                             song="fixture", bank="fixture",
+                             bank_dir=tmp_path)[0]
+        assert plan.placements
+        for p in plan.placements:
+            assert p.split is False
+            assert p.target_s is not None
+            assert p.target_s == pytest.approx(p.play_s)
+            assert p.target_s <= p.slot_span_s + 1e-6
+
+    def test_a_recited_never_split_clip_keeps_its_pace(self):
+        """split=False and a pace target together: the whole clip is one
+        segment stretched to the reciting pace, not to its slot span."""
+        unit = _spoken(1)[0]  # 0.4s
+        slots = [Slot(0.0, 0.25, 53.0, 0), Slot(0.25, 0.5, 53.0, 0)]
+        p = Placement(unit=unit, onset_s=0.0, slot_span_s=0.5, play_s=0.5,
+                      n_slots=2, phrase=0, slots=slots, split=False,
+                      target_s=0.5)
+        segments, total = build_segments(p)
+        assert len(segments) == 1
+        assert total == pytest.approx(0.5)
+
+
+class TestRecitedSyllables:
+    """The paced split path: end to end, nothing dropped, nothing on top."""
+
+    def test_a_raw_shout_advances_the_recital_not_overlaps_it(self):
+        """Defect, latent: in the paced path a raw shout syllable stayed
+        pinned to its slot while its neighbours walked a cursor, so it
+        sounded on top of them. Every syllable advances the cursor; the
+        shout only keeps its recorded length while doing so."""
+        unit = _unit(["aah", "calculator"])  # shout syllable first, 1.0s
+        slots = [Slot(i * 0.25, (i + 1) * 0.25, 60.0, 0) for i in range(5)]
+        p = Placement(unit=unit, onset_s=0.0, slot_span_s=1.25, play_s=1.5,
+                      n_slots=5, phrase=0, slots=slots, split=True,
+                      target_s=1.5)
+        segments, total = build_segments(p)
+        assert len(segments) == 5
+        for a, b in zip(segments, segments[1:]):
+            assert b.out_start_s == pytest.approx(a.out_start_s + a.out_dur_s)
+        # The shout keeps its own length; the rest share the remaining time.
+        assert segments[0].out_dur_s == pytest.approx(0.2)
+        assert total == pytest.approx(1.5)
+
+    def test_reciting_never_drops_a_syllable_short_of_slots(self):
+        """Fewer slots than syllables happens whenever the slots are long.
+        The sung path stops at the last slot; the recited path reuses its
+        pitch instead, because half a spoken word is not a shorter word."""
+        unit = _unit(["tango", "bravo"])  # 4 syllables, 0.8s
+        slots = [Slot(0.0, 0.6, 60.0, 0)]
+        p = Placement(unit=unit, onset_s=0.0, slot_span_s=0.6, play_s=0.8,
+                      n_slots=1, phrase=0, slots=slots, split=True,
+                      target_s=0.8)
+        segments, total = build_segments(p)
+        assert len(segments) == 4
+        assert total == pytest.approx(0.8)
+
+
+# ---------------------------------------------------------------------------
+# Replay
+# ---------------------------------------------------------------------------
+
+class TestSequenceReplay:
+    """A sequence bank's own .arr must come back as the same plan.
+
+    The file records what was placed where, and deliberately not how the
+    bank behaves: never_split, the strategy and reading_speed are properties
+    of the bank, re-derived at replay through the same resolution build
+    uses. A replay that forgot them re-pitched whole spoken clips per
+    syllable, sliced them into words, and cut them to their slots.
+    """
+
+    def _bank_dir(self, tmp_path):
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "levels": {"conservative": {"strategy": "sequence",
+                                        "overrides": {"reading_speed": 0.8}}},
+            "never_split": True,
+        }), encoding="utf-8")
+        return tmp_path
+
+    @staticmethod
+    def _fingerprint(plan):
+        return [(p.unit.name, round(p.onset_s, 3), p.n_slots, p.split,
+                 round(p.play_s, 3),
+                 None if p.target_s is None else round(p.target_s, 3))
+                for p in plan.placements]
+
+    def test_replay_reproduces_the_recitation(self, tmp_path):
+        bank_dir = self._bank_dir(tmp_path)
+        units = _spoken(5)
+        plan, arrangement, _ = arrange.build(
+            _slots(), units, "conservative", 7,
+            song="fixture", bank="fixture", bank_dir=bank_dir)
+        replayed = arrange.realise(
+            arrange.parse_text(arrange.render_text(arrangement)),
+            _slots(), units, bank_dir=bank_dir)
+        assert self._fingerprint(replayed) == self._fingerprint(plan)
+
+    def test_replay_does_not_slice_a_never_split_bank(self, tmp_path):
+        bank_dir = self._bank_dir(tmp_path)
+        units = _spoken(5)
+        _, arrangement, _ = arrange.build(
+            _slots(), units, "conservative", 7,
+            song="fixture", bank="fixture", bank_dir=bank_dir)
+        replayed = arrange.realise(
+            arrange.parse_text(arrange.render_text(arrangement)),
+            _slots(), units, bank_dir=bank_dir)
+        for p in replayed.placements:
+            assert "#" not in p.unit.name, "a spoken clip came back as a slice"
+            assert p.split is False
+
+    def test_replay_without_a_bank_dir_stays_exactly_as_before(self, tmp_path):
+        """The default is the behaviour every existing .arr depends on."""
+        units = _arranged_bank()
+        plan, arrangement, _ = arrange.build(_slots(), units, "wild", 31)
+        replayed = arrange.realise(
+            arrange.parse_text(arrange.render_text(arrangement)),
+            _slots(), units, bank_dir=None)
+        assert [p.unit.name for p in replayed.placements] == \
+               [p.unit.name for p in plan.placements]
+        for p in replayed.placements:
+            assert p.split is True
+            assert p.target_s is None
+
+
+# ---------------------------------------------------------------------------
+# The bank's own level against the bed
+# ---------------------------------------------------------------------------
+
+class TestWordBusLufs:
+    def test_the_declared_level_is_returned(self, tmp_path):
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "mix": {"word_bus_lufs": -11.0}
+        }), encoding="utf-8")
+        assert banks.mix_for(tmp_path) == {"word_bus_lufs": -11.0}
+        assert banks.mix_for(None) == {}
+
+    def test_a_string_is_refused_by_file_not_deep_in_the_mix(self, tmp_path):
+        """A JSON string used to surface as a TypeError inside _normalise,
+        blaming nothing. The refusal must name the file and the setting."""
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "mix": {"word_bus_lufs": "-11.0"}
+        }), encoding="utf-8")
+        with pytest.raises(ValueError, match="word_bus_lufs") as caught:
+            banks.mix_for(tmp_path)
+        assert "bank.json" in str(caught.value)
+
+    def test_a_reading_speed_that_is_not_a_number_is_refused(self, tmp_path):
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "levels": {"conservative": {"strategy": "sequence",
+                                        "overrides": {"reading_speed": "0.8"}}}
+        }), encoding="utf-8")
+        with pytest.raises(ValueError, match="reading_speed") as caught:
+            banks.overrides_for(tmp_path, "conservative")
+        assert "bank.json" in str(caught.value)
+
+    def test_a_reading_speed_of_zero_is_refused(self, tmp_path):
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "levels": {"conservative": {"strategy": "sequence",
+                                        "overrides": {"reading_speed": 0}}}
+        }), encoding="utf-8")
+        with pytest.raises(ValueError, match="reading_speed"):
+            banks.overrides_for(tmp_path, "conservative")
+
+    def test_the_level_reaches_the_mix(self):
+        """mix() must honour a bank's declared bus level, or the whole
+        setting is a comment."""
+        sr = config.SAMPLE_RATE
+        t = np.arange(2 * sr) / sr
+        tone = (0.1 * np.sin(2 * np.pi * 220 * t)).astype(np.float32)
+        words = np.stack([tone, tone])
+        bed = np.zeros_like(words)
+
+        loud = mix_buses(words, bed, sr, word_bus_lufs=-20.0)
+        quiet = mix_buses(words, bed, sr, word_bus_lufs=-40.0)
+
+        def rms(x):
+            return float(np.sqrt(np.mean(np.square(x))))
+
+        assert rms(loud) > 5 * rms(quiet)
+
+
+# ---------------------------------------------------------------------------
+# Settings resolve to the bank, however the directory was reached
+# ---------------------------------------------------------------------------
+
+class TestSettingsComeFromTheBank:
+    def _bank_and_tier(self, tmp_path):
+        bank = tmp_path / "words_hq"
+        bank.mkdir()
+        (bank / "bank.json").write_text(json.dumps({
+            "levels": {"conservative": {"strategy": "sequence"}},
+            "mix": {"word_bus_lufs": -11.0},
+            "never_split": True,
+        }), encoding="utf-8")
+        tier = tmp_path / ("words_hq" + config.STD_SUFFIX)
+        tier.mkdir()
+        (tier / config.STD_MANIFEST).write_text("{}", encoding="utf-8")
+        return bank, tier
+
+    def test_a_tier_answers_with_what_its_bank_declared(self, tmp_path):
+        """Defect: --words-dir pointed at a .std tier read settings from the
+        tier itself, which has no bank.json, so every declared setting
+        silently vanished. A tier is a derivative of its bank."""
+        bank, tier = self._bank_and_tier(tmp_path)
+        assert banks.settings_dir(tier) == bank
+        assert banks.strategy_for(tier, "conservative") == "sequence"
+        assert banks.never_split(tier) is True
+        assert banks.mix_for(tier).get("word_bus_lufs") == -11.0
+
+    def test_the_bank_itself_is_untouched_by_the_rule(self, tmp_path):
+        bank, _ = self._bank_and_tier(tmp_path)
+        assert banks.settings_dir(bank) == bank
+        assert banks.strategy_for(bank, "conservative") == "sequence"
+
+    def test_a_name_alone_does_not_make_a_tier(self, tmp_path):
+        """The manifest marker decides, the same rule resolve_bank uses. A
+        directory that merely ends in .std speaks for itself."""
+        d = tmp_path / "foo.std"
+        d.mkdir()
+        assert banks.settings_dir(d) == d
+
+    def test_a_tier_whose_bank_is_gone_speaks_for_itself(self, tmp_path):
+        tier = tmp_path / ("orphan" + config.STD_SUFFIX)
+        tier.mkdir()
+        (tier / config.STD_MANIFEST).write_text("{}", encoding="utf-8")
+        assert banks.settings_dir(tier) == tier
+        assert banks.strategy_for(tier, "conservative") == "arranged"
 
 
 # ---------------------------------------------------------------------------

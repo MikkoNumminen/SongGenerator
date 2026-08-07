@@ -588,8 +588,8 @@ def build(slots, units: list[Unit], level: str, seed: int,
         # Pace is a property of the bank, not of the song: how fast a voice
         # reads is a fact about that recording, and a busy melody would
         # otherwise decide it.
-        pace = float(banks.overrides_for(bank_dir, level).get("reading_speed", 1.0))
-        plan = plan_sequence(slots, units, reading_speed=pace,
+        speed = float(banks.overrides_for(bank_dir, level).get("reading_speed", 1.0))
+        plan = plan_sequence(slots, units, reading_speed=speed,
                              split=not banks.never_split(bank_dir))
         return plan, describe(plan, song, bank, level, seed), 1
 
@@ -642,9 +642,13 @@ def build(slots, units: list[Unit], level: str, seed: int,
             # Marked after planning rather than threaded through plan_words,
             # which every bank shares. The planner's job is which clip goes
             # where; whether that clip may be taken apart to sound is the
-            # bank's business, and build_segments is where it is read.
+            # bank's business, and build_segments is where it is read. The
+            # target pins the whole clip to the time plan_words actually gave
+            # it, so it is fitted to its span rather than ringing over the
+            # next word at natural length.
             for placement in plan.placements:
                 placement.split = False
+                placement.target_s = placement.play_s
         arrangement = describe(plan, song, bank, level, this_seed)
 
         covered = wanted <= arrangement.words_used()
@@ -670,15 +674,35 @@ def unreachable_words(units: list[Unit]) -> list[str]:
     return sorted(set(required_words()) - sayable)
 
 
-def realise(arrangement: Arrangement, slots, units: list[Unit]) -> Plan:
+def realise(arrangement: Arrangement, slots, units: list[Unit],
+            bank_dir: Path | None = None) -> Plan:
     """Turn a description back into a plan, exactly.
 
     Placements are rebuilt from the file rather than replanned, so an edited
     arrangement produces what it says and nothing else. Each line is anchored
     to the slot nearest the time it records; a line that cannot be anchored is
     refused by name, since a silently misaligned word is worse than a stop.
+
+    bank_dir is the same argument build takes: where the bank's declaration
+    lives. The .arr file records what was placed where and deliberately not
+    how the bank behaves -- never_split, the strategy, reading_speed -- because
+    those are properties of the bank, and a second copy per file could
+    disagree with the first. They are re-derived here through the same
+    resolution build uses, so replaying a sequence bank's own log keeps its
+    clips whole and keeps their pace instead of re-pitching them per syllable
+    and cutting them to their slots.
     """
+    from . import banks
     from .mapping import Placement
+
+    whole = banks.never_split(bank_dir)
+    recited = False
+    speed = 1.0
+    if (bank_dir is not None
+            and banks.strategy_for(bank_dir, arrangement.level) == "sequence"):
+        recited = True
+        speed = max(float(banks.overrides_for(bank_dir, arrangement.level)
+                          .get("reading_speed", 1.0)), 0.05)
 
     # Rebuild the pool the run had, not merely the recorded clips. A take can
     # be a word cut out of a phrase, a word spelled from syllables, or an order
@@ -686,11 +710,14 @@ def realise(arrangement: Arrangement, slots, units: list[Unit]) -> Plan:
     # for such a name in the recordings alone found nothing and quietly
     # substituted a different take, so a replay was not the arrangement it
     # claimed to be. The file records the level and the seed precisely so the
-    # same pool can be built again.
+    # same pool can be built again. For a never_split bank there is nothing
+    # derived to rebuild, and slicing here would cut the very clips the
+    # setting exists to keep whole.
     pool = list(units)
     if arrangement.level in config.PLAY_LEVELS:
-        pool = enrich(units, arrangement.level, random.Random(arrangement.seed))
-    if not any("#" in u.name for u in pool):
+        pool = enrich(units, arrangement.level, random.Random(arrangement.seed),
+                      split=not whole)
+    if not whole and not any("#" in u.name for u in pool):
         pool = pool + slice_words(units)
     by_word = index_by_word(pool)
 
@@ -735,25 +762,40 @@ def realise(arrangement: Arrangement, slots, units: list[Unit]) -> Plan:
         # replay that derived it cut a word short by over a second.
         span_s = line.span_s if line.span_s is not None else (
             covered[-1].offset_s - covered[0].onset_s)
+        # A recited placement's duration is the bank's pace, not the slots'.
+        target = unit.duration_s / speed if recited else None
         plan.placements.append(Placement(
             unit=unit,
             onset_s=covered[0].onset_s,
             slot_span_s=span_s,
-            play_s=unit.duration_s,
+            play_s=unit.duration_s if target is None else target,
             n_slots=len(covered),
             phrase=covered[0].phrase,
             slots=list(landing),
+            split=not whole,
+            target_s=target,
         ))
         plan.slots_used += len(covered)
 
     # Nothing runs into what follows, and nothing rings past the span it was
     # given. The planner truncates on both, and a replay that set play_s to the
     # whole clip let a four second unit sound where a 1.3 second one was
-    # planned, which is not the arrangement the file describes.
+    # planned, which is not the arrangement the file describes. A placement
+    # that carries a target is exempt: its planner's cursor already kept it
+    # clear of its neighbours, and clamping it here would cut the word the
+    # file exists to preserve.
     for placement in plan.placements:
-        placement.play_s = min(placement.play_s, placement.slot_span_s)
+        if placement.target_s is None:
+            placement.play_s = min(placement.play_s, placement.slot_span_s)
     for a, b in zip(plan.placements, plan.placements[1:]):
-        a.play_s = min(a.play_s, max(0.0, b.onset_s - a.onset_s))
+        if a.target_s is None:
+            a.play_s = min(a.play_s, max(0.0, b.onset_s - a.onset_s))
+    if whole:
+        # The whole clip is fitted to the time the plan gives it, the same
+        # marking build applies after plan_words.
+        for placement in plan.placements:
+            if placement.target_s is None:
+                placement.target_s = placement.play_s
     return plan
 
 

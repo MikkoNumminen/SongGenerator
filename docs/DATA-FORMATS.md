@@ -101,17 +101,21 @@ together with the `build_bank` command that restores them.
 ## `words/bank.json`
 
 How a bank behaves, declared beside its clips. Written by a person, read by
-`banks.py` from whichever directory is actually being sung from, so it works
-the same through `--bank` and `--words-dir`. Optional: a bank without one
-behaves exactly as every bank did before the file existed.
+`banks.py`. Settings always resolve to the bank as declared: a standardised
+tier is a derivative of its bank, so pointing `--words-dir` at either the
+bank or its `.std` tier finds the same declaration. Optional: a bank without
+one behaves exactly as every bank did before the file existed.
 
 ```jsonc
 {
   "levels": {
-    "conservative": {"strategy": "sequence"},
+    "conservative": {"strategy": "sequence",
+                     "overrides": {"reading_speed": 0.8}},
     "wild": {"strategy": "arranged",
              "overrides": {"chant_chance": 0.55, "chant_max": 6}}
-  }
+  },
+  "mix": {"word_bus_lufs": -11.0},
+  "never_split": true
 }
 ```
 
@@ -123,20 +127,34 @@ Per level, `strategy` picks how units are placed:
   looping when they run out. The order comes from the `variant` field in
   `words.json`, which `build_bank --raw` writes as a zero-padded index in
   chronological order, so string comparison is enough; names break ties. No
-  seed, no draws, no coverage redraw: two runs are identical. A unit is
-  never cut short to fit its slots either, because a spoken word cut short
-  stops being the word, so it plays whole and may overrun.
+  seed, no draws, no coverage redraw: two runs are identical. One time
+  cursor paces the reciting: each unit is given the time it needs to be
+  said at the declared pace and the next begins on the first slot after it
+  stops sounding, so a spoken word is never cut short to fit its slots and
+  never lands on top of the word after it.
 
 `overrides` sit on top of the level's parameters from the playfulness block
 of `config.py`, so a bank can lean a level without redefining it. Any knob a
 level sets may appear. They are merged onto a copy, never written into
 `PLAY_LEVELS`, so a batch run cannot carry one bank's taste into the next
-song. They mean nothing under `sequence`, which has no parameters.
+song. `sequence` reads exactly one of them: `reading_speed`, the pace of the
+reciting, where 1.0 is as spoken and lower is slower. The rest mean nothing
+to it.
+
+`never_split` keeps every clip whole: one segment, one pitch shift, fitted
+to the time the plan gives it rather than cut apart into syllables, because
+half a spoken word is not a shorter word. It applies to every level the bank
+has, whichever strategy places the clips. `mix.word_bus_lufs` lets the
+bank's words sit at their own level against the bed, in LUFS; a speaking
+voice needs more than a shouted one to be heard over a band.
 
 An unknown strategy is refused by name rather than defaulted. A bank that
 declared `sequence` and silently got `arranged` would still play, in the
-wrong order, which is the failure the file exists to prevent. The behaviour
-of a bank that declares nothing is pinned by `tests/test_determinism.py`.
+wrong order, which is the failure the file exists to prevent. A
+`reading_speed` or `word_bus_lufs` that is not a number is refused the same
+way, naming the file, instead of surfacing as a type error deep in the mix.
+The behaviour of a bank that declares nothing is pinned by
+`tests/test_determinism.py`.
 
 ---
 
