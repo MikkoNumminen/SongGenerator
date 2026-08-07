@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import __version__, arrange, audio_io, config
+from . import __version__, arrange, audio_io, banks, config
 from .analysis import analyse, report as analysis_report
 from .detect import detect_vocal
 from .mapping import (
@@ -111,16 +111,43 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def output_path(explicit: Path | None, song: Path) -> Path:
-    """Where a run writes, with every song in a folder of its own.
+def versioned_name(output: Path, label: str, tag: str | None = None) -> Path:
+    """The filename for one rendered version: level, then mimicry rung.
+
+    Every path a render writes goes through here, which is the point: the
+    level went into the name at one of two sites and not the other, so two
+    single-level runs of one song wrote the same names and the second
+    silently replaced the first. One function cannot disagree with itself.
+
+    The level always goes in. The guard against doubling it checks the name
+    rather than counting anything, so an --output that already names a level
+    is left alone.
+    """
+    stem = output.stem
+    if label and not stem.endswith(f".{label}"):
+        stem = f"{stem}.{label}"
+    if tag is not None:
+        stem = f"{stem}.mim{tag}"
+    return output.with_name(f"{stem}{output.suffix}")
+
+
+def output_path(explicit: Path | None, song: Path, bank: str) -> Path:
+    """Where a run writes, with every song in a folder of its own and every
+    bank in a folder inside that.
 
     A run writes fourteen files and there are a dozen songs, so flat that is
     nearly two hundred sorted by name, interleaving every song's levels and
     rungs. The song name stays in the filename as well, so a file dragged out
     of its folder still says what it is.
+
+    Banks get the same treatment for the same reason, one level down. The
+    same song sung from two banks is twenty-eight files whose names differ in
+    nothing at all, so without the folder the second bank's render silently
+    replaces the first. The folder is named for what --bank was given, or for
+    the directory itself when --words-dir pointed somewhere directly.
     """
     base = explicit or Path("output") / f"{song.stem}.mp3"
-    return base.parent / base.stem / base.name
+    return base.parent / base.stem / bank / base.name
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -130,7 +157,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: input file not found: {args.input}", file=sys.stderr)
         return EXIT_ERROR
 
-    output = output_path(args.output, args.input)
+    # The name outputs are filed under: the chosen bank, or the directory
+    # itself when --words-dir bypasses the bank table.
+    bank_name = args.words_dir.name if args.words_dir else args.bank
+    output = output_path(args.output, args.input, bank_name)
     work = work_dir_for(args.input, args.work_dir)
     device = resolve_device(args.device)
 
@@ -218,6 +248,18 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_OK
 
     words_dir = args.words_dir or Path(config.BANKS[args.bank])
+    # A bank may sit at its own level against the bed. A speaking voice
+    # needs more than a shouted one to be heard over a band. banks resolves
+    # a standardised tier back to the bank beside it, so --words-dir pointed
+    # at either finds the same declaration.
+    # This is also where a malformed bank.json is refused: banks validates
+    # the whole file on every read, so catching its refusal here turns it
+    # into an error with the error exit code rather than a traceback.
+    try:
+        bus_lufs = banks.mix_for(words_dir).get("word_bus_lufs")
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EXIT_ERROR
     singing_from, standardised = resolve_bank(
         words_dir, prefer_standardised=not args.raw_clips)
     try:
@@ -259,8 +301,18 @@ def main(argv: list[str] | None = None) -> int:
     for level in levels:
         try:
             if level is None:
-                described = arrange.load(args.arrangement)
-                word_plan = arrange.realise(described, slots, units)
+                # The arrangement belongs to the bank it was rendered from,
+                # and the bank decides what words exist: a bank cut with
+                # build_bank --raw calls every unit "raw", which no
+                # vocabulary holds, and its own log has to replay.
+                described = arrange.load(
+                    args.arrangement,
+                    bank_words={w for u in units for w in u.words})
+                # The bank's declaration travels into replay too, so a
+                # sequence bank's own log comes back whole and paced rather
+                # than re-pitched per syllable and cut to its slots.
+                word_plan = arrange.realise(described, slots, units,
+                                            bank_dir=words_dir)
                 label = described.level or "replay"
                 if not args.json:
                     print(f"  arrangement replayed from {args.arrangement}")
@@ -268,7 +320,14 @@ def main(argv: list[str] | None = None) -> int:
                 seed = args.seed if args.seed is not None else random.randrange(1, 1_000_000)
                 word_plan, described, tries = arrange.build(
                     slots, units, level, seed,
-                    song=args.input.stem, bank=str(singing_from))
+                    song=args.input.stem, bank=str(singing_from),
+                    # The directory the run was pointed at, tier or bank.
+                    # banks resolves a tier back to the bank beside it, so
+                    # the settings are always the bank's as declared: a
+                    # standardised tier is a derivative of the bank, and
+                    # reading settings from the tier made every one of them
+                    # vanish the moment a tier was built or named.
+                    bank_dir=words_dir)
                 saved = arrange.save(described, work)
                 label = level
                 if not args.json:
@@ -298,22 +357,18 @@ def main(argv: list[str] | None = None) -> int:
                 decide_shifts(word_plan, mix=0.0 if args.no_shift else args.mix,
                               mode=args.mix_mode, seed=args.seed,
                               target_mimicry=args.mimicry)
-                stem = f"{output.stem}.{label}" if len(levels) > 1 else output.stem
-                path = output.with_name(f"{stem}{output.suffix}")
+                path = versioned_name(output, label)
             else:
                 decide_shifts(word_plan, mode=args.mix_mode, seed=args.seed,
                               target_mimicry=target)
-                tag = f"{target:.2f}".replace(".", "p")
-                # The level goes in the name only when there is more than one
-                # to tell apart. Appending it unconditionally doubled it onto
-                # an --output that already named a level.
-                stem = f"{output.stem}.{label}" if len(levels) > 1 else output.stem
-                path = output.with_name(f"{stem}.mim{tag}{output.suffix}")
+                path = versioned_name(output, label,
+                                      tag=f"{target:.2f}".replace(".", "p"))
 
             word_bus = render(word_plan, stems.instrumental.shape[1], config.SAMPLE_RATE,
                               shift=not args.no_shift, engine=args.engine, cache=cache)
             audio_io.encode_mp3(path, mix_buses(word_bus, stems.instrumental,
-                                                config.SAMPLE_RATE))
+                                                config.SAMPLE_RATE,
+                                                word_bus_lufs=bus_lufs))
             written.append((path, label, mimicry(word_plan),
                             sum(1 for p in word_plan.placements if p.do_shift)))
 

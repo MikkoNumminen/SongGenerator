@@ -98,6 +98,76 @@ together with the `build_bank` command that restores them.
 
 ---
 
+## `words/bank.json`
+
+How a bank behaves, declared beside its clips. Written by a person, read by
+`banks.py`. Settings always resolve to the bank as declared: a standardised
+tier is a derivative of its bank, so pointing `--words-dir` at either the
+bank or its `.std` tier finds the same declaration. Optional: a bank without
+one behaves exactly as every bank did before the file existed.
+
+```jsonc
+{
+  "levels": {
+    "conservative": {"strategy": "sequence",
+                     "overrides": {"reading_speed": 0.8}},
+    "wild": {"strategy": "arranged",
+             "overrides": {"chant_chance": 0.55, "chant_max": 6}}
+  },
+  "mix": {"word_bus_lufs": -11.0},
+  "never_split": true
+}
+```
+
+Per level, `strategy` picks how units are placed:
+
+- `arranged` -- the planner: units chosen by role, fit and variety from a
+  seed, redrawn until every required word is covered. The default.
+- `sequence` -- the recordings replayed in the order they were spoken,
+  looping when they run out. The order comes from the `variant` field in
+  `words.json`, which `build_bank --raw` writes as a zero-padded index in
+  chronological order, so string comparison is enough; names break ties. No
+  seed, no draws, no coverage redraw: two runs are identical. One time
+  cursor paces the reciting: each unit is given the time it needs to be
+  said at the declared pace and the next begins on the first slot after it
+  stops sounding, so a spoken word is never cut short to fit its slots and
+  never lands on top of the word after it.
+
+`overrides` sit on top of the level's parameters from the playfulness block
+of `config.py`, so a bank can lean a level without redefining it. Any knob
+the level sets may appear, and nothing else: an override no code reads would
+leave the level's own value in force with no complaint, so an unknown knob
+is refused by name. They are merged onto a copy, never written into
+`PLAY_LEVELS`, so a batch run cannot carry one bank's taste into the next
+song. `sequence` reads exactly one of them: `reading_speed`, the pace of the
+reciting, where 1.0 is as spoken and lower is slower. It must lie within the
+paces the stretch engine delivers, the reciprocals of `TIME_STRETCH_RANGE`,
+which is 0.5 to 2.0 as shipped: outside that range the renderer would clamp
+the stretch while the planner's cursor kept the declared pace, and every
+word would land on top of the word after it. The rest mean nothing to
+`sequence`.
+
+`never_split` keeps every clip whole: one segment, one pitch shift, fitted
+to the time the plan gives it rather than cut apart into syllables, because
+half a spoken word is not a shorter word. It applies to every level the bank
+has, whichever strategy places the clips. `mix.word_bus_lufs` lets the
+bank's words sit at their own level against the bed, in LUFS; a speaking
+voice needs more than a shouted one to be heard over a band.
+
+Anything that would change what plays without saying so is refused by name
+rather than defaulted or ignored: an unknown strategy, a level name that is
+not one of the levels in `config.py`, an override knob no level defines, a
+`reading_speed` outside the engine's range, a `never_split` that is not a
+JSON boolean, and a section of the wrong shape. A bank that declared
+`sequence` and silently got `arranged` would still play, in the wrong order,
+which is the failure the file exists to prevent, and a misspelled level or
+knob is the same failure spelled differently. A `reading_speed` or
+`word_bus_lufs` that is not a number is refused the same way, naming the
+file, instead of surfacing as a type error deep in the mix. The behaviour of
+a bank that declares nothing is pinned by `tests/test_determinism.py`.
+
+---
+
 ## `work/<song>/arrangements/<seed>-<level>.arr`
 
 What gets sung where, for one run. Written by `arrange.py` on every render,
@@ -148,9 +218,12 @@ the bank's words can be asked for, whether the generator would have chosen it
 or not. That is what makes this the format a "supply your own lyrics" mode
 would read, without that mode existing yet.
 
-Refused rather than guessed: a word the vocabulary does not have, a line that
-cannot be anchored to a slot, a sequence the bank cannot say, and a seed that
-does not read as a number. The seed is load-bearing on replay, since the pool
+Refused rather than guessed: a word that neither the vocabulary nor the
+bank's own clips hold, a line that cannot be anchored to a slot, a sequence
+the bank cannot say, and a seed that does not read as a number. The bank's
+words count because the arrangement belongs to a bank and the bank decides
+what words exist: one cut with `build_bank --raw` calls every unit `raw`,
+which no vocabulary has, and its own log still has to replay. The seed is load-bearing on replay, since the pool
 of slices and invented orders is rebuilt from it; substituting a default would
 play a different arrangement under this file's name. A silently misaligned or
 dropped word would still play, which is why none of them are tolerated. A file

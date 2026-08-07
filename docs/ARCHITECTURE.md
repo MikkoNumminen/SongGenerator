@@ -59,6 +59,7 @@ song.mp4
 | `detect.py` | Mode A vs Mode B, with the numbers behind the verdict | `detect_vocal`, `VocalReport` |
 | `analysis.py` | Melody and syllable timing out of the original vocal | `analyse`, `Analysis` |
 | `mapping.py` | Every arrangement decision, plus render and mix | `load_bank`, `plan_words`, `render`, `mix` |
+| `banks.py` | Per-bank behaviour from `bank.json`: which strategy each level uses, and its overrides | `strategy_for`, `overrides_for` |
 | `pitchshift.py` | WORLD or Rubber Band; octave folding | `render_unit`, `fold_shift` |
 | `config.py` | Every tunable, grouped by stage, with the reasoning |, |
 | `util.py` | Device resolution, work-dir naming, glob expansion, word scoring | `resolve_device`, `work_dir_for`, `expand`, `word_similarity` |
@@ -132,6 +133,20 @@ missing required word is a broken rule, so when the weights are what holds a
 word out they are relaxed and then dropped. `docs/GLOSSARY.md` defines the
 roles and origins.
 
+All of that describes the `arranged` strategy, which is what every bank gets
+unless it says otherwise. A bank may say otherwise in a `bank.json` beside its
+clips, read by `banks.py` and always resolved to the bank as declared, so
+`--words-dir` pointed at a bank or at its standardised tier gets the declared
+behaviour either way. The other strategy is
+`sequence`: the recordings replayed in the order they were spoken, sorted by
+the variant index `build_bank --raw` writes, looping when they run out, with
+no seed, no draws and no coverage redraw, because the order is the content. A
+bank may also declare overrides that sit on top of a level's parameters from
+`PLAY_LEVELS`, merged onto a copy so nothing leaks into the next song of a
+batch. A bank with no `bank.json` behaves exactly as every bank did before
+the file existed, and `tests/test_determinism.py` pins the existing bank's
+placements so that cannot drift. `docs/DATA-FORMATS.md` documents the file.
+
 Every arrangement is written to `work/<song>/arrangements/` as a file a person
 can read and edit, and `--arrangement` plays one back. Replay rebuilds the
 placements from the file rather than replanning, so an edited file produces
@@ -164,6 +179,7 @@ undo that silently.
 | `work/<song>/analysis.json` | `analysis` | Notes, phrases, beats, F0 | Yes |
 | `work/<song>/detect.json` | `cli` | The Mode A/B verdict and its numbers | Yes |
 | `words/words.json` | `build_bank` | Every unit: pitch, duration, syllable bounds | Yes |
+| `words/bank.json` | a human | The bank's declared strategy and overrides, per level | Yes |
 | `words/*.wav` | `build_bank` | The bank's audio | Yes |
 | `words_hq.std/*.wav` | `standardize` | Trimmed, levelled derivatives | Yes |
 | `words_hq.std/standardized.json` | `standardize` | Each derivative's source and hash | Yes |

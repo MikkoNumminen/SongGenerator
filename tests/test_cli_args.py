@@ -124,9 +124,10 @@ class TestOutputGoesInItsOwnFolder:
 
         from song_generator.cli import output_path
 
-        got = output_path(None, Path("input/musicHyva.mp4"))
-        assert got.parent.name == "musicHyva"
-        assert got.parent.parent.name == "output"
+        got = output_path(None, Path("input/musicHyva.mp4"), "curated")
+        assert got.parent.name == "curated"
+        assert got.parent.parent.name == "musicHyva"
+        assert got.parent.parent.parent.name == "output"
 
     def test_the_filename_still_names_the_song(self):
         """So a file dragged out of its folder still says what it is."""
@@ -134,7 +135,8 @@ class TestOutputGoesInItsOwnFolder:
 
         from song_generator.cli import output_path
 
-        assert output_path(None, Path("input/musicHyva.mp4")).name == "musicHyva.mp3"
+        got = output_path(None, Path("input/musicHyva.mp4"), "curated")
+        assert got.name == "musicHyva.mp3"
 
     def test_an_explicit_output_is_folded_the_same_way(self):
         """Otherwise batch, which passes -o per song, would stay flat."""
@@ -142,7 +144,50 @@ class TestOutputGoesInItsOwnFolder:
 
         from song_generator.cli import output_path
 
-        got = output_path(Path("elsewhere/song.mp3"), Path("input/x.mp4"))
-        assert got.parent.name == "song"
-        assert got.parent.parent.name == "elsewhere"
+        got = output_path(Path("elsewhere/song.mp3"), Path("input/x.mp4"), "curated")
+        assert got.parent.name == "curated"
+        assert got.parent.parent.name == "song"
+        assert got.parent.parent.parent.name == "elsewhere"
         assert got.name == "song.mp3"
+
+
+class TestEveryFilenameCarriesTheLevel:
+    """Both write sites, one function, no way to disagree.
+
+    The level went into the name at the mimicry-sweep site and not the
+    single-render one, so `--play conservative --mimicry 0.6` and then
+    `--play wild --mimicry 0.6` wrote the same filename and the second run
+    silently replaced the first. The same failure as two banks sharing a
+    filename, one layer down, for the second time.
+    """
+
+    def test_two_single_level_runs_cannot_collide(self):
+        from pathlib import Path
+
+        from song_generator.cli import versioned_name
+
+        out = Path("output/song/curated/song.mp3")
+        a = versioned_name(out, "conservative")
+        b = versioned_name(out, "wild")
+        assert a != b
+        assert a.name == "song.conservative.mp3"
+        assert b.name == "song.wild.mp3"
+
+    def test_the_mimicry_rung_joins_the_level(self):
+        from pathlib import Path
+
+        from song_generator.cli import versioned_name
+
+        out = Path("output/song/curated/song.mp3")
+        got = versioned_name(out, "wild", tag="0p60")
+        assert got.name == "song.wild.mim0p60.mp3"
+
+    def test_an_output_already_naming_the_level_is_not_doubled(self):
+        from pathlib import Path
+
+        from song_generator.cli import versioned_name
+
+        out = Path("output/song/curated/song.wild.mp3")
+        assert versioned_name(out, "wild").name == "song.wild.mp3"
+        assert versioned_name(out, "wild", tag="0p60").name == \
+            "song.wild.mim0p60.mp3"
