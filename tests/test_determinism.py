@@ -21,15 +21,20 @@ is "did I mean to change what the existing bank sings".
 from __future__ import annotations
 
 import pytest
-from test_arrange import _unit
 
-from song_generator import arrange
+from song_generator import arrange, config
 from song_generator.mapping import Slot
 
 
-def _bank():
-    return [_unit(["tango", "bravo"]), _unit(["delta"]),
-            _unit(["delta", "tango", "kilometer"]), _unit(["aah", "calculator"])]
+def _bank(unit):
+    """Built from the clip factory in conftest, where it is pinned in place.
+
+    The exact expectations below depend on the factory's internals, so it
+    cannot be a private helper of another test module that someone refactors
+    without knowing these pins exist.
+    """
+    return [unit(["tango", "bravo"]), unit(["delta"]),
+            unit(["delta", "tango", "kilometer"]), unit(["aah", "calculator"])]
 
 
 def _slots():
@@ -40,8 +45,8 @@ def _slots():
     return out
 
 
-def _placements(level: str, seed: int) -> list[str]:
-    arr = arrange.build(_slots(), _bank(), level, seed,
+def _placements(unit, level: str, seed: int) -> list[str]:
+    arr = arrange.build(_slots(), _bank(unit), level, seed,
                         song="fixture", bank="fixture")[1]
     return [l.rstrip() for l in arrange.render_text(arr).splitlines()
             if l.strip() and not l.lstrip().startswith("#")]
@@ -88,16 +93,22 @@ WILD_1987 = [
     ("conservative", CONSERVATIVE_1987),
     ("wild", WILD_1987),
 ])
-def test_the_arrangement_for_a_given_seed_does_not_move(level, expected):
-    assert _placements(level, 1987) == expected
+def test_the_arrangement_for_a_given_seed_does_not_move(level, expected, unit):
+    assert _placements(unit, level, 1987) == expected
 
 
-def test_the_same_seed_twice_is_the_same_arrangement():
+def test_the_same_seed_twice_is_the_same_arrangement(unit):
     """The guarantee the seed is printed for. Nothing asserted it before."""
-    assert _placements("wild", 4242) == _placements("wild", 4242)
+    assert _placements(unit, "wild", 4242) == _placements(unit, "wild", 4242)
 
 
-def test_a_different_seed_is_a_different_arrangement():
+def test_a_different_seed_is_a_different_arrangement(unit):
     """Otherwise the test above passes for the wrong reason, on a planner that
     ignores its seed entirely."""
-    assert _placements("wild", 4242) != _placements("wild", 4243)
+    # The second seed sits outside the redraw window on purpose. On a coverage
+    # miss, arrange.build replans with seed + attempt, so two seeds closer
+    # than PLAY_COVERAGE_TRIES can legitimately walk onto the same draw: seed
+    # A redrawing once plans exactly what seed A + 1 plans on its first try.
+    # Adjacent seeds would then fail here on correct behaviour.
+    other = 4242 + config.PLAY_COVERAGE_TRIES + 1
+    assert _placements(unit, "wild", 4242) != _placements(unit, "wild", other)

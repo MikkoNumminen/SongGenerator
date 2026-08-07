@@ -20,46 +20,22 @@ from song_generator.arrange import (
     join_words, level_params, parse_text, realise, render_text, required_words,
     load, save, slice_words, unit_for, word_spans,
 )
-from song_generator.mapping import Slot, Unit, plan_words
+from song_generator.mapping import Slot, plan_words
 
-SR = config.SAMPLE_RATE
-
-
-def _tone(seconds: float, freq: float = 220.0, amp: float = 0.4) -> np.ndarray:
-    t = np.arange(int(SR * seconds)) / SR
-    mono = (amp * np.sin(2 * np.pi * freq * t)).astype(np.float32)
-    return np.stack([mono, mono])
-
-
-def _unit(words, per_word=0.4, name=None) -> Unit:
-    """A clip holding the given words, with honest boundaries."""
-    syllables = [config.WORD_SYLLABLES[w] for w in words]
-    total = sum(syllables) * (per_word / 2)
-    audio = _tone(total)
-    bounds, at = [], 0.0
-    for n in sum(([w] * config.WORD_SYLLABLES[w] for w in words), []):
-        at += per_word / 2
-        bounds.append(round(at, 4))
-    return Unit(
-        name=name or ("-".join(words) + "_1.wav"),
-        words=list(words),
-        syllables=sum(syllables),
-        duration_s=audio.shape[1] / SR,
-        midi=53.0,
-        audio=audio,
-        bounds_s=bounds[:-1],
-        syllable_midi=[53.0] * sum(syllables),
-    )
+# The clip factory lives in conftest.py as the `unit` fixture, because
+# test_determinism.py builds its pinned bank from the same factory and a
+# private helper here could be refactored without anyone noticing the pins
+# it was quietly defining.
 
 
 @pytest.fixture
-def bank():
+def bank(unit):
     """Two-word and three-word clips, as the real bank is shaped."""
     return [
-        _unit(["tango", "bravo"]),
-        _unit(["delta"]),
-        _unit(["delta", "tango", "kilometer"]),
-        _unit(["aah", "calculator"]),
+        unit(["tango", "bravo"]),
+        unit(["delta"]),
+        unit(["delta", "tango", "kilometer"]),
+        unit(["aah", "calculator"]),
     ]
 
 
@@ -268,9 +244,9 @@ def test_words_start_near_the_top_of_the_song(bank, slots):
         assert plan.placements[0].onset_s <= slots[0].onset_s + 3.0
 
 
-def test_coverage_is_reported_when_it_cannot_be_met(slots):
+def test_coverage_is_reported_when_it_cannot_be_met(slots, unit):
     """A bank that cannot say a required word must say so, not pretend."""
-    thin = [_unit(["delta"])]
+    thin = [unit(["delta"])]
     _, arrangement, _ = build(slots, thin, "conservative", 5)
     assert "kilometer" in arrangement.missing()
 
@@ -367,8 +343,8 @@ def test_an_empty_arrangement_is_refused():
         parse_text("# song  nothing\n")
 
 
-def test_a_word_the_bank_cannot_say_is_refused(slots):
-    thin = [_unit(["delta"])]
+def test_a_word_the_bank_cannot_say_is_refused(slots, unit):
+    thin = [unit(["delta"])]
     text = "phrase 0\n  0:00.00  x4  delta kilometer\n"
     with pytest.raises(ArrangementError, match="cannot say"):
         realise(parse_text(text), slots, thin)
@@ -421,9 +397,9 @@ def test_the_payoff_pairing_is_guaranteed_not_merely_likely(bank, slots):
             assert arrangement.has_pairing(), f"{level} seed {4000 + i} lost the pairing"
 
 
-def test_a_bank_with_no_pairing_is_not_asked_for_one(slots):
+def test_a_bank_with_no_pairing_is_not_asked_for_one(slots, unit):
     """The rule cannot demand something the recordings do not contain."""
-    thin = [_unit(["tango", "bravo"]), _unit(["delta"])]
+    thin = [unit(["tango", "bravo"]), unit(["delta"])]
     _, arrangement, tries = build(slots, thin, "conservative", 12)
     assert not arrangement.has_pairing()
     assert tries == 1
