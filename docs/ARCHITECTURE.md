@@ -84,6 +84,7 @@ These do not run during a song. They turn source videos into reviewed clips.
 
 | Module | Does |
 |---|---|
+| `fetch.py` | Fetch a song from a URL into `input/`, video kept, origin recorded |
 | `batch.py` | Render many songs in one command; one failure does not end the run |
 | `doctor.py` | Read-only: bank contents, pitch coverage, a song's slots and predicted shift |
 | `separate_hq.py` | Re-separate sources with Mel-Band Roformer into `vocal_hq.wav` |
@@ -185,9 +186,13 @@ undo that silently.
 | `words_hq.std/standardized.json` | `standardize` | Each derivative's source and hash | Yes |
 | `words/candidates/*.wav` **unprefixed** | **a human** | **Reviewed clips** | **No** |
 | `output/*.mp3` | `cli` | The results | Yes |
+| `input/SOURCES.md` | `fetch`, and a human | One row per song: slug, local file, address | **No** |
 
-Only one row cannot be regenerated. That is why no automatic pass touches an
-unprefixed clip.
+Two rows cannot be regenerated. The reviewed clips are why no automatic pass
+touches an unprefixed clip. The sources index is knowledge rather than
+computation: `fetch` appends a row for anything it downloads, but the address
+of a song that arrived any other way exists only in someone's memory, so a
+lost row is not recoverable by rerunning anything.
 
 ## Why decisions live where they do
 

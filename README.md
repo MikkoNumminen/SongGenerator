@@ -111,7 +111,10 @@ to hold locally, not fine to redistribute. `.gitignore` excludes all of it.
 
 So a fresh clone has the tool and none of the material. To use it you supply:
 
-- **songs** to convert, in `input/`
+- **songs** to convert, in `input/`. Either copy them in, or fetch one
+  straight from a page address with
+  `python -m song_generator.fetch <url>`, which keeps the video and records
+  where it came from.
 - **source video or audio** to cut word clips from, anywhere on disk
 
 Then follow [docs/WORKFLOWS.md](docs/WORKFLOWS.md) to build a bank. Nothing
@@ -153,6 +156,6 @@ payoff rather than becoming the texture. In the example vocabulary that is
 ## Status
 
 All four build stages are done: separation and mode detection, melody and timing
-extraction, word mapping, and formant-corrected pitch shifting. 548 tests.
+extraction, word mapping, and formant-corrected pitch shifting. 561 tests.
 
 Mode B remains deliberately unimplemented.
