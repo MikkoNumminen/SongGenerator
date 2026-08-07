@@ -153,21 +153,41 @@ class TestRecutWillNotClobberHandNamedClips:
     AGENTS.md says can never be recreated.
     """
 
-    def _bank(self, path, names):
+    def _sources(self, tmp_path, monkeypatch):
+        """A work directory with both stems, and WORK_DIR pointed at it.
+
+        The guard only fires for clips the run has located, and locating one
+        takes a stem to correlate against. work/ is gitignored, so a fresh
+        checkout has none, and without this setup the run finds nothing and
+        returns success before the guard is ever reached.
+        """
+        d = tmp_path / "work" / "asource"
+        d.mkdir(parents=True)
+        stem = _stem()
+        audio_io.write_wav(d / "vocal.wav", stem)
+        audio_io.write_wav(d / "vocal_hq.wav", stem)
+        monkeypatch.setattr(config, "WORK_DIR", str(tmp_path / "work"))
+        return stem
+
+    def _bank(self, path, stem, names):
+        """Clips are verbatim slices of the stem, so correlation finds them."""
         path.mkdir(parents=True, exist_ok=True)
         index = {}
-        for name in names:
-            audio_io.write_wav(path / name, _stem(seconds=1.0))
-            index[name] = {"words": ["bravo"], "syllables": 2, "duration_s": 1.0,
-                           "midi": 53.0, "syllable_bounds_s": [0.5]}
+        for i, name in enumerate(names):
+            audio_io.write_wav(path / name, _slice(stem, 1.0 + i, 0.8))
+            index[name] = {"words": [name.split("_")[0]], "syllables": 2,
+                           "duration_s": 0.8, "midi": 53.0,
+                           "syllable_bounds_s": [0.4]}
         (path / "words.json").write_text(json.dumps(index), encoding="utf-8")
         return path
 
-    def test_it_refuses_when_the_output_already_holds_those_clips(self, tmp_path, capsys):
+    def test_it_refuses_when_the_output_already_holds_those_clips(
+            self, tmp_path, monkeypatch, capsys):
         from song_generator.recut_bank import main
 
-        source = self._bank(tmp_path / "words", ["bravo_1.wav"])
-        out = self._bank(tmp_path / "words_hq", ["bravo_1.wav"])
+        stem = self._sources(tmp_path, monkeypatch)
+        source = self._bank(tmp_path / "words", stem, ["bravo_1.wav"])
+        out = self._bank(tmp_path / "words_hq", stem, ["bravo_1.wav"])
         before = (out / "bravo_1.wav").read_bytes()
 
         code = main(["--bank", str(source), "--out", str(out)])
@@ -175,24 +195,28 @@ class TestRecutWillNotClobberHandNamedClips:
         assert "already exist" in capsys.readouterr().err
         assert (out / "bravo_1.wav").read_bytes() == before
 
-    def test_the_refusal_names_what_would_be_lost(self, tmp_path, capsys):
+    def test_the_refusal_names_what_would_be_lost(
+            self, tmp_path, monkeypatch, capsys):
         from song_generator.recut_bank import main
 
-        source = self._bank(tmp_path / "words", ["bravo_1.wav", "tango_1.wav"])
-        out = self._bank(tmp_path / "words_hq", ["bravo_1.wav"])
+        stem = self._sources(tmp_path, monkeypatch)
+        source = self._bank(tmp_path / "words", stem,
+                            ["bravo_1.wav", "tango_1.wav"])
+        out = self._bank(tmp_path / "words_hq", stem, ["bravo_1.wav"])
 
         main(["--bank", str(source), "--out", str(out)])
         said = capsys.readouterr().err
         assert "bravo_1.wav" in said
         assert "--overwrite" in said
 
-    def test_an_empty_output_directory_is_not_refused(self, tmp_path):
+    def test_an_empty_output_directory_is_not_refused(self, tmp_path, monkeypatch):
         """The ordinary case still works: nothing there, nothing to lose."""
         from song_generator.recut_bank import main
 
-        source = self._bank(tmp_path / "words", ["bravo_1.wav"])
+        stem = self._sources(tmp_path, monkeypatch)
+        source = self._bank(tmp_path / "words", stem, ["bravo_1.wav"])
         code = main(["--bank", str(source), "--out", str(tmp_path / "fresh")])
-        assert code != 2
+        assert code == 0
 
 
 class TestTheGuardRunsAgainAtWriteTime:
