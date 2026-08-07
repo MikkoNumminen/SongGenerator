@@ -124,9 +124,10 @@ class TestOutputGoesInItsOwnFolder:
 
         from song_generator.cli import output_path
 
-        got = output_path(None, Path("input/musicHyva.mp4"))
-        assert got.parent.name == "musicHyva"
-        assert got.parent.parent.name == "output"
+        got = output_path(None, Path("input/musicHyva.mp4"), "curated")
+        assert got.parent.name == "curated"
+        assert got.parent.parent.name == "musicHyva"
+        assert got.parent.parent.parent.name == "output"
 
     def test_the_filename_still_names_the_song(self):
         """So a file dragged out of its folder still says what it is."""
@@ -134,7 +135,8 @@ class TestOutputGoesInItsOwnFolder:
 
         from song_generator.cli import output_path
 
-        assert output_path(None, Path("input/musicHyva.mp4")).name == "musicHyva.mp3"
+        got = output_path(None, Path("input/musicHyva.mp4"), "curated")
+        assert got.name == "musicHyva.mp3"
 
     def test_an_explicit_output_is_folded_the_same_way(self):
         """Otherwise batch, which passes -o per song, would stay flat."""
@@ -142,7 +144,8 @@ class TestOutputGoesInItsOwnFolder:
 
         from song_generator.cli import output_path
 
-        got = output_path(Path("elsewhere/song.mp3"), Path("input/x.mp4"))
-        assert got.parent.name == "song"
-        assert got.parent.parent.name == "elsewhere"
+        got = output_path(Path("elsewhere/song.mp3"), Path("input/x.mp4"), "curated")
+        assert got.parent.name == "curated"
+        assert got.parent.parent.name == "song"
+        assert got.parent.parent.parent.name == "elsewhere"
         assert got.name == "song.mp3"

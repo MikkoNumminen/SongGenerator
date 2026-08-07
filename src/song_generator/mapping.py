@@ -41,6 +41,10 @@ class Unit:
     audio: np.ndarray
     bounds_s: list[float] = field(default_factory=list)
     syllable_midi: list[float | None] = field(default_factory=list)
+    # The zero-padded index build_bank --raw writes ("0001", "0002"), which is
+    # chronological order in the source. Empty for derived units and for banks
+    # built before the field existed; only plan_sequence reads it.
+    variant: str = ""
 
     @property
     def label(self) -> str:
@@ -242,6 +246,7 @@ def load_bank(words_dir: Path = Path("words"),
                    else level_clip(audio_io.read_wav(path))),
             bounds_s=e.get("syllable_bounds_s", []),
             syllable_midi=e.get("syllable_midi", []),
+            variant=str(e.get("variant", "")),
         ))
 
     if not units:
@@ -921,6 +926,57 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None,
         placement.play_s = min(placement.play_s, placement.slot_span_s)
     for a, b in zip(plan.placements, plan.placements[1:]):
         a.play_s = min(a.play_s, max(0.0, b.onset_s - a.onset_s))
+
+    return plan
+
+
+def plan_sequence(slots: list[Slot], units: list[Unit]) -> Plan:
+    """Replay the bank in the order it was recorded. plan_words chooses;
+    this recites.
+
+    Built for a bank whose words were spoken in an order that carries the
+    meaning, so the one placement rule is that order. Units are sorted by
+    their variant field, the zero-padded index build_bank --raw writes in
+    chronological order, compared as strings so the padding does the sorting,
+    with the name breaking ties. When the units run out the sequence starts
+    again from the first, so a long song against a short bank keeps going.
+
+    No randomness anywhere: no seed, no draws, no coverage redraw, because
+    there is no vocabulary to cover. Two calls over the same slots and units
+    are the same plan.
+
+    Nothing is shortened to fit its slots either. A spoken word cut short
+    stops being the word, so play_s is the unit's full duration, as
+    plan_words sets at its own placement sites, and a unit that overruns its
+    slots is allowed to.
+
+    Phrases come from group_phrases and placements never cross a group, the
+    same as plan_words, so a phrase number in the log means the same thing
+    whichever planner wrote it.
+    """
+    plan = Plan(slots_total=len(slots))
+    ordered = sorted(units, key=lambda u: (u.variant, u.name))
+    if not ordered:
+        return plan
+
+    at = 0
+    for group in group_phrases(slots):
+        i = 0
+        while i < len(group):
+            unit = ordered[at % len(ordered)]
+            at += 1
+            covered = group[i:i + max(1, unit.syllables)]
+            plan.placements.append(Placement(
+                unit=unit,
+                onset_s=covered[0].onset_s,
+                slot_span_s=covered[-1].offset_s - covered[0].onset_s,
+                play_s=unit.duration_s,
+                n_slots=len(covered),
+                phrase=covered[0].phrase,
+                slots=list(covered),
+            ))
+            plan.slots_used += len(covered)
+            i += len(covered)
 
     return plan
 

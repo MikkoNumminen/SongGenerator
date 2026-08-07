@@ -98,6 +98,48 @@ together with the `build_bank` command that restores them.
 
 ---
 
+## `words/bank.json`
+
+How a bank behaves, declared beside its clips. Written by a person, read by
+`banks.py` from whichever directory is actually being sung from, so it works
+the same through `--bank` and `--words-dir`. Optional: a bank without one
+behaves exactly as every bank did before the file existed.
+
+```jsonc
+{
+  "levels": {
+    "conservative": {"strategy": "sequence"},
+    "wild": {"strategy": "arranged",
+             "overrides": {"chant_chance": 0.55, "chant_max": 6}}
+  }
+}
+```
+
+Per level, `strategy` picks how units are placed:
+
+- `arranged` -- the planner: units chosen by role, fit and variety from a
+  seed, redrawn until every required word is covered. The default.
+- `sequence` -- the recordings replayed in the order they were spoken,
+  looping when they run out. The order comes from the `variant` field in
+  `words.json`, which `build_bank --raw` writes as a zero-padded index in
+  chronological order, so string comparison is enough; names break ties. No
+  seed, no draws, no coverage redraw: two runs are identical. A unit is
+  never cut short to fit its slots either, because a spoken word cut short
+  stops being the word, so it plays whole and may overrun.
+
+`overrides` sit on top of the level's parameters from the playfulness block
+of `config.py`, so a bank can lean a level without redefining it. Any knob a
+level sets may appear. They are merged onto a copy, never written into
+`PLAY_LEVELS`, so a batch run cannot carry one bank's taste into the next
+song. They mean nothing under `sequence`, which has no parameters.
+
+An unknown strategy is refused by name rather than defaulted. A bank that
+declared `sequence` and silently got `arranged` would still play, in the
+wrong order, which is the failure the file exists to prevent. The behaviour
+of a bank that declares nothing is pinned by `tests/test_determinism.py`.
+
+---
+
 ## `work/<song>/arrangements/<seed>-<level>.arr`
 
 What gets sung where, for one run. Written by `arrange.py` on every render,

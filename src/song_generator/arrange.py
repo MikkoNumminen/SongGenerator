@@ -543,7 +543,8 @@ def unit_for(words: list[str], pool: list[Unit], by_word: dict[str, list[Unit]],
 # ---------------------------------------------------------------------------
 
 def build(slots, units: list[Unit], level: str, seed: int,
-          song: str = "", bank: str = "") -> tuple[Plan, Arrangement, int]:
+          song: str = "", bank: str = "",
+          bank_dir: Path | None = None) -> tuple[Plan, Arrangement, int]:
     """One arrangement, redrawn until it says every required word.
 
     Coverage is checked after the fact rather than forced during planning,
@@ -553,18 +554,39 @@ def build(slots, units: list[Unit], level: str, seed: int,
     Returns the plan, its description, and how many draws it took. The seed
     that survived is recorded in the description, so a run stays reproducible
     from the number it printed.
-    """
-    from .mapping import plan_words
 
-    params = level_params(level)
-    wanted = set(required_words())
-    tries = max(1, int(config.PLAY_COVERAGE_TRIES))
+    bank_dir is where the clips being sung actually live, so a bank.json
+    there can pick the strategy per level and lean its parameters. None, or
+    a directory with no bank.json, is the behaviour every bank had before
+    banks could declare anything.
+    """
+    from . import banks
+    from .mapping import plan_sequence, plan_words
 
     if not units:
         raise ArrangementError(
             "the bank holds no usable clips, so there is nothing to sing."
             " Check the bank directory and that build_bank has been run over it."
         )
+
+    strategy = "arranged" if bank_dir is None else banks.strategy_for(bank_dir, level)
+    if strategy == "sequence":
+        # Nothing to redraw: the sequence has no draws in it, and there are
+        # no required words because the order IS the content. One plan, and
+        # it is the plan. Described the same way as any other, so the .arr
+        # log reads identically and replay keeps working.
+        plan = plan_sequence(slots, units)
+        return plan, describe(plan, song, bank, level, seed), 1
+
+    params = level_params(level)
+    if bank_dir is not None:
+        # Merged onto the copy level_params returned, never onto
+        # config.PLAY_LEVELS itself: batch renders many songs in one process,
+        # so a write into the module dict would leak this bank's taste into
+        # every later song.
+        params.update(banks.overrides_for(bank_dir, level))
+    wanted = set(required_words())
+    tries = max(1, int(config.PLAY_COVERAGE_TRIES))
 
     # A word no clip contains cannot be found by redrawing, and spending the
     # whole budget looking for it hides the ones that a redraw WOULD have

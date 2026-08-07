@@ -92,6 +92,12 @@ rendered across the whole mimicry ladder. Playfulness and mimicry are separate
 questions and deliberately do not multiply: a run writes both levels times
 seven rungs, not two arrangements per rung.
 
+**Strategy**. How a bank's units are placed on the slots, declared per level
+in the bank's `bank.json` and read by `banks.py`. `arranged` is the planner:
+seeded, weighted by role and fit, redrawn for coverage. `sequence` replays
+the recordings in the order they were spoken, looping, with no randomness.
+A bank that declares nothing gets `arranged`.
+
 **Word role**. The bank's words are not interchangeable, and each has a share
 of the song it should have. Weighted per level in `PLAY_LEVELS`.
 

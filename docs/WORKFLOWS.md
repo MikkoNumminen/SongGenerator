@@ -125,6 +125,42 @@ a knob to 0 will not remove a required word from a song.
 
 ---
 
+## Make a bank behave differently
+
+How a bank should be placed is a property of its recordings, so it is
+declared beside them: a `bank.json` in the bank directory, read from
+whichever directory is actually being sung from. `docs/DATA-FORMATS.md`
+documents the format.
+
+```jsonc
+{
+  "levels": {
+    "conservative": {"strategy": "sequence"},
+    "wild": {"strategy": "arranged",
+             "overrides": {"chant_chance": 0.55, "chant_max": 6}}
+  }
+}
+```
+
+Per level, pick a strategy. `arranged` is the planner every bank gets by
+default. `sequence` replays the clips in the order they were recorded,
+looping, with no randomness at all, built for a bank whose words were spoken
+in an order that carries the meaning. `overrides` lean the level's
+parameters from the `PLAYFULNESS` block of `config.py` without redefining
+them; any knob a level sets may appear.
+
+Name the bank in the `BANKS` table of `vocabulary_local.py`, or point
+`--words-dir` at the directory; the settings are read either way. Renders
+land in `output/<song>/<bank>/`, so the same song sung from two banks never
+overwrites itself.
+
+A bank with no `bank.json` behaves exactly as every bank always has, and
+`tests/test_determinism.py` holds the existing bank to its exact placements
+for a fixed seed. If that suite goes red, the change moved a bank that
+declared nothing, which is the one thing this mechanism must never do.
+
+---
+
 ## Check the bank is the one being sung from
 
 ```powershell

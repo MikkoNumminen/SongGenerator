@@ -111,16 +111,23 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
-def output_path(explicit: Path | None, song: Path) -> Path:
-    """Where a run writes, with every song in a folder of its own.
+def output_path(explicit: Path | None, song: Path, bank: str) -> Path:
+    """Where a run writes, with every song in a folder of its own and every
+    bank in a folder inside that.
 
     A run writes fourteen files and there are a dozen songs, so flat that is
     nearly two hundred sorted by name, interleaving every song's levels and
     rungs. The song name stays in the filename as well, so a file dragged out
     of its folder still says what it is.
+
+    Banks get the same treatment for the same reason, one level down. The
+    same song sung from two banks is twenty-eight files whose names differ in
+    nothing at all, so without the folder the second bank's render silently
+    replaces the first. The folder is named for what --bank was given, or for
+    the directory itself when --words-dir pointed somewhere directly.
     """
     base = explicit or Path("output") / f"{song.stem}.mp3"
-    return base.parent / base.stem / base.name
+    return base.parent / base.stem / bank / base.name
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -130,7 +137,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: input file not found: {args.input}", file=sys.stderr)
         return EXIT_ERROR
 
-    output = output_path(args.output, args.input)
+    # The name outputs are filed under: the chosen bank, or the directory
+    # itself when --words-dir bypasses the bank table.
+    bank_name = args.words_dir.name if args.words_dir else args.bank
+    output = output_path(args.output, args.input, bank_name)
     work = work_dir_for(args.input, args.work_dir)
     device = resolve_device(args.device)
 
@@ -266,9 +276,13 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"  arrangement replayed from {args.arrangement}")
             else:
                 seed = args.seed if args.seed is not None else random.randrange(1, 1_000_000)
+                # Settings are read from the directory actually being sung
+                # from, so --words-dir, which bypasses the bank table, still
+                # gets the behaviour the bank on disk declares.
                 word_plan, described, tries = arrange.build(
                     slots, units, level, seed,
-                    song=args.input.stem, bank=str(singing_from))
+                    song=args.input.stem, bank=str(singing_from),
+                    bank_dir=singing_from)
                 saved = arrange.save(described, work)
                 label = level
                 if not args.json:
