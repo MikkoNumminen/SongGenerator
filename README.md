@@ -11,7 +11,7 @@ analyses, re-pitches, re-times and mixes them.
 .\.venv\Scripts\song-generator.exe input\song.mp4
 ```
 
-One command writes fourteen versions into `output/<song>/`. Two arrangements
+One command writes fourteen versions into `output/<song>/<bank>/`. Two arrangements
 of the words, one tidy and one that mixes them up harder, and each rendered
 from words that ignore the tune completely through to words that sing it as
 closely as the song allows. Pick by ear; the right one varies by song.
@@ -138,6 +138,23 @@ is left over.
 Multi-word clips are worth more than their parts. A clip holding two words also
 holds the singer's own transition between them, and a transition cannot be
 rebuilt by butting two recordings together.
+
+**There can be more than one bank, and they need not behave alike.**
+`--bank` picks between the ones `BANKS` in `config.py` names, and each renders
+into its own folder so two banks never overwrite each other's work.
+
+A bank may also declare how it wants to be sung, by dropping a `bank.json`
+beside its clips. That file can choose a placement strategy per level, override
+the playfulness knobs for that bank alone, refuse to let its clips be cut into
+syllables, and set how loud it sits against the instrumental. **A bank that
+declares nothing behaves exactly as it always did**, which is what makes the
+whole thing safe to add to a bank you are happy with.
+
+The strategies are `arranged`, which chooses words to fit the tune and is what
+everything above describes, and `sequence`, which replays a bank's clips in the
+order they were recorded and loops when the song outlasts them. `sequence`
+suits a bank cut from speech, where the order carries the meaning and there is
+no vocabulary to choose from. `docs/DATA-FORMATS.md` gives the file's shape.
 
 Two clips get special handling, and both are worth understanding before you
 change them.
