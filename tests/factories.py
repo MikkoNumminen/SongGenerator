@@ -12,8 +12,13 @@ can be refactored innocently and redefine the pinned bank without anyone
 connecting the two. A module that exists for this and nothing else cannot be
 refactored by accident.
 
-`conftest.py` re-exports it as a fixture for modules that want it injected.
-Modules that need it in a module-level helper import it from here.
+What this does NOT solve, stated plainly because an earlier version of this
+comment implied otherwise: importing it still relies on pytest's default
+prepend import mode putting `tests/` on the path. Adopting importlib mode would
+break `from factories import ...` exactly as it would have broken importing
+from another test module. Take the `unit` fixture from `conftest.py` where you
+can, since a fixture survives either mode; import from here only where a
+module-level helper needs it, which a fixture cannot serve.
 """
 
 from __future__ import annotations

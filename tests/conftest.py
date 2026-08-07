@@ -10,10 +10,11 @@ pytest imports conftest before test modules, which is early enough: the module
 level constants built from the vocabulary are computed at import time. The
 environment variable is set before the imports below for the same reason.
 
-The clip factory the suite shares lives in `factories.py`, next door. It is
-re-exported here as a fixture for modules that want it injected; modules that
-need it inside a module-level helper import it from there directly, which a
-fixture cannot serve.
+The clip factory the suite shares lives in `factories.py`, next door, exposed
+here as the `unit` fixture. Prefer the fixture: it resolves under any pytest
+import mode, where importing `factories` directly needs the default prepend
+mode. A module-level helper cannot take a fixture, so those import it, and
+`factories.py` records that limit.
 """
 
 import os
@@ -26,8 +27,6 @@ os.environ["SONG_GENERATOR_NO_LOCAL_VOCAB"] = "1"
 import pytest
 
 from factories import make_unit
-
-__all__ = ["make_unit"]
 
 
 @pytest.fixture
