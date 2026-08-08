@@ -232,9 +232,9 @@ def render_segments(mono: np.ndarray, sr: int, segments: list[Segment],
 
         # Hold the vowel out to the next syllable. TIME_STRETCH_RANGE caps how
         # far a syllable may be stretched, and a short one cannot always reach
-        # the note after it, which left the word cut in half by silence. The
-        # last source frame is repeated instead, which is a held note rather
-        # than a smeared one.
+        # the note after it, which left the word cut in half by silence. One
+        # frame is repeated instead, which is a held note rather than the
+        # smeared one that stretching further would give.
         if seg.sustain_to_s is not None:
             j_end = min(n_out, int(round(seg.sustain_to_s / step_s)))
             if j_end > j1:

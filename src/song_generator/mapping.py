@@ -1164,7 +1164,11 @@ def build_segments(p: Placement) -> tuple[list, float]:
 
       split, no target   sung. Each syllable is pinned to its own slot and
                          stretched to that slot's length, which is what
-                         following a melody means.
+                         following a melody means. Where the melody rests
+                         between two notes of the same word, the earlier
+                         syllable holds its vowel across the rest rather than
+                         stopping, so the word is not cut in half. See
+                         WORDS_SING_THROUGH.
       split, target      recited. The syllables are laid end to end and
                          stretched to fill target_s, each still taking a
                          slot's pitch. Pinning them to slots is wrong for
