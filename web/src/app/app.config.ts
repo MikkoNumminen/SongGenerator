@@ -6,7 +6,7 @@ import { API_BASE_URL } from './core/api/api-config';
 import { HttpBankCatalog } from './core/api/http-bank-catalog';
 import { HttpRunSource } from './core/api/http-run-source';
 import { attachBearerToken } from './core/auth/auth-interceptor';
-import { DEFAULT_CONFIG, RuntimeConfig } from './core/config/runtime-config';
+import { RuntimeConfig } from './core/config/runtime-config';
 import { GOOGLE_CLIENT_ID, GoogleAuth } from './core/auth/google-auth';
 import { AUTH_CONTEXT } from './core/ports/auth-context.port';
 import { BANK_CATALOG } from './core/ports/bank-catalog.port';
@@ -39,6 +39,3 @@ export function appConfigWith(config: RuntimeConfig): ApplicationConfig {
   ],
   };
 }
-
-/** The local defaults, for anything that needs a config without loading one. */
-export const appConfig: ApplicationConfig = appConfigWith(DEFAULT_CONFIG);
