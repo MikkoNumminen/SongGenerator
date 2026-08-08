@@ -101,6 +101,46 @@ never see. Resolve it on a real vocal.
 
 ## Open items
 
+- **Words hold together now. The break inside a shout pairing is the next
+  gain, and it is a bank problem more than a code one.**
+
+  The tearing is fixed. Shifts were folded one syllable at a time, so two
+  syllables of a word either side of the 12-semitone cap were moved an octave
+  apart however little the melody moved between them. `fold_unit` now makes one
+  octave decision per word, and on ellinoora the words whose internal interval
+  was enlarged by folding went from 32 of 156 to 5. A glide between syllables
+  covers the rest. See `fold_unit` and `GLIDE_MS`.
+
+  Four things remain, in the order they are worth doing:
+
+  1. **Anchor the octave to a held shout.** A shout is dropped in as recorded,
+     so it sounds at its own pitch while the word beside it can be shifted most
+     of an octave away, and the unit breaks in the middle. Shifting the shout
+     too is not the answer, that is what `SHOUT_KEEP_RAW` exists to prevent.
+     Choosing the *word's* octave to sit beside the shout is. Measured over 304
+     units mixing a raw shout with sung words, median internal spread 7.5 to
+     6.9 semitones and units breaking more than half an octave 230 to 200.
+     Where it applies the win is large, `perse+eee` goes from 10.6 to 3.0.
+
+  2. **Record a bare `paviaani`.** There is not one. All six takes in the
+     curated bank are `eee-paviaani`, so every placement of the climax word
+     carries the shout and its break. This removes the problem rather than
+     reducing it, and no code change reaches as far.
+
+  3. **The `paviaani` takes disagree.** `eee-paviaani_8` descends across its
+     syllables where the other five ascend, so which take the arrangement picks
+     changes the shape of the word. Worth deciding whether that is range or a
+     take to set aside.
+
+  4. **`GLIDE_MS` is a taste default.** 60 ms was chosen as roughly a fast
+     singer's portamento and confirmed by ear, not by measurement. The
+     surrounding constants in that block all carry numbers.
+
+  Worth knowing before re-measuring any of this: most remaining `eee+paviaani`
+  breaks are not octave artefacts. The word's own recorded melody spans about
+  9.6 semitones around the held shout, which is real and no octave choice
+  should flatten it.
+
 - **Record word takes at higher pitches. Still the way to reach the last of
   it, but much less urgent than it was.**
 
