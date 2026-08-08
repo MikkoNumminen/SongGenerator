@@ -35,6 +35,36 @@ because with nothing to borrow the tool would have to invent note, onset and
 duration against the backing track. That is composition, not signal processing.
 See [docs/TODO.md](docs/TODO.md).
 
+## There is a web front end too
+
+An **Angular 22 + TypeScript** application in [`web/`](web/), talking to a
+**FastAPI** edge in [`api/`](api/): paste a link, pick a bank, watch the run
+through its stages, and read what was made before.
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn app.main:build --factory --app-dir api
+cd web ; npm install ; npm start
+```
+
+Two things shape it more than anything else.
+
+**The machine is often switched off.** The pipeline needs a GPU, so it runs on
+a desktop rather than in the cloud, and that desktop is not always on. "Not
+answering" is therefore a normal state rather than a fault, and it is a state
+of its own throughout: told apart from a real error at the one place that
+classifies failures, and rendered in wording that does not apologise for a
+computer being turned off.
+
+**It is never openly usable.** The pipeline takes an arbitrary link and spends
+a GPU on it, so every route but the health check is behind Google sign-in and
+an allowlist of named accounts. The browser only carries a token; the check
+that counts happens on the server.
+
+The TypeScript interfaces are generated from the edge's own OpenAPI schema, and
+tests fail if either half drifts from the other. See
+[web/ARCHITECTURE.md](web/ARCHITECTURE.md) for the shape and what it leaves
+out.
+
 ## Documentation
 
 | | |
@@ -46,6 +76,7 @@ See [docs/TODO.md](docs/TODO.md).
 | [docs/DATA-FORMATS.md](docs/DATA-FORMATS.md) | Every file the tool writes, field by field. |
 | [docs/TODO.md](docs/TODO.md) | What is deliberately unfinished. |
 | [docs/AI-FIRST.md](docs/AI-FIRST.md) | How legible this repo is, scored against a written rubric. |
+| [web/ARCHITECTURE.md](web/ARCHITECTURE.md) | How the Angular front end is put together, and what it deliberately leaves out. |
 | [src/song_generator/config.py](src/song_generator/config.py) | Every tunable, with the reasoning behind its value. |
 
 ## Install
@@ -174,5 +205,11 @@ payoff rather than becoming the texture. In the example vocabulary that is
 
 All four build stages are done: separation and mode detection, melody and timing
 extraction, word mapping, and formant-corrected pitch shifting. 597 tests.
+
+The HTTP edge and the Angular front end are built and carry their own suites.
+Neither is deployed: that needs a Google client id and somewhere to host static
+files, both of which are decisions rather than code. Listening to a finished
+render still means going to the machine that made it, because the edge
+deliberately serves no audio yet.
 
 Mode B remains deliberately unimplemented.
