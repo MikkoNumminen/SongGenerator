@@ -3,10 +3,11 @@
 import numpy as np
 import pytest
 
+from factories import make_unit
 from song_generator import config
 from song_generator.mapping import (
-    Plan, Slot, Unit, clean_slots, decide_by_mimicry, decide_shifts, group_phrases,
-    mimicry, mix, plan_words, render, report,
+    Placement, Plan, Slot, Unit, build_segments, clean_slots, decide_by_mimicry,
+    decide_shifts, group_phrases, mimicry, mix, plan_words, render, report,
 )
 
 SR = config.SAMPLE_RATE
@@ -439,3 +440,51 @@ class TestBareSyllablesIsARequestNotAStateChange:
         source = inspect.getsource(cli)
         assert not re.search(r"config\.[A-Z_]+\s*=[^=]", source), \
             "cli.py mutates config at runtime again"
+
+
+class TestWordsSingThrough:
+    """A word's syllables run into each other rather than stopping on their notes.
+
+    Each syllable used to be pinned to its slot and given that slot's length,
+    so wherever the melody left a rest between two notes of the same word, the
+    word was cut in half by real silence. Measured on sanni against the curated
+    bank, 101 of 150 multi-syllable words held silence inside them, 25.2
+    seconds of it across the song.
+    """
+
+    def _placement(self, rest_s: float):
+        """One two-syllable word over two notes with `rest_s` between them."""
+        unit = make_unit(["bravo"])          # two syllables
+        first = Slot(onset_s=1.0, offset_s=1.2, midi=53.0, phrase=0)
+        second = Slot(onset_s=1.2 + rest_s, offset_s=1.4 + rest_s,
+                      midi=53.0, phrase=0)
+        return Placement(unit=unit, onset_s=1.0, slot_span_s=0.4 + rest_s,
+                         play_s=0.4 + rest_s, n_slots=2, phrase=0,
+                         slots=[first, second])
+
+    def test_a_syllable_sounds_until_the_next_one_starts(self):
+        segments, _ = build_segments(self._placement(rest_s=0.25))
+
+        first, second = segments[0], segments[1]
+        assert first.sustain_to_s == pytest.approx(
+            second.out_start_s), "the rest between the notes is inside the word"
+
+    def test_the_last_syllable_is_still_allowed_to_stop(self):
+        """Without this every word would end on a held vowel running into
+        whatever came after it."""
+        segments, _ = build_segments(self._placement(rest_s=0.25))
+
+        assert segments[-1].sustain_to_s is None
+
+    def test_a_syllable_is_never_shortened_to_reach_the_next(self):
+        """Notes that already touch must not be changed at all."""
+        segments, _ = build_segments(self._placement(rest_s=0.0))
+
+        assert segments[0].out_dur_s == pytest.approx(0.2)
+
+    def test_the_bridging_syllable_holds_its_vowel(self):
+        """TIME_STRETCH_RANGE caps the stretch, so a short syllable cannot
+        always reach the next note by stretching alone."""
+        segments, _ = build_segments(self._placement(rest_s=0.25))
+
+        assert segments[0].sustain_to_s is not None

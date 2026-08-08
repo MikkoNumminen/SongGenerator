@@ -8,20 +8,28 @@ to its slots costs nothing extra.
 
 Two things keep this sounding like a person rather than a chipmunk:
 
-  Octave folding. The test song's melody spans over two octaves while the bank
-  sits near F3, so raw targets run to 29 semitones up. Beyond
+  Octave folding, once per word. The test song's melody spans over two octaves
+  while the bank sits near F3, so raw targets run to 29 semitones up. Beyond
   SHIFT_CAP_SEMITONES the shift is folded by whole octaves, which keeps the
   note NAME the melody asked for while landing it in a register the voice can
-  actually reach.
+  actually reach. The octave is chosen for the whole word rather than for each
+  syllable, because a word whose syllables fold differently does not bend in
+  the middle, it comes apart. See fold_unit.
 
   Ratio, not replacement. Each syllable's own F0 contour is multiplied by a
   constant, rather than being flattened onto the target pitch. The scoop into a
   note, the vibrato, the fall at the end -- the things that make the clip sound
   sung rather than typed -- all survive the move.
+
+  Gliding between syllables. Where a word steps from one pitch to the next it
+  slides in over GLIDE_MS rather than jumping on a frame boundary, because a
+  sung voice reaches a note through its approach. WORLD only; see GLIDE_MS for
+  why Rubber Band cannot do this.
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 import numpy as np
@@ -39,6 +47,20 @@ class Segment:
     out_start_s: float
     out_dur_s: float
     semitones: float
+    # A shout is kept at its own pitch and its own length on purpose, so it is
+    # not slid into or out of either. Bending its tail is exactly the smoothing
+    # SHOUT_KEEP_RAW exists to prevent.
+    glide: bool = True
+    # Hold the vowel until this moment on the output clock rather than falling
+    # silent early. Set on a syllable that has another one of the same word
+    # after it, to the moment that one starts.
+    #
+    # Deliberately separate from out_dur_s, which stays the length the melody
+    # allotted. Widening out_dur_s instead would make the syllable itself
+    # stretch to fill the rest, up to the TIME_STRETCH_RANGE ceiling, so a word
+    # over a slow melody would come out smeared. A singer holds the vowel; they
+    # do not slow the consonant down. WORLD only.
+    sustain_to_s: float | None = None
 
     @property
     def src_dur_s(self) -> float:
@@ -61,6 +83,84 @@ def fold_shift(semitones: float, cap: float | None = None) -> float:
     # With a cap under 6 semitones no fold can always satisfy it; return the
     # closest available rather than looping.
     return float(folded if abs(folded) < abs(semitones) else semitones)
+
+
+def fold_unit(semitones: Sequence[float], cap: float | None = None) -> list[float]:
+    """Fold a whole word by one octave decision instead of one per syllable.
+
+    `fold_shift` judges a syllable on its own, so two syllables of the same
+    word sitting either side of the cap are moved an octave apart from each
+    other. The word does not bend in the middle, it comes apart.
+
+    Measured on ellinoora against the curated bank: of 156 words with more than
+    one pitched syllable, folding enlarged the interval inside 32 of them (21%)
+    by a median of 5.5 semitones. The worst was a `perse` whose own melody
+    moved 0.7 semitones and which was rendered with its halves 11.3 apart.
+
+    Deciding the octave once for the word keeps every interval inside it
+    exactly as the melody asked. The octave chosen is the one leaving the
+    furthest syllable nearest its own register, ties going to the smaller move.
+    A word that needed no folding at all is returned untouched, so this changes
+    nothing for the majority that never crossed the cap.
+    """
+    cap = config.SHIFT_CAP_SEMITONES if cap is None else cap
+    values = [float(s) for s in semitones]
+    if not values or max(abs(v) for v in values) <= cap:
+        return values
+
+    def worst(k: int) -> float:
+        return max(abs(v - 12.0 * k) for v in values)
+
+    lo = int(min(values) // 12.0) - 1
+    hi = int(max(values) // 12.0) + 2
+    best = min(range(lo, hi + 1), key=lambda k: (worst(k), abs(k)))
+
+    # With a cap under 6 semitones no octave can satisfy every syllable; return
+    # what was asked rather than moving the word for no gain.
+    if worst(best) >= worst(0):
+        return values
+    return [v - 12.0 * best for v in values]
+
+
+def apply_glide(semis: np.ndarray, placed: Sequence[tuple[int, int, float, bool]],
+                step_s: float, glide_ms: float | None = None) -> np.ndarray:
+    """Slide between a word's syllables instead of stepping on a frame edge.
+
+    `placed` is each rendered syllable as (first frame, last frame, semitones,
+    may glide), in output order. Returns the per-frame semitone track.
+
+    A sung voice reaches a note through its approach, and the step is a good
+    part of what makes a word read as a run of separate syllables. The slide is
+    linear in semitones, because a ramp in frequency ratio would sit sharp for
+    most of its length.
+
+    Three things are deliberately left stepping:
+
+    - A join with silence in it. The gap between two words is where the pitch
+      is allowed to change outright, and sliding across it would sound like one
+      long word.
+    - Either side asking not to be glided, which is how a shout keeps the pitch
+      it was recorded at.
+    - Anything at all when GLIDE_MS is 0, which restores the old behaviour
+      exactly rather than approximately.
+    """
+    glide_ms = config.GLIDE_MS if glide_ms is None else glide_ms
+    half = int(round((glide_ms / 1000.0) / step_s / 2.0))
+    if half <= 0:
+        return semis
+
+    out = semis.copy()
+    for (a0, _a1, a_st, a_ok), (b0, b1, b_st, b_ok) in zip(placed, placed[1:]):
+        if b0 > _a1 or a_st == b_st or not (a_ok and b_ok):
+            continue
+        # Never take more than half of either syllable, so a short one between
+        # two others still states its own pitch instead of being swallowed by
+        # the slide into it and the slide out of it.
+        left = max(a0 + (_a1 - a0) // 2, b0 - half)
+        right = min(b0 + (b1 - b0) // 2, b0 + half)
+        if right - left >= 2:
+            out[left:right] = np.linspace(a_st, b_st, right - left)
+    return out
 
 
 def clamp_stretch(out_dur_s: float, src_dur_s: float) -> float:
@@ -105,8 +205,12 @@ def render_segments(mono: np.ndarray, sr: int, segments: list[Segment],
     n_out = max(1, int(round(total_out_s / step_s)))
 
     src_index = np.zeros(n_out, dtype=int)
-    ratio = np.ones(n_out, dtype=float)
+    # Held in semitones rather than as a frequency ratio, because the glide
+    # below has to be linear in pitch. Ramping the ratio instead would leave
+    # the slide sitting sharp for most of its length.
+    semis = np.zeros(n_out, dtype=float)
     gate = np.zeros(n_out, dtype=bool)
+    placed: list[tuple[int, int, float, bool]] = []
 
     for seg in segments:
         stretch = clamp_stretch(seg.out_dur_s, seg.src_dur_s)
@@ -123,10 +227,33 @@ def render_segments(mono: np.ndarray, sr: int, segments: list[Segment],
         idx = np.clip(idx, 0, n_src - 1)
 
         src_index[j0:j1] = idx
-        ratio[j0:j1] = 2.0 ** (seg.semitones / 12.0)
+        semis[j0:j1] = seg.semitones
         gate[j0:j1] = True
 
-    f0_out = f0[src_index] * ratio
+        # Hold the vowel out to the next syllable. TIME_STRETCH_RANGE caps how
+        # far a syllable may be stretched, and a short one cannot always reach
+        # the note after it, which left the word cut in half by silence. One
+        # frame is repeated instead, which is a held note rather than the
+        # smeared one that stretching further would give.
+        if seg.sustain_to_s is not None:
+            j_end = min(n_out, int(round(seg.sustain_to_s / step_s)))
+            if j_end > j1:
+                # The last VOICED frame, not simply the last one. A syllable
+                # cut at an energy valley often ends inside a consonant, and
+                # holding an unvoiced frame synthesises as silence, which is
+                # the hole this exists to fill. Measured on the curated bank,
+                # 1 syllable in 31 ends unvoiced.
+                voiced = idx[f0[idx] > 0]
+                src_index[j1:j_end] = voiced[-1] if voiced.size else idx[-1]
+                semis[j1:j_end] = seg.semitones
+                gate[j1:j_end] = True
+                j1 = j_end
+
+        placed.append((j0, j1, seg.semitones, seg.glide))
+
+    semis = apply_glide(semis, placed, step_s)
+
+    f0_out = f0[src_index] * 2.0 ** (semis / 12.0)
     f0_out[~gate] = 0.0
     sp_out = np.ascontiguousarray(sp[src_index], dtype=np.float64)
     ap_out = np.ascontiguousarray(ap[src_index], dtype=np.float64)
@@ -155,6 +282,11 @@ def render_segments_rubberband(mono: np.ndarray, sr: int, segments: list[Segment
     Rubber Band transposes by a fixed amount per pass, so unlike WORLD it
     cannot follow a contour in one go; each syllable is processed separately
     and the joins are crossfaded.
+
+    That also means GLIDE_MS does nothing here. The pitch steps between
+    syllables, and the crossfade blurs the join without bending it. Words still
+    hold together, because the octave is chosen once per word before the
+    segments ever reach an engine.
     """
     import pylibrb
 

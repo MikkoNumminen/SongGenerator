@@ -9,7 +9,14 @@ import numpy as np
 import pytest
 
 from song_generator import config
-from song_generator.pitchshift import Segment, clamp_stretch, fold_shift, render_unit
+from song_generator.pitchshift import (
+    Segment,
+    apply_glide,
+    clamp_stretch,
+    fold_shift,
+    fold_unit,
+    render_unit,
+)
 
 SR = config.SAMPLE_RATE
 
@@ -97,6 +104,22 @@ class TestRenderUnit:
             f"expected ~{expected:.0f} Hz, measured {measured:.0f} Hz"
         )
 
+    def test_a_sustained_syllable_does_not_fall_silent_before_the_next(self):
+        """TIME_STRETCH_RANGE caps the stretch, so a short syllable asked to
+        cover a long span used to stop early and leave silence in the middle of
+        the word. Holding the last frame is what keeps the word in one piece."""
+        mono = _sung(0.2)
+        span = 0.6                      # three times the source, past the cap
+
+        held = render_unit(mono, SR, [Segment(0.0, 0.2, 0.0, span, 0.0,
+                                              sustain_to_s=span)], span, engine="world")
+        cut = render_unit(mono, SR, [Segment(0.0, 0.2, 0.0, span, 0.0)],
+                          span, engine="world")
+
+        tail = slice(int(0.45 * SR), int(0.58 * SR))
+        assert np.abs(held[tail]).max() > 0.01, "the vowel should still be sounding"
+        assert np.abs(cut[tail]).max() < 1e-3, "without sustain it stops early"
+
     def test_no_segments_yields_silence_not_a_crash(self):
         assert render_unit(_sung(), SR, [], 0.5, engine="world").size >= 0
 
@@ -149,3 +172,111 @@ class TestRubberBandFormants:
         # An octave up with no preservation lands near 2x in theory and 1.35x
         # measured on real clips. Held formants stay near 1.
         assert ratio < 1.15, f"formants rode up with the pitch: {ratio:.2f}x"
+
+
+class TestFoldUnit:
+    """One octave decision per word, not one per syllable.
+
+    Judged alone, two syllables of the same word sitting either side of the cap
+    are moved an octave apart from each other, and the word comes apart in the
+    middle rather than bending. Measured on ellinoora against the curated bank,
+    that happened to 32 of 156 words with more than one pitched syllable.
+    """
+
+    def test_a_word_inside_the_cap_is_left_alone(self):
+        """The majority case. Nothing needed folding, so nothing moves."""
+        assert fold_unit([2.0, -3.0, 5.5], cap=12) == [2.0, -3.0, 5.5]
+
+    @pytest.mark.parametrize("wanted", [
+        [11.6, 12.3],            # straddling the cap: the whole bug
+        [25.0, 26.0, 24.5],
+        [0.0, 22.0],             # wider than an octave, no octave can help
+        [-13.0, -11.0],
+        [12.0, 12.0, 13.0],
+    ])
+    def test_the_intervals_inside_a_word_always_survive(self, wanted):
+        """The property the whole change exists for. Reverting to a fold per
+        syllable fails this on the first case."""
+        got = fold_unit(wanted, cap=12)
+
+        assert [b - a for a, b in zip(got, got[1:])] == pytest.approx(
+            [b - a for a, b in zip(wanted, wanted[1:])])
+
+    def test_the_syllable_fold_would_tear_the_case_this_holds_together(self):
+        """Names the old behaviour, so this reads as a fix rather than a
+        preference. 0.7 semitones apart becomes 11.6 apart."""
+        torn = abs(fold_shift(12.3, cap=12) - fold_shift(11.6, cap=12))
+        held = fold_unit([11.6, 12.3], cap=12)
+
+        assert torn > 11
+        assert max(held) - min(held) == pytest.approx(0.7)
+
+    @pytest.mark.parametrize("wanted", [[25.0, 26.0], [13.0, 14.5], [-27.0, -25.0]])
+    def test_the_word_moves_by_whole_octaves_only(self, wanted):
+        """Anything else changes the note names the melody asked for."""
+        got = fold_unit(wanted, cap=12)
+
+        assert all((w - g) % 12 == pytest.approx(0) for w, g in zip(wanted, got))
+
+    def test_the_octave_chosen_brings_the_word_nearest_its_own_register(self):
+        assert max(abs(x) for x in fold_unit([25.0, 26.0], cap=12)) <= 12
+
+    def test_a_word_with_no_pitched_syllables_is_empty_not_an_error(self):
+        assert fold_unit([]) == []
+
+
+class TestGlide:
+    """Sliding between a word's syllables rather than stepping between them."""
+
+    STEP = 0.005  # FRAME_PERIOD_MS
+
+    def _track(self, placed, glide_ms=60.0, n=200):
+        semis = np.zeros(n, dtype=float)
+        for a, b, st, _ in placed:
+            semis[a:b] = st
+        return apply_glide(semis, placed, self.STEP, glide_ms=glide_ms)
+
+    def _between(self, track, lo, hi):
+        return [x for x in track if lo + 1e-9 < x < hi - 1e-9]
+
+    def test_a_step_between_syllables_becomes_a_slide(self):
+        track = self._track([(0, 50, 0.0, True), (50, 100, 6.0, True)])
+
+        assert len(self._between(track, 0.0, 6.0)) >= 5
+
+    def test_the_slide_is_linear_in_semitones_not_in_ratio(self):
+        """A ramp in frequency ratio sits sharp for most of its length, which
+        is heard as arriving early rather than as a slide."""
+        track = self._track([(0, 50, 0.0, True), (50, 100, 12.0, True)])
+        ramp = self._between(track, 0.0, 12.0)
+
+        assert ramp[len(ramp) // 2] == pytest.approx(6.0, abs=1.0)
+
+    def test_zero_restores_the_old_stepping_exactly(self):
+        """Not approximately. The constant has to be able to turn this off."""
+        placed = [(0, 50, 0.0, True), (50, 100, 6.0, True)]
+
+        assert self._between(self._track(placed, glide_ms=0.0), 0.0, 6.0) == []
+
+    def test_nothing_slides_across_silence(self):
+        """The gap between two words is where the pitch may change outright.
+        Sliding across it would sound like one long word."""
+        track = self._track([(0, 40, 0.0, True), (60, 100, 6.0, True)])
+
+        assert self._between(track, 0.0, 6.0) == []
+
+    def test_a_shout_is_neither_slid_into_nor_out_of(self):
+        """SHOUT_KEEP_RAW exists to stop exactly this smoothing."""
+        into = self._track([(0, 50, 0.0, True), (50, 100, 6.0, False)])
+        outof = self._track([(0, 50, 0.0, False), (50, 100, 6.0, True)])
+
+        assert self._between(into, 0.0, 6.0) == []
+        assert self._between(outof, 0.0, 6.0) == []
+
+    def test_a_short_syllable_still_states_its_own_pitch(self):
+        """Slid into and out of, a 30ms syllable would otherwise be all ramp
+        and never reach the note it was placed on."""
+        track = self._track([(0, 50, 0.0, True), (50, 56, 6.0, True),
+                             (56, 100, 0.0, True)])
+
+        assert track[53] == pytest.approx(6.0)
