@@ -20,6 +20,10 @@ trigger:
       - web/*
       - azure-pipelines.yml
 
+# No validation build on pull requests. The free grant is 1800 minutes a month
+# and the suite already runs here before anything is published, so a second run
+# per pull request would spend them to learn the same thing twice. Worth
+# revisiting if this ever has more than one person pushing to it.
 pr: none
 
 pool:

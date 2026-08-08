@@ -36,6 +36,26 @@ enforced by the platform rather than by watching a dashboard.
 scope so one command creates both and so `what-if` works against a
 subscription that has neither yet.
 
+### What `what-if` reports and you can ignore
+
+Against an existing site it says three properties would be cleared:
+
+    properties.provider           'SwaCli' -> None
+    properties.stableInboundIP    '9.163...' -> None
+    properties.trafficSplitting   {...} -> None
+
+None of them are declared here and none should be. `provider` records what
+published last, `stableInboundIP` is assigned by Azure, and `trafficSplitting`
+is the default share between environments. `what-if` lists every property the
+template does not mention as though it were being removed, and an incremental
+deployment leaves them alone.
+
+`deploymentAuthPolicy` used to appear in that list too and no longer does. It
+decides whether a deployment token may publish at all, which is precisely how
+the pipeline works, so it is stated rather than inherited. It was correct
+already; nothing said so, and a diff threatening to clear it is a poor moment
+to learn what it does.
+
 The deployment token is deliberately **not** an output. Outputs are kept in the
 deployment history and readable by anyone with access to the group, and that
 token alone is enough to publish to the site. The pipeline fetches it at run
