@@ -386,59 +386,78 @@ weak stem is the usual cause.
 
 ## Put the site online
 
-The front end deploys to GitHub Pages, which is free for a public repository.
-`.github/workflows/deploy-web.yml` builds it on any push to `main` that touched
-`web/`, runs the suite first, and publishes.
+The front end is hosted on Azure Static Web Apps, Free plan, and published by
+`azure-pipelines.yml`. What runs in Azure and what deliberately does not is in
+[AZURE.md](AZURE.md).
 
-Four things have to be done once, by hand, because none of them is code.
+**1. Create the site.** Once, from a machine signed in with `az login`:
 
-**1. Turn Pages on.** Settings, Pages, Source: GitHub Actions. Not "deploy from
-a branch": the workflow uploads an artifact rather than committing built files.
+```powershell
+az deployment sub what-if --location westeurope --template-file infra\main.bicep
+az deployment sub create  --location westeurope --template-file infra\main.bicep
+```
 
-**2. Reach the backend from the internet.** It runs on a desktop behind a home
+`what-if` changes nothing and prints what the second command would do. Both
+create a resource group `rg-songgen-web` and a Free-plan site in it.
+
+**2. Point a pipeline at this repository.** Azure DevOps, Pipelines, New, using
+the existing `azure-pipelines.yml`.
+
+Hosted parallelism is no longer granted automatically. A new organisation needs
+either a grant request or an Azure subscription linked with billing configured,
+after which the free grant applies. This is friction rather than cost.
+
+**3. Give the pipeline three variables.** Pipeline, Edit, Variables:
+
+| Variable | Value | Secret |
+|---|---|---|
+| `AZURE_STATIC_WEB_APPS_API_TOKEN` | see below | yes |
+| `API_BASE_URL` | the tunnel address, no trailing slash | no |
+| `GOOGLE_CLIENT_ID` | the OAuth client id, once there is one | no |
+
+The token is the one credential here, and it is enough on its own to publish to
+the site, so it is marked secret and never committed:
+
+```powershell
+az staticwebapp secrets list --name songgen-web --query "properties.apiKey" -o tsv
+```
+
+The other two are not secret and cannot be. The browser has to know where to
+send requests, so the address is in the shipped files however it gets there.
+Keeping them out of the repository stops a home machine's address living in git
+history; the allowlist on the edge is what actually protects the service.
+
+Missing either is not a failure. The site falls back to the local backend and
+reports that nothing is answering, which it renders honestly.
+
+**4. Reach the backend from the internet.** It runs on a desktop behind a home
 connection, so it needs a tunnel. Tailscale Funnel is the free one:
 
 ```powershell
 tailscale funnel 8000
 ```
 
-That prints an address. Everything below wants it.
+The address it prints is `API_BASE_URL`.
 
-**3. Tell the site where the backend is.** Settings, Secrets and variables,
-Actions, Variables tab. Two repository *variables*, not secrets:
-
-| Variable | Value |
-|---|---|
-| `API_BASE_URL` | the funnel address, no trailing slash |
-| `GOOGLE_CLIENT_ID` | the OAuth client id, once there is one |
-
-Variables rather than secrets because neither is one. The browser has to know
-where to send requests, so the address ends up in the shipped files whatever is
-done with it. Keeping it out of the repository stops a home machine's address
-living in git history, which is tidiness rather than protection. What protects
-the service is the allowlist on the edge.
-
-Missing either is not a failure. The site falls back to the local backend and
-reports that nothing is answering, which is a state it renders honestly.
-
-**4. Let the browser call the backend.** A page served from github.io calling a
-funnel address is cross-origin, so the edge has to allow it. On the machine
-running the edge:
+**5. Let the browser call it.** A page on `azurestaticapps.net` calling that
+address is cross-origin, so the edge has to allow it. On the machine running
+the edge:
 
 ```powershell
-$env:SONGGEN_ALLOWED_ORIGINS = "https://<user>.github.io"
+$env:SONGGEN_ALLOWED_ORIGINS = "https://<the site hostname>"
 ```
 
-Without it every request fails the preflight and the site shows the machine as
-unreachable, which is technically true and thoroughly unhelpful.
+Without it every request fails the preflight and the site reports the machine
+as unreachable, which is technically true and thoroughly unhelpful.
 
-Two deployment details worth knowing, because both fail as a blank page rather
-than as an error:
+Two things about a single page app on a static host, both of which fail as a
+blank screen rather than as an error:
 
-- A project page is served from `/<repo>/` rather than the root, so the build
-  is given `--base-href`. Wrong, and every script 404s after the page loads.
-- A static host has no file at `/runs/abc`, so a deep link 404s. The workflow
-  copies `index.html` to `404.html`, which hands the path to the router.
+- A Static Web App serves from the root of its own hostname, so the build takes
+  no `--base-href`. Passing one, as a GitHub project page would need, 404s
+  every script after the page loads.
+- There is no file at `/runs/abc`, so `web/public/staticwebapp.config.json`
+  rewrites unknown paths to `index.html` and hands them to the router.
 
 ---
 

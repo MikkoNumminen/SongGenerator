@@ -81,6 +81,7 @@ def test_constants_named_in_docs_actually_exist(doc):
     # Words that look like constants but are prose or JSON keys.
     allowed = {
         "AGENTS", "README", "GLOSSARY", "ARCHITECTURE", "WORKFLOWS", "CLAUDE",
+        "AZURE",
         "DEMUCS", "WORLD", "PATH", "JSON", "LUFS", "PYTHONPATH", "GPU",
         "NVIDIA", "TSV", "BOM", "DENSITY", "CLIMAXES", "STAGE", "LISTEN",
         "FIRST", "FORMATS", "BRAVO", "OTHER", "PLAYFULNESS", "SOURCES",
@@ -96,6 +97,9 @@ def test_constants_named_in_docs_actually_exist(doc):
         # trees into it would make config.py the place every deployment name
         # has to be declared, which it is not.
         "SONGGEN_ALLOWED_ORIGINS", "API_BASE_URL", "GOOGLE_CLIENT_ID",
+        # The one real credential in the deployment, and the only reason it is
+        # named in a runbook is to say it must be marked secret.
+        "AZURE_STATIC_WEB_APPS_API_TOKEN",
     }
     missing = sorted(_referenced_constants(read(ROOT / doc)) - known - allowed)
     assert not missing, f"{doc} names constants that do not exist: {missing}"

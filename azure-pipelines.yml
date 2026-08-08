@@ -1,0 +1,82 @@
+# Build the front end and publish it to Azure Static Web Apps.
+#
+# The site being reachable by anyone is not a hole. It is HTML and JavaScript
+# carrying no credentials, and it can do nothing without a token the edge
+# accepts. What must never be openly usable is the pipeline that makes songs,
+# and that is guarded on the machine that runs it, against an allowlist of
+# named accounts.
+#
+# Setting this up is in docs/WORKFLOWS.md under "Put the site online".
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    # The audio pipeline is most of this repository and has nothing to do with
+    # the site. Building it on every commit would burn the free minutes on
+    # changes that cannot affect what gets published.
+    include:
+      - web/*
+      - azure-pipelines.yml
+
+pr: none
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  # Overridable when running the pipeline by hand, so a second site can be
+  # published without editing this file.
+  - name: outputPath
+    value: web/dist/songgen-web/browser
+
+steps:
+  - task: NodeTool@0
+    displayName: Node 22
+    inputs:
+      versionSpec: '22.x'
+
+  - script: npm ci
+    displayName: Install
+    workingDirectory: web
+
+  # Before anything is published. A green site with a broken front end is
+  # worse than no site.
+  - script: npm test -- --watch=false
+    displayName: Test
+    workingDirectory: web
+
+  # No --base-href. A Static Web App serves from the root of its own hostname,
+  # unlike a GitHub project page, so the default is right and passing a path
+  # here would 404 every script after the page loaded.
+  - script: npx ng build
+    displayName: Build
+    workingDirectory: web
+
+  # Where the edge is and which client id signs people in. Written at deploy
+  # time rather than committed, so a home machine's address does not live in
+  # git history. Neither value is secret and neither can be: the browser has to
+  # know where to send requests. The allowlist on the edge is the protection.
+  #
+  # Absent, the site falls back to the local backend and honestly reports that
+  # nothing is answering, which is a state it renders properly.
+  - script: |
+      cat > "$(outputPath)/config.json" <<JSON
+      {
+        "apiBaseUrl": "$(API_BASE_URL)",
+        "googleClientId": "$(GOOGLE_CLIENT_ID)"
+      }
+      JSON
+      echo "wrote $(outputPath)/config.json"
+    displayName: Write the runtime config
+
+  - task: AzureStaticWebApp@0
+    displayName: Publish
+    inputs:
+      # Already built and tested above, so the task uploads rather than
+      # building again with its own toolchain and its own idea of the config.
+      skip_app_build: true
+      app_location: $(outputPath)
+      output_location: ''
+      azure_static_web_apps_api_token: $(AZURE_STATIC_WEB_APPS_API_TOKEN)

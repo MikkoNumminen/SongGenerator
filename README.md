@@ -65,6 +65,12 @@ tests fail if either half drifts from the other. See
 [web/ARCHITECTURE.md](web/ARCHITECTURE.md) for the shape and what it leaves
 out.
 
+The site is hosted on **Azure Static Web Apps**, declared in **Bicep** and
+published by an **Azure DevOps** pipeline, all on free tiers. Azure Functions
+and a managed database are deliberately not used, because the work needs a GPU
+and the job history has to sit beside it. [docs/AZURE.md](docs/AZURE.md) gives
+the measurements behind both decisions.
+
 ## Documentation
 
 | | |
@@ -76,6 +82,7 @@ out.
 | [docs/DATA-FORMATS.md](docs/DATA-FORMATS.md) | Every file the tool writes, field by field. |
 | [docs/TODO.md](docs/TODO.md) | What is deliberately unfinished. |
 | [docs/AI-FIRST.md](docs/AI-FIRST.md) | How legible this repo is, scored against a written rubric. |
+| [docs/AZURE.md](docs/AZURE.md) | What runs in Azure, what does not, and the measurements behind each decision. |
 | [web/ARCHITECTURE.md](web/ARCHITECTURE.md) | How the Angular front end is put together, and what it deliberately leaves out. |
 | [src/song_generator/config.py](src/song_generator/config.py) | Every tunable, with the reasoning behind its value. |
 
