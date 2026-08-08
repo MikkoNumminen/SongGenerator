@@ -122,6 +122,13 @@ never see. Resolve it on a real vocal.
      6.9 semitones and units breaking more than half an octave 230 to 200.
      Where it applies the win is large, `perse+eee` goes from 10.6 to 3.0.
 
+     A shout also leaves a gap in time, not only in pitch. It keeps the length
+     it was recorded at, so it does not hold its vowel across a rest the way a
+     sung syllable now does, and the word after it starts late. On rocketman
+     those are the only two words left with silence inside them, 80 ms and
+     30 ms, both after `eee`. Whatever is decided about the octave should
+     decide this at the same time: both come from the same exemption.
+
   2. **Record a bare `paviaani`.** There is not one. All six takes in the
      curated bank are `eee-paviaani`, so every placement of the climax word
      carries the shout and its break. This removes the problem rather than
