@@ -425,6 +425,44 @@ never see. Resolve it on a real vocal.
   Deleting a helper because it has one caller is a rule that would also delete
   every well-named private function in the codebase. Closed, not fixed.
 
+- **A web front end, and the two pieces deliberately left out of its first
+  cut.** The first cut takes one link for the song, lets you pick which bank
+  sings it, runs the pipeline and plays the seven mimicry versions back. Two
+  things it does not do, both cut on purpose rather than forgotten.
+
+  **Building a bank from a second link.** The obvious next feature, and the one
+  that cannot be automated the way it sounds. `AGENTS.md` is blunt about it:
+  identification is done by ear, and speech recognition was tried three ways
+  and was wrong nearly every time on shouted singing. The mine, listen, rename,
+  build loop needs a person in the middle.
+
+  The one automatable route is `build_bank --raw`, which discards identity and
+  keeps only syllable count and pitch. That is a real feature and it is exactly
+  how the spoken bank was built, but what it produces is a bank to be replayed
+  in recorded order, not a vocabulary to be chosen from. A UI offering "paste a
+  link, get a bank" has to say which of those it means, or it promises the one
+  people expect and delivers the other.
+
+  So the seam is there from the start: the front end asks the API which banks
+  exist rather than naming them, because the names live in a gitignored local
+  override anyway. Adding a bank later is a new row in that list, not a change
+  to the form.
+
+  **Snapshot mode.** A deployed link that works when the machine behind it is
+  off, serving a few pre-rendered songs so the whole interface is browsable
+  with generation calmly disabled. Cut for a simpler reason: there is nothing
+  yet that is worth showing publicly.
+
+  The seam for this one is a single interface over "where runs come from", with
+  one implementation today and a second reading static assets later. Chosen
+  before it is needed because retrofitting it means touching every component
+  that ever called the API directly, and because it is also what makes
+  "the backend is down" testable without a backend.
+
+  Note when it does happen: seven versions of one song is a real number of
+  megabytes shipped into a static build, so the question is how few songs and
+  how few rungs can carry the demo, not how many will fit.
+
 ## Resolved
 
 Kept rather than deleted, because each says what was tried and why the answer
