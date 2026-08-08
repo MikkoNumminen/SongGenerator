@@ -324,3 +324,61 @@ def test_cancelling_a_run_that_is_not_going_is_a_conflict(tmp_path):
     client, _, _ = _app(tmp_path)
 
     assert client.post("/jobs/abc/cancel", headers=_auth()).status_code == 409
+
+
+# ---------------------------------------------------------------------------
+# The production wiring
+# ---------------------------------------------------------------------------
+
+def test_the_real_wiring_builds_and_registers_every_route(tmp_path, monkeypatch):
+    """The bug this guards against is the one that shipped: a collaborator
+    the tests always injected and the production wiring never supplied, so the
+    route that matters answered 503 to anybody who pressed go.
+
+    The repository root is the real one, because `build` imports the pipeline
+    to read its bank and level lists, and that is tracked. Only the database is
+    redirected, so this writes nothing a person would miss.
+    """
+    from app.main import build
+
+    monkeypatch.setenv("SONGGEN_DATABASE_PATH", str(tmp_path / "jobs.sqlite3"))
+    monkeypatch.setenv("SONGGEN_ALLOWED_EMAILS", "owner@example.invalid")
+    monkeypatch.setenv("SONGGEN_GOOGLE_CLIENT_ID", "abc.apps.googleusercontent.com")
+
+    app = build()
+
+    paths = {r.path for r in app.routes if hasattr(r, "path")}
+    assert {"/health", "/banks", "/jobs", "/jobs/{job_id}",
+            "/jobs/{job_id}/cancel"} <= paths
+
+
+def test_a_fetcher_is_not_optional(tmp_path):
+    """The bug was a collaborator the tests always injected and the production
+    wiring never supplied, so it could only be discovered by a person pressing
+    go. Leaving it out is a wiring error now, raised where the app is built.
+
+    Asserted directly rather than through a request, because a request without
+    credentials stops at the guard and would pass whether a fetcher exists or
+    not, which is how this went unnoticed the first time.
+    """
+    settings = _settings(tmp_path)
+    store = open_store(settings.database_path)
+
+    with pytest.raises(TypeError, match="prepare_song"):
+        create_app(  # type: ignore[call-arg]
+            settings=settings, runner=JobRunner(on_update=store.save),
+            store=store, banks=BANKS, standardised_suffix=".std",
+            levels=LEVELS, verifier=_verifier(),
+        )
+
+
+def test_the_real_wiring_supplies_one(tmp_path, monkeypatch):
+    """And the production path does supply it, which is the half that was
+    missing. Read off the built app rather than inferred from a status code."""
+    from app.main import build
+
+    monkeypatch.setenv("SONGGEN_DATABASE_PATH", str(tmp_path / "jobs.sqlite3"))
+
+    app = build()
+
+    assert app.state.prepare_song is not None

@@ -102,6 +102,11 @@ def create_app(
 ) -> FastAPI:
     """Build the app around already-made collaborators."""
     app = FastAPI(title="SongGenerator edge", version="0.1.0")
+    # Recorded on the app so the wiring can be asserted directly. A
+    # request cannot show it: an unauthenticated one stops at the guard
+    # long before anything fetches, which is how a missing fetcher went
+    # unnoticed until somebody pressed go.
+    app.state.prepare_song = prepare_song
 
     # The front end is served from somewhere else entirely, so the browser
     # will preflight. Origins are configured rather than "*", because "*" plus
