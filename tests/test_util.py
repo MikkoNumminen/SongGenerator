@@ -104,7 +104,9 @@ class TestGpuMemoryCap:
     stand-in for torch, so they pin the decision rather than needing a GPU.
     """
 
-    def _fake_torch(self, monkeypatch, calls):
+    CARD_MIB = 12288      # the card these numbers were measured on
+
+    def _fake_torch(self, monkeypatch, calls, total_mib=CARD_MIB):
         import sys
         import types
 
@@ -117,6 +119,8 @@ class TestGpuMemoryCap:
         torch.device = _Device
         torch.cuda = types.SimpleNamespace(
             is_available=lambda: True,
+            get_device_properties=lambda i: types.SimpleNamespace(
+                total_memory=int(total_mib * 1024 ** 2)),
             set_per_process_memory_fraction=lambda f, i: calls.append((f, i)),
         )
         monkeypatch.setitem(sys.modules, "torch", torch)
@@ -184,8 +188,62 @@ class TestGpuMemoryCap:
         def angry(fraction, index):
             raise RuntimeError("no CUDA-capable device is detected")
 
-        torch.cuda = types.SimpleNamespace(set_per_process_memory_fraction=angry)
+        torch.cuda = types.SimpleNamespace(
+            get_device_properties=lambda i: types.SimpleNamespace(
+                total_memory=12288 * 1024 ** 2),
+            set_per_process_memory_fraction=angry,
+        )
         monkeypatch.setitem(sys.modules, "torch", torch)
         monkeypatch.setattr(config, "GPU_MEMORY_FRACTION", 0.8)
 
         assert util.cap_gpu_memory("cuda") is False
+
+    def test_a_torch_without_these_calls_does_not_fail_the_render_either(self, monkeypatch):
+        """Reading the card size is a second API that can be absent or
+        renamed. It went in as part of a fix and would have turned a courtesy
+        into an AttributeError mid-render."""
+        import sys
+        import types
+
+        torch = types.ModuleType("torch")
+        torch.device = lambda name: types.SimpleNamespace(index=0)
+        torch.cuda = types.SimpleNamespace()          # neither call exists
+        monkeypatch.setitem(sys.modules, "torch", torch)
+        monkeypatch.setattr(config, "GPU_MEMORY_FRACTION", 0.8)
+
+        assert util.cap_gpu_memory("cuda") is False
+
+    def test_a_cap_too_small_for_separation_is_refused_not_applied(self, monkeypatch):
+        """The bug this exists for. At 0.15 on a 12 GB card roformer died with
+        "1.80 GiB allowed" while 6.25 GiB of the card was free: the cap was the
+        limit, not the hardware. A cap that cannot fit the work protects
+        nothing, so leaving the card uncapped is the lesser harm."""
+        calls = []
+        self._fake_torch(monkeypatch, calls)
+        monkeypatch.setattr(config, "SEPARATION_PEAK_MIB", 3200)
+        monkeypatch.setattr(config, "GPU_MEMORY_FRACTION", 0.15)   # 1843 MiB
+
+        assert util.cap_gpu_memory("cuda") is False
+        assert calls == [], "a cap below the separation peak must not be set"
+
+    def test_the_shipped_default_clears_the_measured_separation_peak(self, monkeypatch):
+        """Guards the pairing rather than either number alone: lowering the
+        fraction, or re-measuring a bigger peak, must not silently produce a
+        cap that cannot separate."""
+        calls = []
+        self._fake_torch(monkeypatch, calls)
+
+        assert util.cap_gpu_memory("cuda") is True
+        assert config.GPU_MEMORY_FRACTION * self.CARD_MIB >= config.SEPARATION_PEAK_MIB
+
+    def test_a_smaller_card_refuses_the_same_fraction(self, monkeypatch):
+        """The fraction is of the card, so the same value means different
+        memory on different hardware. On a 6 GB card 0.35 is 2.1 GB, under the
+        measured peak, and capping there would break separation."""
+        calls = []
+        self._fake_torch(monkeypatch, calls, total_mib=6144)
+        monkeypatch.setattr(config, "SEPARATION_PEAK_MIB", 3200)
+        monkeypatch.setattr(config, "GPU_MEMORY_FRACTION", 0.35)   # 2150 MiB
+
+        assert util.cap_gpu_memory("cuda") is False
+        assert calls == []

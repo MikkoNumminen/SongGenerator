@@ -144,10 +144,15 @@ Five things that each cost an hour to learn:
 - **`CUDA_VISIBLE_DEVICES=""` does not hide the card.** Torch still reports
   cuda available and builds a context, so ten workers filled 11.7 GB doing no
   GPU work at all. `-1` genuinely hides it. To leave room for other GPU work
-  instead, use `GPU_MEMORY_FRACTION`.
-- **Do not pass `--separator` to a re-render.** Stems cache as
-  `work/<song>/vocal.wav` whatever produced them, and naming a backend can send
-  it off to separate from scratch, which on CPU never finishes.
+  instead, use `GPU_MEMORY_FRACTION`, and do not set it below what separation
+  measurably needs: at 0.15 roformer died with "1.80 GiB allowed" while 6.25 GiB
+  of the card was free.
+- **`--separator` on a song that already has stems does nothing, and says it
+  did.** The cache is `work/<song>/vocal.wav` plus its instrumental, and the
+  check is only that both files exist; nothing records which backend wrote
+  them. So asking for a different separator reuses whatever is there while the
+  header still prints the backend you asked for. `--force` is what actually
+  re-separates.
 - **Redirect stdout and Python buffers it.** A run that has printed only its
   header looks hung and is not. Use `python -u`, or you will kill working jobs.
   For the same reason, grep batch logs with `-a`: one `ä` in a song title makes

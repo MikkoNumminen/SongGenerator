@@ -38,9 +38,14 @@ def cap_gpu_memory(device: str = "cuda") -> bool:
     assume it.
 
     The machine this runs on also hosts other GPU work, and a separator that
-    takes the whole card either evicts that or is evicted by it. Measured on a
-    12 GB card, separation peaks around 8.7 GB, so a cap at
-    GPU_MEMORY_FRACTION leaves real headroom rather than a theoretical margin.
+    takes the whole card either evicts that or is evicted by it.
+
+    A cap below what separation actually needs is refused rather than applied,
+    because it does not protect anything: it just turns a working render into
+    an out-of-memory error while the card sits half empty. That is not
+    hypothetical. At 0.15 on a 12 GB card roformer died with "1.80 GiB allowed"
+    while 6.25 GiB was free. SEPARATION_PEAK_MIB carries the measured figure it
+    has to clear.
 
     Torch's limit is PER PROCESS, which is the right shape here only because
     the pipeline separates one song at a time. Running several separations at
@@ -58,10 +63,16 @@ def cap_gpu_memory(device: str = "cuda") -> bool:
         import torch
 
         index = torch.device(device).index or 0
+        total_mib = torch.cuda.get_device_properties(index).total_memory / 1024 ** 2
+        if total_mib * fraction < getattr(config, "SEPARATION_PEAK_MIB", 0):
+            # Too small to be a cap. Leaving the card uncapped is the lesser
+            # harm: the alternative is a render that cannot run at all.
+            return False
         torch.cuda.set_per_process_memory_fraction(fraction, index)
-    except (ImportError, RuntimeError, ValueError, AssertionError):
-        # No torch, no CUDA, or a device that does not exist. Capping is a
-        # courtesy to other work on the card, never a reason to fail a render.
+    except (ImportError, RuntimeError, ValueError, AssertionError, AttributeError):
+        # No torch, no CUDA, a device that does not exist, or a torch build
+        # without one of these calls. Capping is a courtesy to other work on
+        # the card, never a reason to fail a render.
         return False
     return True
 

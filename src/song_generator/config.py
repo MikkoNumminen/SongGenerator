@@ -51,8 +51,12 @@ SEPARATOR = "demucs"
 DEMUCS_MODEL = "htdemucs_ft"
 
 # Segment length in seconds that demucs processes at a time. Lower this if the
-# GPU runs out of memory. None = the model's own default (7.8s for htdemucs),
-# which peaks around 7 GB and fits a 12 GB card comfortably.
+# GPU runs out of memory. None = the model's own default (7.8s for htdemucs).
+#
+# The default is far cheaper than this comment used to claim. It said "peaks
+# around 7 GB"; measured on the longest song here (5:00) it holds 555 MiB and
+# reserves 818 MiB. Nothing needs lowering on a card of any ordinary size, and
+# lowering it costs quality at the segment joins for nothing.
 DEMUCS_SEGMENT = None
 
 # Number of random shifts to average over. 1 = off. Higher is slightly cleaner
@@ -65,14 +69,37 @@ ROFORMER_MODEL = "model_mel_band_roformer_ep_3005_sdr_11.4360.ckpt"
 # "cuda" or "cpu". None = autodetect, preferring cuda.
 DEVICE = None
 
+# The most GPU memory separation has been measured to hold, in MiB, across both
+# backends. This is the floor the cap below must clear.
+#
+# Measured on the longest song here (5:00), peak reserved by the caching
+# allocator, which is the figure that has to fit rather than the smaller
+# "allocated" one:
+#
+#   demucs    555 MiB allocated,   818 MiB reserved
+#   roformer 1947 MiB allocated,  3200 MiB reserved
+#
+# Roformer is the larger and is the backend preferred for new songs, so it sets
+# the number. Re-measure with torch.cuda.max_memory_reserved() around a forced
+# separation if a model changes.
+SEPARATION_PEAK_MIB = 3200
+
 # The most of the card this process may take, as a fraction. 0 or 1 disables
 # the cap.
 #
-# 0.8 leaves a fifth of the GPU free, because this machine also runs other GPU
-# work and a separator that takes the whole card either evicts that or is
-# evicted by it. On the 12 GB card here that is a ceiling of about 9.8 GB
-# against a measured separation peak of 8.7 GB, so it is headroom rather than a
-# limit anything normally reaches.
+# The point is to leave room for whatever else is on the GPU, since this
+# machine also hosts a local model server that holds most of the card. A
+# separator that takes everything either evicts that or is evicted by it.
+#
+# 0.35 is about 4.3 GB of the 12 GB card here, chosen to clear
+# SEPARATION_PEAK_MIB with headroom while leaving roughly two thirds free.
+# Verified by separating with a local model server holding 8 GB at the time.
+#
+# Do NOT lower this without re-measuring. At 0.15 roformer died with
+# "CUDA out of memory ... 1.80 GiB allowed" while 6.25 GiB of the card was
+# free: the cap, not the card, was the limit. `cap_gpu_memory` now refuses to
+# apply a fraction that cannot fit SEPARATION_PEAK_MIB rather than let that
+# happen again, so lowering this stops capping instead of breaking renders.
 #
 # Torch enforces this PER PROCESS, which only gives the intended guarantee
 # because the pipeline separates one song at a time. Several separations at
@@ -80,8 +107,8 @@ DEVICE = None
 #
 # Going over raises out-of-memory rather than spilling to host RAM. That is
 # deliberate: a song that genuinely needs more should say so, not silently drag
-# the machine. Raise this if that happens on a longer track.
-GPU_MEMORY_FRACTION = 0.15
+# the machine.
+GPU_MEMORY_FRACTION = 0.35
 
 
 # ---------------------------------------------------------------------------
