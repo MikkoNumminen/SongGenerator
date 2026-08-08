@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_CONFIG, loadRuntimeConfig, readRuntimeConfig } from './runtime-config';
+import {
+  DEFAULT_CONFIG,
+  LOCAL_BACKEND,
+  loadRuntimeConfig,
+  readRuntimeConfig,
+} from './runtime-config';
 
 const response = (body: unknown, ok = true): Response =>
   ({ ok, json: () => Promise.resolve(body) }) as Response;
@@ -36,7 +41,9 @@ describe('reading the deployment settings', () => {
   ])('falls back to the defaults for %s', (_why, input) => {
     // Nothing here may reject. A typo in a config file must not stop the app
     // booting, because then nobody can see the message explaining what broke.
-    expect(readRuntimeConfig(input)).toEqual(DEFAULT_CONFIG);
+    // The hostname is given rather than taken from the test environment, so
+    // what this asserts does not change with where the runner thinks it is.
+    expect(readRuntimeConfig(input, 'songgen.example.invalid')).toEqual(DEFAULT_CONFIG);
   });
 
   it('keeps whichever half is usable', () => {
@@ -62,10 +69,12 @@ describe('fetching them', () => {
       ok: true, json: () => Promise.reject(new SyntaxError('unexpected <')),
     } as unknown as Response)],
   ])('still boots when %s', async (_why, fetcher) => {
-    // A deployment that failed to write its config then looks exactly like a
-    // switched-off desktop, which this application renders honestly.
-    await expect(loadRuntimeConfig('config.json', fetcher as typeof fetch))
-      .resolves.toEqual(DEFAULT_CONFIG);
+    // A deployment that failed to write its config still produces a running
+    // application, which then says plainly that it was never told where its
+    // backend is.
+    await expect(
+      loadRuntimeConfig('config.json', fetcher as typeof fetch, 'songgen.example.invalid'),
+    ).resolves.toEqual(DEFAULT_CONFIG);
   });
 
   it('asks for a fresh copy rather than a cached one', async () => {
@@ -80,5 +89,39 @@ describe('fetching them', () => {
     await loadRuntimeConfig('config.json', fetcher as unknown as typeof fetch);
 
     expect(seen?.cache).toBe('no-store');
+  });
+});
+
+describe('never guessing an address once deployed', () => {
+  it('assumes the local backend only when the page is itself local', () => {
+    // Convenient and harmless when the page and the edge are one machine.
+    for (const host of ['localhost', '127.0.0.1', '[::1]']) {
+      expect(readRuntimeConfig({}, host).apiBaseUrl).toBe(LOCAL_BACKEND);
+    }
+  });
+
+  it('assumes nothing at all on a real hostname', () => {
+    // A public page asking for http://127.0.0.1:8000 is a website reaching
+    // into the visitor's own computer. Chrome prompts about exactly that, and
+    // being the site that triggers the prompt is worse than admitting the
+    // deployment is unfinished. It could not have worked anyway: an HTTPS page
+    // may not call HTTP.
+    expect(readRuntimeConfig({}, 'green-bay-0f4fe1d03.7.azurestaticapps.net').apiBaseUrl)
+      .toBe('');
+    expect(readRuntimeConfig(undefined, 'example.invalid').apiBaseUrl).toBe('');
+  });
+
+  it('still takes a configured address on any host', () => {
+    expect(readRuntimeConfig({ apiBaseUrl: 'https://desk.invalid' }, 'anywhere.invalid')
+      .apiBaseUrl).toBe('https://desk.invalid');
+  });
+
+  it('guesses nothing when the fetch fails on a deployed host', async () => {
+    const dead = () => Promise.reject(new Error('offline'));
+
+    const config = await loadRuntimeConfig('config.json', dead as typeof fetch,
+                                           'songgen.example.invalid');
+
+    expect(config.apiBaseUrl).toBe('');
   });
 });

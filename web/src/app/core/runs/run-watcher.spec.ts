@@ -4,6 +4,7 @@ import { Observable, Subscription, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { JobReply } from '../contract/dto';
+import { API_BASE_URL } from '../api/api-config';
 import { RUN_SOURCE, RunSource } from '../ports/run-source.port';
 import { AsyncState } from '../state/async-state';
 import { OFFLINE_POLL_MS, POLL_MS, RunWatcher } from './run-watcher';
@@ -44,7 +45,10 @@ function scripted(answers: Array<JobReply | HttpErrorResponse>) {
 function watcherFor(answers: Array<JobReply | HttpErrorResponse>) {
   const scripts = scripted(answers);
   TestBed.configureTestingModule({
-    providers: [{ provide: RUN_SOURCE, useValue: scripts.source }],
+    providers: [
+      { provide: RUN_SOURCE, useValue: scripts.source },
+      { provide: API_BASE_URL, useValue: 'https://desk.example.invalid' },
+    ],
   });
   return { watcher: TestBed.inject(RunWatcher), asked: scripts.asked };
 }
@@ -146,7 +150,9 @@ describe('RunWatcher', () => {
     let open = 0;
     let peak = 0;
     TestBed.configureTestingModule({
-      providers: [{
+      providers: [
+        { provide: API_BASE_URL, useValue: 'https://desk.example.invalid' },
+        {
         provide: RUN_SOURCE,
         useValue: {
           submit: () => throwError(() => new Error('not used')),

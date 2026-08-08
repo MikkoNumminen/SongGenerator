@@ -20,18 +20,43 @@ export interface RuntimeConfig {
   readonly googleClientId: string;
 }
 
+/** Where the edge listens when it is running on the same machine as the page. */
+export const LOCAL_BACKEND = 'http://127.0.0.1:8000';
+
 /**
  * What to use when there is no config file, or it is unreadable.
  *
- * The local backend, because that is what somebody running this from a clone
- * is pointing at. A deployment that fails to write its config therefore looks
- * exactly like a switched-off desktop, which is a state this application
- * already renders honestly, instead of a blank page or a crash on boot.
+ * No address at all. This used to default to the local backend, which is
+ * right when you are sitting at the machine and indefensible anywhere else: a
+ * public page asking for `http://127.0.0.1:8000` is a website reaching into
+ * the visitor's own computer. Chrome now asks the visitor to allow "access to
+ * other apps and services on this device", which is exactly the question it
+ * should ask and exactly the impression no honest site wants to make. It could
+ * not have worked either way, since an HTTPS page may not call HTTP.
+ *
+ * So the local default is applied only when the page is itself being served
+ * locally. See `defaultApiBaseUrl`.
  */
 export const DEFAULT_CONFIG: RuntimeConfig = {
-  apiBaseUrl: 'http://127.0.0.1:8000',
+  apiBaseUrl: '',
   googleClientId: '',
 };
+
+/** Whether the page itself came from this machine. */
+function servedLocally(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
+}
+
+/**
+ * The address to assume when the config file says nothing.
+ *
+ * Localhost while developing, because that is convenient and harmless when the
+ * page and the backend are the same machine. Nothing at all once deployed,
+ * because guessing there means probing a stranger's computer.
+ */
+export function defaultApiBaseUrl(hostname: string): string {
+  return servedLocally(hostname) ? LOCAL_BACKEND : DEFAULT_CONFIG.apiBaseUrl;
+}
 
 function text(source: Record<string, unknown>, key: string): string | undefined {
   const value = source[key];
@@ -46,12 +71,16 @@ function text(source: Record<string, unknown>, key: string): string | undefined 
  * typo in it must not stop the application booting, because then nobody can
  * even see the message explaining what is wrong.
  */
-export function readRuntimeConfig(raw: unknown): RuntimeConfig {
+export function readRuntimeConfig(
+  raw: unknown,
+  hostname: string = typeof location === 'undefined' ? '' : location.hostname,
+): RuntimeConfig {
+  const fallback = defaultApiBaseUrl(hostname);
   if (!raw || typeof raw !== 'object') {
-    return DEFAULT_CONFIG;
+    return { ...DEFAULT_CONFIG, apiBaseUrl: fallback };
   }
   const source = raw as Record<string, unknown>;
-  const base = text(source, 'apiBaseUrl') ?? DEFAULT_CONFIG.apiBaseUrl;
+  const base = text(source, 'apiBaseUrl') ?? fallback;
   return {
     // A trailing slash would produce `//health`, which some servers answer and
     // others do not. Cheaper to fix here than to debug once deployed.
@@ -70,14 +99,16 @@ export function readRuntimeConfig(raw: unknown): RuntimeConfig {
 export async function loadRuntimeConfig(
   url = 'config.json',
   fetcher: typeof fetch = fetch,
+  hostname: string = typeof location === 'undefined' ? '' : location.hostname,
 ): Promise<RuntimeConfig> {
+  const empty = { ...DEFAULT_CONFIG, apiBaseUrl: defaultApiBaseUrl(hostname) };
   try {
     const response = await fetcher(url, { cache: 'no-store' });
     if (!response.ok) {
-      return DEFAULT_CONFIG;
+      return empty;
     }
-    return readRuntimeConfig(await response.json());
+    return readRuntimeConfig(await response.json(), hostname);
   } catch {
-    return DEFAULT_CONFIG;
+    return empty;
   }
 }

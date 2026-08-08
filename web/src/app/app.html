@@ -18,7 +18,12 @@
   </div>
 </header>
 
-@if (health.status().kind === 'offline') {
+@if (!health.configured) {
+  <p class="banner" role="status">
+    This site has not been told where its backend is, so it cannot make
+    anything yet. Nothing is wrong with your machine.
+  </p>
+} @else if (health.status().kind === 'offline') {
   <p class="banner" role="status">
     The machine that makes the songs is not answering. It is a desktop, and it
     is not always on.
