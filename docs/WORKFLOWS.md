@@ -384,6 +384,64 @@ weak stem is the usual cause.
 
 ---
 
+## Put the site online
+
+The front end deploys to GitHub Pages, which is free for a public repository.
+`.github/workflows/deploy-web.yml` builds it on any push to `main` that touched
+`web/`, runs the suite first, and publishes.
+
+Four things have to be done once, by hand, because none of them is code.
+
+**1. Turn Pages on.** Settings, Pages, Source: GitHub Actions. Not "deploy from
+a branch": the workflow uploads an artifact rather than committing built files.
+
+**2. Reach the backend from the internet.** It runs on a desktop behind a home
+connection, so it needs a tunnel. Tailscale Funnel is the free one:
+
+```powershell
+tailscale funnel 8000
+```
+
+That prints an address. Everything below wants it.
+
+**3. Tell the site where the backend is.** Settings, Secrets and variables,
+Actions, Variables tab. Two repository *variables*, not secrets:
+
+| Variable | Value |
+|---|---|
+| `API_BASE_URL` | the funnel address, no trailing slash |
+| `GOOGLE_CLIENT_ID` | the OAuth client id, once there is one |
+
+Variables rather than secrets because neither is one. The browser has to know
+where to send requests, so the address ends up in the shipped files whatever is
+done with it. Keeping it out of the repository stops a home machine's address
+living in git history, which is tidiness rather than protection. What protects
+the service is the allowlist on the edge.
+
+Missing either is not a failure. The site falls back to the local backend and
+reports that nothing is answering, which is a state it renders honestly.
+
+**4. Let the browser call the backend.** A page served from github.io calling a
+funnel address is cross-origin, so the edge has to allow it. On the machine
+running the edge:
+
+```powershell
+$env:SONGGEN_ALLOWED_ORIGINS = "https://<user>.github.io"
+```
+
+Without it every request fails the preflight and the site shows the machine as
+unreachable, which is technically true and thoroughly unhelpful.
+
+Two deployment details worth knowing, because both fail as a blank page rather
+than as an error:
+
+- A project page is served from `/<repo>/` rather than the root, so the build
+  is given `--base-href`. Wrong, and every script 404s after the page loads.
+- A static host has no file at `/runs/abc`, so a deep link 404s. The workflow
+  copies `index.html` to `404.html`, which hands the path to the router.
+
+---
+
 ## Verify a change
 
 ```powershell

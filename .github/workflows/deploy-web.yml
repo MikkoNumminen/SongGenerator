@@ -1,0 +1,90 @@
+# Build the front end and publish it to GitHub Pages.
+#
+# Free for a public repository, which is why it is this rather than anything
+# else: the whole project is built to cost nothing to run.
+#
+# The static site being reachable by anyone is fine and is not a hole. It is
+# HTML and JavaScript with no credentials in it, and it can do nothing without
+# a token the edge accepts. What must never be openly usable is the pipeline,
+# and that is guarded on the machine that runs it, against an allowlist of
+# named accounts.
+name: Deploy web
+
+on:
+  push:
+    branches: [main]
+    # Only when the front end or this workflow actually changed. The pipeline
+    # is most of this repository and has nothing to do with the site.
+    paths:
+      - 'web/**'
+      - '.github/workflows/deploy-web.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time, and let a newer commit win rather than queueing a
+# site nobody wants any more.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+
+      # The suite runs before anything is published. A green site with a
+      # broken front end is worse than no site.
+      - run: npm test -- --watch=false
+
+      # A project page is served from /<repo>/, not from the root, so every
+      # built asset path has to know that. Getting this wrong produces a page
+      # that loads and then 404s every script, which looks like a blank screen.
+      - run: npx ng build --base-href "/${GITHUB_REPOSITORY#*/}/"
+
+      # Where the edge is and which client id signs people in. Written at
+      # deploy time from repository variables so neither lives in git history.
+      # Absent, the app falls back to the local backend and honestly reports
+      # that nothing is answering.
+      - name: Write the runtime config
+        run: |
+          cat > dist/songgen-web/browser/config.json <<JSON
+          {
+            "apiBaseUrl": "${{ vars.API_BASE_URL }}",
+            "googleClientId": "${{ vars.GOOGLE_CLIENT_ID }}"
+          }
+          JSON
+
+      # Pages serves files, so a deep link like /runs/abc has no file to find
+      # and 404s. Serving index.html for a miss hands the path to the router,
+      # which is the standard way to run a single page app on a static host.
+      - run: cp dist/songgen-web/browser/index.html dist/songgen-web/browser/404.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist/songgen-web/browser
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
