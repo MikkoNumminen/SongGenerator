@@ -35,7 +35,7 @@
       <label for="bank">Bank</label>
       <select id="bank" formControlName="bank">
         <option value="" disabled>Choose a bank</option>
-        @for (bank of banks().kind === 'ready' ? usableBanks() : []; track bank.name) {
+        @for (bank of usableBanks(); track bank.name) {
           <option [value]="bank.name">{{ bank.name }} ({{ bank.units }} clips)</option>
         }
       </select>

@@ -1,4 +1,5 @@
-import { ChangeDetectionStrategy, Component, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
 import { Subscription } from 'rxjs';
 
@@ -30,7 +31,9 @@ export class RunPage implements OnInit, OnDestroy {
   private readonly watcher = inject(RunWatcher);
   private readonly runs = inject(RUN_SOURCE);
 
+  private readonly destroyRef = inject(DestroyRef);
   private watching?: Subscription;
+  private current: string | null = null;
 
   readonly stages = STAGES;
   readonly state = signal<AsyncState<JobReply>>(idle());
@@ -48,10 +51,18 @@ export class RunPage implements OnInit, OnDestroy {
   );
 
   ngOnInit(): void {
-    const id = this.route.snapshot.paramMap.get('id');
-    if (id) {
-      this.watch(id);
-    }
+    // The parameter is followed rather than read once. The router reuses this
+    // component when only the id changes, so ngOnInit does not run again:
+    // reading a snapshot meant going from one run to another left the page
+    // watching the first one under the second one's address, which is a
+    // convincing way to show somebody the wrong song's progress.
+    this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
+      const id = params.get('id');
+      this.current = id;
+      if (id) {
+        this.watch(id);
+      }
+    });
   }
 
   ngOnDestroy(): void {
@@ -62,13 +73,13 @@ export class RunPage implements OnInit, OnDestroy {
 
   watch(id: string): void {
     this.watching?.unsubscribe();
+    this.state.set(idle());
     this.watching = this.watcher.watch(id).subscribe((state) => this.state.set(state));
   }
 
   retry(): void {
-    const id = this.route.snapshot.paramMap.get('id');
-    if (id) {
-      this.watch(id);
+    if (this.current) {
+      this.watch(this.current);
     }
   }
 

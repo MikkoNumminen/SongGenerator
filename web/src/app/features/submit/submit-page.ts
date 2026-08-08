@@ -1,5 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 
@@ -26,6 +27,7 @@ export class SubmitPage implements OnInit {
   private readonly runs = inject(RUN_SOURCE);
   private readonly router = inject(Router);
   readonly health = inject(BackendHealth);
+  private readonly destroyRef = inject(DestroyRef);
 
   readonly banks = signal<AsyncState<readonly BankReply[]>>(idle());
   readonly levels = signal<readonly string[]>([]);
@@ -55,13 +57,14 @@ export class SubmitPage implements OnInit {
   );
 
   ngOnInit(): void {
-    this.health.check().subscribe();
+    // Health is asked once by the shell, at the top. Asking again here spent a
+    // second request on every visit to answer a question already on screen.
     this.loadBanks();
   }
 
   loadBanks(): void {
     this.banks.set(loading());
-    this.catalog.list().subscribe({
+    this.catalog.list().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: (reply) => {
         this.levels.set(reply.levels);
         this.banks.set(ready(reply.banks));
@@ -85,6 +88,7 @@ export class SubmitPage implements OnInit {
     this.submitting.set(loading());
     this.runs
       .submit({ source_url, bank, ...(level ? { level } : {}) })
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (job) => {
           this.submitting.set(idle());

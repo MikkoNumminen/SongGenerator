@@ -1,5 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 
 import { stateForFailure } from '../../core/api/http-failure';
@@ -17,6 +18,7 @@ import { StatePanel } from '../../shared/state-panel/state-panel';
 })
 export class HistoryPage implements OnInit {
   private readonly runs = inject(RUN_SOURCE);
+  private readonly destroyRef = inject(DestroyRef);
 
   readonly state = signal<AsyncState<readonly JobReply[]>>(idle());
 
@@ -26,7 +28,7 @@ export class HistoryPage implements OnInit {
 
   load(): void {
     this.state.set(loading());
-    this.runs.history().subscribe({
+    this.runs.history().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       // An empty history is a real answer with its own wording, not a table
       // with no rows and not a spinner that never stops.
       next: (reply) =>
@@ -40,7 +42,7 @@ export class HistoryPage implements OnInit {
     return state.kind === 'ready' ? state.value : [];
   }
 
-  /** The date only, because a list of times to the second is unreadable. */
+  /** Local date and time, or the raw value if it cannot be parsed. */
   when(iso: string): string {
     const at = new Date(iso);
     return Number.isNaN(at.getTime()) ? iso : at.toLocaleString();

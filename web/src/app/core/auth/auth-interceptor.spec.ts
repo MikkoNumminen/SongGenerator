@@ -13,6 +13,7 @@ const BASE = 'https://desktop.example.invalid';
 function setup(token: string | null) {
   const auth: AuthContext = {
     user: signal(null),
+    configured: true,
     token: () => token,
     signIn: () => Promise.resolve(),
     signOut: () => undefined,

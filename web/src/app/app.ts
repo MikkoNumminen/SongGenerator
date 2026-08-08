@@ -1,8 +1,8 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
-import { GoogleAuth } from './core/auth/google-auth';
 import { BackendHealth } from './core/health/backend-health';
+import { AUTH_CONTEXT } from './core/ports/auth-context.port';
 
 @Component({
   selector: 'app-root',
@@ -13,7 +13,10 @@ import { BackendHealth } from './core/health/backend-health';
 })
 export class App implements OnInit {
   readonly health = inject(BackendHealth);
-  readonly auth = inject(GoogleAuth);
+  // Through the port, like every other component. Reaching for GoogleAuth
+  // here would tie the shell to the one implementation, which is the thing
+  // the ports exist to prevent.
+  readonly auth = inject(AUTH_CONTEXT);
 
   ngOnInit(): void {
     // Asked once, at the top, so every page can render the right thing on its

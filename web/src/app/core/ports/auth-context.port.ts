@@ -23,6 +23,17 @@ export interface AuthContext {
   /** The signed-in account, or null. A signal so views track it. */
   readonly user: Signal<SignedInUser | null>;
 
+  /**
+   * Whether this deployment can sign anybody in at all.
+   *
+   * Part of the port rather than of one implementation, because the shell has
+   * to say "sign-in is not set up here" and must not reach past the port to a
+   * concrete class to find that out. A fresh clone has no client id, and
+   * showing a button that cannot work sends somebody to check their Google
+   * account for a problem that is in somebody else's environment variable.
+   */
+  readonly configured: boolean;
+
   /** The bearer token for the edge, or null when signed out or expired. */
   token(): string | null;
 
