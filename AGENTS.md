@@ -102,6 +102,15 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   be restarted. The full list of what bites, including the `xargs` pool that
   outlives the shell that started it, is in `docs/WORKFLOWS.md` under "Make
   many tracks at once".
+- **What a segment is asked to do is not what it sounds.** `out_dur_s` is what
+  the planner allotted; what actually sounds is
+  `min(out_dur_s, src_dur_s * clamp_stretch(...))`, because
+  `TIME_STRETCH_RANGE` caps how far a clip may be stretched, and now also
+  whatever `sustain_to_s` holds past that. Measuring timing from
+  `out_start_s + out_dur_s` therefore measures the request, not the result. It
+  reported silence inside words at 37% of a song's words when the true figure
+  was 67%, and the wrong number was quoted before anyone caught it. Any
+  measurement of what a render sounds like has to compute the sounding length.
 - **A float WAV is not a pure function of its samples.** libsndfile writes a
   PEAK chunk holding the wall-clock time of the write, at byte 60. Two runs
   producing bit-identical audio therefore produce files that differ by that one
