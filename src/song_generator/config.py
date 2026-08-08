@@ -792,6 +792,24 @@ FORMANT_SCALE = 1.0
 # Beyond 12 is untested by ear. 15 measures worse again and buys little.
 SHIFT_CAP_SEMITONES = 12.0
 
+# Whether a word's syllables run into each other instead of each stopping when
+# its own note ends.
+#
+# Off, each syllable was pinned to its slot and given that slot's length, so
+# wherever the melody left a rest between two notes the word was cut in half by
+# real silence. Measured on sanni against the curated bank: 55 of 150
+# multi-syllable words held silence inside them, median 130 ms and up to 310,
+# 10.7 seconds of it across the song. That is the word being spelled out a
+# syllable at a time, and no amount of pitch work covers it.
+#
+# On, every syllable but the last sounds until the next one starts. The word
+# comes out continuous and the melody still moves under it. A syllable can only
+# stretch as far as TIME_STRETCH_RANGE allows, so a very long rest inside a word
+# is still not fully covered.
+#
+# A shout is exempt, as everywhere: it keeps the length it was recorded at.
+WORDS_SING_THROUGH = True
+
 # How long a word takes to slide from one of its syllables' pitches to the
 # next, in milliseconds. 0 disables it and the pitch steps on the frame
 # boundary, which is what this did before.

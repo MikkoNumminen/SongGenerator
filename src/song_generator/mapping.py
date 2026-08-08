@@ -1224,19 +1224,36 @@ def build_segments(p: Placement) -> tuple[list, float]:
         # its own pitch, so it neither votes on the octave nor takes it.
         folded = iter(fold_unit([w for *_, raw, w in pieces if not raw]))
 
-        for src_a, src_b, slot, raw, _ in pieces:
+        for i, (src_a, src_b, slot, raw, _) in enumerate(pieces):
             shift = 0.0 if raw else next(folded)
             shifts.append(shift)
+
+            if raw:
+                # A shout keeps its own length as well as its own pitch:
+                # stretching it to fit a slot smooths out the attack that
+                # makes it a shout.
+                out_dur = src_b - src_a
+            elif config.WORDS_SING_THROUGH and i + 1 < len(pieces):
+                # Sound until the next syllable starts rather than stopping
+                # when this note ends. Where the melody leaves a rest between
+                # two notes of the same word, ending on the note cut the word
+                # in half with real silence.
+                out_dur = max(slot.dur_s, pieces[i + 1][2].onset_s - slot.onset_s)
+            else:
+                out_dur = slot.dur_s
+
             segments.append(Segment(
                 src_start_s=src_a,
                 src_end_s=src_b,
                 out_start_s=slot.onset_s - origin,
-                # A shout keeps its own length as well as its own pitch:
-                # stretching it to fit a slot smooths out the attack that
-                # makes it a shout.
-                out_dur_s=(src_b - src_a) if raw else slot.dur_s,
+                out_dur_s=out_dur,
                 semitones=shift,
                 glide=not raw,
+                # Only where another syllable of this word follows. The last
+                # one must be allowed to stop, or every word would end on a
+                # held vowel running into the next.
+                sustain=(config.WORDS_SING_THROUGH and not raw
+                         and i + 1 < len(pieces)),
             ))
 
         total = (p.slots[-1].offset_s - origin) if p.slots else p.unit.duration_s

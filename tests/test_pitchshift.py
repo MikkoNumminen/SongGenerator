@@ -104,6 +104,22 @@ class TestRenderUnit:
             f"expected ~{expected:.0f} Hz, measured {measured:.0f} Hz"
         )
 
+    def test_a_sustained_syllable_does_not_fall_silent_before_the_next(self):
+        """TIME_STRETCH_RANGE caps the stretch, so a short syllable asked to
+        cover a long span used to stop early and leave silence in the middle of
+        the word. Holding the last frame is what keeps the word in one piece."""
+        mono = _sung(0.2)
+        span = 0.6                      # three times the source, past the cap
+
+        held = render_unit(mono, SR, [Segment(0.0, 0.2, 0.0, span, 0.0,
+                                              sustain=True)], span, engine="world")
+        cut = render_unit(mono, SR, [Segment(0.0, 0.2, 0.0, span, 0.0,
+                                             sustain=False)], span, engine="world")
+
+        tail = slice(int(0.45 * SR), int(0.58 * SR))
+        assert np.abs(held[tail]).max() > 0.01, "the vowel should still be sounding"
+        assert np.abs(cut[tail]).max() < 1e-3, "without sustain it stops early"
+
     def test_no_segments_yields_silence_not_a_crash(self):
         assert render_unit(_sung(), SR, [], 0.5, engine="world").size >= 0
 

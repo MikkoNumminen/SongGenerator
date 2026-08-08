@@ -51,6 +51,11 @@ class Segment:
     # not slid into or out of either. Bending its tail is exactly the smoothing
     # SHOUT_KEEP_RAW exists to prevent.
     glide: bool = True
+    # Hold the last frame rather than falling silent early. Set on a syllable
+    # that has another syllable of the same word after it: stretching alone
+    # cannot always reach the next note, and a singer holds the vowel rather
+    # than stretching the consonant. WORLD only.
+    sustain: bool = False
 
     @property
     def src_dur_s(self) -> float:
@@ -219,6 +224,20 @@ def render_segments(mono: np.ndarray, sr: int, segments: list[Segment],
         src_index[j0:j1] = idx
         semis[j0:j1] = seg.semitones
         gate[j0:j1] = True
+
+        # Hold the vowel out to the next syllable. TIME_STRETCH_RANGE caps how
+        # far a syllable may be stretched, and a short one cannot always reach
+        # the note after it, which left the word cut in half by silence. The
+        # last source frame is repeated instead, which is a held note rather
+        # than a smeared one.
+        if seg.sustain:
+            j_end = min(n_out, j0 + max(1, int(round(seg.out_dur_s / step_s))))
+            if j_end > j1:
+                src_index[j1:j_end] = idx[-1]
+                semis[j1:j_end] = seg.semitones
+                gate[j1:j_end] = True
+                j1 = j_end
+
         placed.append((j0, j1, seg.semitones, seg.glide))
 
     semis = apply_glide(semis, placed, step_s)
