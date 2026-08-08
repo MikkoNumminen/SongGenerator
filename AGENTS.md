@@ -90,6 +90,18 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   failure path now writes `labels.partial.tsv` beside the file instead, and
   numbers later partials rather than clobbering earlier ones. Any new unwind
   path that writes where hand work can live needs the same sidestep.
+- **Every render needs the GPU, not just the first.** `analysis.json` is
+  written on every run and never read back, so melody extraction re-runs each
+  time. It is torchcrepe: one song took 167 seconds with the card and over nine
+  minutes without it. Sparing the GPU by passing `--device cpu` therefore makes
+  a batch slower by an order of magnitude rather than politer. To leave room
+  for other GPU work, cap the share with `GPU_MEMORY_FRACTION` instead.
+- **Running renders in parallel is a memory decision, not a core count.** One
+  render is single-threaded and holds about 3.5 GB; eight at once against 19 GB
+  free exhausted RAM and the swapping pinned the disk until the machine had to
+  be restarted. The full list of what bites, including the `xargs` pool that
+  outlives the shell that started it, is in `docs/WORKFLOWS.md` under "Make
+  many tracks at once".
 - **What a segment is asked to do is not what it sounds.** `out_dur_s` is what
   the planner allotted; what actually sounds is
   `min(out_dur_s, src_dur_s * clamp_stretch(...))`, because

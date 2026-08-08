@@ -12,15 +12,69 @@ from . import config
 
 
 def resolve_device(requested: str | None = None) -> str:
-    """Pick a torch device: explicit request, then config, then autodetect."""
+    """Pick a torch device: explicit request, then config, then autodetect.
+
+    Also caps how much of the card this process may take. Every GPU user in the
+    pipeline resolves its device through here, so this is the one place that
+    has to know.
+    """
     choice = requested or config.DEVICE
-    if choice:
-        return choice
+    if not choice:
+        try:
+            import torch
+        except ImportError:
+            return "cpu"
+        choice = "cuda" if torch.cuda.is_available() else "cpu"
+
+    if choice.startswith("cuda"):
+        cap_gpu_memory(choice)
+    return choice
+
+
+def cap_gpu_memory(device: str = "cuda") -> bool:
+    """Leave part of the card free for whatever else is using it.
+
+    Returns whether a cap was applied, so a caller can say so rather than
+    assume it.
+
+    The machine this runs on also hosts other GPU work, and a separator that
+    takes the whole card either evicts that or is evicted by it.
+
+    A cap below what separation actually needs is refused rather than applied,
+    because it does not protect anything: it just turns a working render into
+    an out-of-memory error while the card sits half empty. That is not
+    hypothetical. At 0.15 on a 12 GB card roformer died with "1.80 GiB allowed"
+    while 6.25 GiB was free. SEPARATION_PEAK_MIB carries the measured figure it
+    has to clear.
+
+    Torch's limit is PER PROCESS, which is the right shape here only because
+    the pipeline separates one song at a time. Running several separations at
+    once would give each of them the same share and overrun the card between
+    them, so keep separation serialised.
+
+    Exceeding the cap raises an out-of-memory error rather than spilling, which
+    is the honest failure: a song that genuinely needs more says so instead of
+    quietly dragging the whole machine.
+    """
+    fraction = getattr(config, "GPU_MEMORY_FRACTION", 0.0)
+    if not 0.0 < fraction < 1.0:
+        return False
     try:
         import torch
-    except ImportError:
-        return "cpu"
-    return "cuda" if torch.cuda.is_available() else "cpu"
+
+        index = torch.device(device).index or 0
+        total_mib = torch.cuda.get_device_properties(index).total_memory / 1024 ** 2
+        if total_mib * fraction < getattr(config, "SEPARATION_PEAK_MIB", 0):
+            # Too small to be a cap. Leaving the card uncapped is the lesser
+            # harm: the alternative is a render that cannot run at all.
+            return False
+        torch.cuda.set_per_process_memory_fraction(fraction, index)
+    except (ImportError, RuntimeError, ValueError, AssertionError, AttributeError):
+        # No torch, no CUDA, a device that does not exist, or a torch build
+        # without one of these calls. Capping is a courtesy to other work on
+        # the card, never a reason to fail a render.
+        return False
+    return True
 
 
 def slugify(name: str) -> str:
