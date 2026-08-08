@@ -466,7 +466,7 @@ class TestWordsSingThrough:
         segments, _ = build_segments(self._placement(rest_s=0.25))
 
         first, second = segments[0], segments[1]
-        assert first.out_start_s + first.out_dur_s == pytest.approx(
+        assert first.sustain_to_s == pytest.approx(
             second.out_start_s), "the rest between the notes is inside the word"
 
     def test_the_last_syllable_is_still_allowed_to_stop(self):
@@ -474,7 +474,7 @@ class TestWordsSingThrough:
         whatever came after it."""
         segments, _ = build_segments(self._placement(rest_s=0.25))
 
-        assert segments[-1].sustain is False
+        assert segments[-1].sustain_to_s is None
 
     def test_a_syllable_is_never_shortened_to_reach_the_next(self):
         """Notes that already touch must not be changed at all."""
@@ -487,4 +487,4 @@ class TestWordsSingThrough:
         always reach the next note by stretching alone."""
         segments, _ = build_segments(self._placement(rest_s=0.25))
 
-        assert segments[0].sustain is True
+        assert segments[0].sustain_to_s is not None

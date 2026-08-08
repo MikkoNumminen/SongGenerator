@@ -1228,19 +1228,18 @@ def build_segments(p: Placement) -> tuple[list, float]:
             shift = 0.0 if raw else next(folded)
             shifts.append(shift)
 
-            if raw:
-                # A shout keeps its own length as well as its own pitch:
-                # stretching it to fit a slot smooths out the attack that
-                # makes it a shout.
-                out_dur = src_b - src_a
-            elif config.WORDS_SING_THROUGH and i + 1 < len(pieces):
-                # Sound until the next syllable starts rather than stopping
-                # when this note ends. Where the melody leaves a rest between
-                # two notes of the same word, ending on the note cut the word
-                # in half with real silence.
-                out_dur = max(slot.dur_s, pieces[i + 1][2].onset_s - slot.onset_s)
-            else:
-                out_dur = slot.dur_s
+            # A shout keeps its own length as well as its own pitch: stretching
+            # it to fit a slot smooths out the attack that makes it a shout.
+            out_dur = (src_b - src_a) if raw else slot.dur_s
+
+            # Hold the vowel until the next syllable of this word starts. Where
+            # the melody leaves a rest between two notes, stopping on the note
+            # cut the word in half with real silence. Only where another
+            # syllable follows: the last one must be allowed to stop, or every
+            # word would end on a held vowel running into the next.
+            hold_to = None
+            if config.WORDS_SING_THROUGH and not raw and i + 1 < len(pieces):
+                hold_to = pieces[i + 1][2].onset_s - origin
 
             segments.append(Segment(
                 src_start_s=src_a,
@@ -1249,11 +1248,7 @@ def build_segments(p: Placement) -> tuple[list, float]:
                 out_dur_s=out_dur,
                 semitones=shift,
                 glide=not raw,
-                # Only where another syllable of this word follows. The last
-                # one must be allowed to stop, or every word would end on a
-                # held vowel running into the next.
-                sustain=(config.WORDS_SING_THROUGH and not raw
-                         and i + 1 < len(pieces)),
+                sustain_to_s=hold_to,
             ))
 
         total = (p.slots[-1].offset_s - origin) if p.slots else p.unit.duration_s

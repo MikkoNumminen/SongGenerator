@@ -112,9 +112,9 @@ class TestRenderUnit:
         span = 0.6                      # three times the source, past the cap
 
         held = render_unit(mono, SR, [Segment(0.0, 0.2, 0.0, span, 0.0,
-                                              sustain=True)], span, engine="world")
-        cut = render_unit(mono, SR, [Segment(0.0, 0.2, 0.0, span, 0.0,
-                                             sustain=False)], span, engine="world")
+                                              sustain_to_s=span)], span, engine="world")
+        cut = render_unit(mono, SR, [Segment(0.0, 0.2, 0.0, span, 0.0)],
+                          span, engine="world")
 
         tail = slice(int(0.45 * SR), int(0.58 * SR))
         assert np.abs(held[tail]).max() > 0.01, "the vowel should still be sounding"

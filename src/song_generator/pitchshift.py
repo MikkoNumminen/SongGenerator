@@ -51,11 +51,16 @@ class Segment:
     # not slid into or out of either. Bending its tail is exactly the smoothing
     # SHOUT_KEEP_RAW exists to prevent.
     glide: bool = True
-    # Hold the last frame rather than falling silent early. Set on a syllable
-    # that has another syllable of the same word after it: stretching alone
-    # cannot always reach the next note, and a singer holds the vowel rather
-    # than stretching the consonant. WORLD only.
-    sustain: bool = False
+    # Hold the vowel until this moment on the output clock rather than falling
+    # silent early. Set on a syllable that has another one of the same word
+    # after it, to the moment that one starts.
+    #
+    # Deliberately separate from out_dur_s, which stays the length the melody
+    # allotted. Widening out_dur_s instead would make the syllable itself
+    # stretch to fill the rest, up to the TIME_STRETCH_RANGE ceiling, so a word
+    # over a slow melody would come out smeared. A singer holds the vowel; they
+    # do not slow the consonant down. WORLD only.
+    sustain_to_s: float | None = None
 
     @property
     def src_dur_s(self) -> float:
@@ -230,10 +235,16 @@ def render_segments(mono: np.ndarray, sr: int, segments: list[Segment],
         # the note after it, which left the word cut in half by silence. The
         # last source frame is repeated instead, which is a held note rather
         # than a smeared one.
-        if seg.sustain:
-            j_end = min(n_out, j0 + max(1, int(round(seg.out_dur_s / step_s))))
+        if seg.sustain_to_s is not None:
+            j_end = min(n_out, int(round(seg.sustain_to_s / step_s)))
             if j_end > j1:
-                src_index[j1:j_end] = idx[-1]
+                # The last VOICED frame, not simply the last one. A syllable
+                # cut at an energy valley often ends inside a consonant, and
+                # holding an unvoiced frame synthesises as silence, which is
+                # the hole this exists to fill. Measured on the curated bank,
+                # 1 syllable in 31 ends unvoiced.
+                voiced = idx[f0[idx] > 0]
+                src_index[j1:j_end] = voiced[-1] if voiced.size else idx[-1]
                 semis[j1:j_end] = seg.semitones
                 gate[j1:j_end] = True
                 j1 = j_end
