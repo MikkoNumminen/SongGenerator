@@ -27,7 +27,7 @@ from collections.abc import Callable
 from dataclasses import asdict
 from datetime import UTC
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -76,14 +76,76 @@ class SubmitBody(BaseModel):
         return value
 
 
-def _job_payload(job: Job) -> dict[str, Any]:
+class HealthReply(BaseModel):
+    """What an unauthenticated caller may learn. Deliberately nothing else."""
+
+    status: str
+    auth_configured: bool
+    busy: bool
+
+
+class BankReply(BaseModel):
+    """One bank, as `banks.BankInfo` reports it plus the derived verdict."""
+
+    name: str
+    directory: str
+    built: bool
+    units: int
+    standardised: bool
+    problem: str | None = None
+    usable: bool
+
+
+class BanksReply(BaseModel):
+    banks: list[BankReply]
+    any_usable: bool
+    levels: list[str]
+    engines: list[str]
+
+
+class JobReply(BaseModel):
+    """A run as reported. Mirrors `jobs.Job` without the arrangement.
+
+    The pasted arrangement can be enormous and nothing renders it back, so it
+    stays in the store for re-running rather than riding on every poll.
+    """
+
+    id: str
+    created_at: str
+    requested_by: str
+    source_url: str
+    bank: str
+    stage: str
+    settled: bool
+    percent: int | None = None
+    detail: str | None = None
+    song: str | None = None
+    level: str | None = None
+    mimicry: float | None = None
+    engine: str | None = None
+    started_at: str | None = None
+    finished_at: str | None = None
+    exit_code: int | None = None
+    error: str | None = None
+    output_dir: str | None = None
+
+
+class HistoryReply(BaseModel):
+    jobs: list[JobReply]
+
+
+class CancelReply(BaseModel):
+    cancelled: bool
+
+
+def _job_payload(job: Job) -> JobReply:
     data = asdict(job)
     data["stage"] = job.stage.value
     data["settled"] = job.settled
     # The pasted arrangement can be enormous and nothing renders it back. It is
     # kept in the store for re-running, not shipped on every poll.
     data.pop("arrangement", None)
-    return data
+    return JobReply(**data)
 
 
 def create_app(
@@ -125,30 +187,28 @@ def create_app(
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(exc)) from exc
 
     @app.get("/health")
-    def health() -> dict[str, Any]:
+    def health() -> HealthReply:
         """Open by design. Says nothing about songs or who may use this."""
-        return {
-            "status": "ok",
-            "auth_configured": settings.auth_configured,
-            "busy": runner.busy,
-        }
+        return HealthReply(status="ok",
+                           auth_configured=settings.auth_configured,
+                           busy=runner.busy)
 
     Caller = Annotated[Principal, Depends(principal)]
 
     @app.get("/banks")
-    def list_banks(_: Caller) -> dict[str, Any]:
+    def list_banks(_: Caller) -> BanksReply:
         found = catalog(banks, settings.repo_root, standardised_suffix)
-        return {
-            "banks": [asdict(b) | {"usable": b.usable} for b in found],
+        return BanksReply(
+            banks=[BankReply(**asdict(b), usable=b.usable) for b in found],
             # Said explicitly so the front end can show the empty state rather
             # than an enabled picker whose every option fails at render time.
-            "any_usable": any(b.usable for b in found),
-            "levels": list(levels),
-            "engines": list(_ENGINES),
-        }
+            any_usable=any(b.usable for b in found),
+            levels=list(levels),
+            engines=list(_ENGINES),
+        )
 
     @app.post("/jobs", status_code=status.HTTP_202_ACCEPTED)
-    def submit(body: SubmitBody, who: Caller) -> dict[str, Any]:
+    def submit(body: SubmitBody, who: Caller) -> JobReply:
         found = {b.name: b for b in catalog(banks, settings.repo_root,
                                             standardised_suffix)}
         chosen = found.get(body.bank)
@@ -188,12 +248,12 @@ def create_app(
         return _job_payload(job)
 
     @app.get("/jobs")
-    def history(_: Caller, limit: int = 50) -> dict[str, Any]:
+    def history(_: Caller, limit: int = 50) -> HistoryReply:
         capped = max(1, min(limit, 200))
-        return {"jobs": [_job_payload(j) for j in store.recent(capped)]}
+        return HistoryReply(jobs=[_job_payload(j) for j in store.recent(capped)])
 
     @app.get("/jobs/{job_id}")
-    def one(job_id: str, _: Caller) -> dict[str, Any]:
+    def one(job_id: str, _: Caller) -> JobReply:
         live = runner.current
         if live is not None and live.id == job_id:
             return _job_payload(live)
@@ -203,7 +263,7 @@ def create_app(
         return _job_payload(job)
 
     @app.post("/jobs/{job_id}/cancel")
-    def cancel(job_id: str, _: Caller) -> dict[str, Any]:
+    def cancel(job_id: str, _: Caller) -> CancelReply:
         live = runner.current
         if live is None or live.id != job_id:
             raise HTTPException(status.HTTP_409_CONFLICT, "that run is not the one going")
@@ -212,7 +272,7 @@ def create_app(
         current = runner.current
         if current is not None:
             store.save(current)
-        return {"cancelled": True}
+        return CancelReply(cancelled=True)
 
     return app
 
