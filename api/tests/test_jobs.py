@@ -220,3 +220,64 @@ def test_updates_only_fire_when_something_changed(tmp_path):
     assert _wait_until(lambda: not runner.busy)
 
     assert len(seen) <= 4, [j.stage for j in seen]
+
+
+# ---------------------------------------------------------------------------
+# Starting, when starting is what goes wrong
+# ---------------------------------------------------------------------------
+
+def test_a_spawn_that_fails_does_not_brick_the_runner(tmp_path):
+    """The busy flag is set under the lock and the spawn happens outside it.
+    Without clearing it on failure the runner stays busy forever and every
+    later run is refused with `a run is already going`, while nothing runs."""
+    runner, _ = _runner()
+
+    with pytest.raises(RuntimeError, match="could not start"):
+        runner.start(REQUEST, tmp_path / "s.mp4", tmp_path, dict(os.environ),
+                     command=["this-executable-does-not-exist"])
+
+    assert runner.busy is False, "the slot must free up when nothing started"
+
+    runner.start(REQUEST, tmp_path / "s.mp4", tmp_path, dict(os.environ),
+                 command=_stub("print('  wrote 1 versions to out')"))
+    assert _wait_until(lambda: not runner.busy)
+
+
+def test_a_spawn_that_fails_is_still_recorded(tmp_path):
+    """It happened and it failed, so it belongs in the history rather than
+    vanishing because nothing ever produced a line of output."""
+    runner, seen = _runner()
+
+    with pytest.raises(RuntimeError):
+        runner.start(REQUEST, tmp_path / "s.mp4", tmp_path, dict(os.environ),
+                     command=["this-executable-does-not-exist"])
+
+    assert seen, "nothing was reported at all"
+    assert seen[-1].stage is Stage.FAILED
+    assert "could not start" in (seen[-1].error or "")
+
+
+def test_the_job_is_reported_before_anything_is_spawned(tmp_path):
+    """One writer for the row. When the caller saved it instead, the caller
+    and the watcher raced, and a run that finished quickly could be written
+    back to queued and sit in the history as queued forever."""
+    runner, seen = _runner()
+
+    runner.start(REQUEST, tmp_path / "s.mp4", tmp_path, dict(os.environ),
+                 command=_stub("print('  wrote 1 versions to out')"))
+
+    assert seen, "the job was not recorded before the process started"
+    assert seen[0].stage is Stage.QUEUED
+    assert _wait_until(lambda: not runner.busy)
+
+
+def test_a_quick_run_ends_settled_in_the_record(tmp_path):
+    """The symptom the race produced: a finished run showing as queued."""
+    runner, seen = _runner()
+
+    runner.start(REQUEST, tmp_path / "s.mp4", tmp_path, dict(os.environ),
+                 command=_stub("print('  wrote 1 versions to out')"))
+    assert _wait_until(lambda: not runner.busy)
+
+    assert seen[-1].settled is True
+    assert seen[-1].stage is Stage.DONE

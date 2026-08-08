@@ -175,8 +175,12 @@ def create_app(
             raise HTTPException(status.HTTP_400_BAD_REQUEST,
                                 f"could not fetch that link ({exc})") from exc
 
-        job = runner.start(request, song, settings.repo_root, _child_env(settings))
-        store.save(job)
+        # The runner records the job itself, before it spawns anything, so
+        # there is one writer for that row rather than two racing.
+        try:
+            job = runner.start(request, song, settings.repo_root, _child_env(settings))
+        except RuntimeError as exc:
+            raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
         return _job_payload(job)
 
     @app.get("/jobs")

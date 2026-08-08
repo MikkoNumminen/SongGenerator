@@ -155,12 +155,31 @@ class JobRunner:
             self._cancelled = False
             self._active = True
 
+        # Recorded before anything can go wrong, and before the watcher thread
+        # exists. Saving it in the caller instead left two writers racing for
+        # the same row, so a run that finished quickly could be overwritten
+        # back to queued and sit in the history as queued forever.
+        self._on_update(job)
+
         cmd = list(command) if command else render_command(self._python, request, song_path)
-        self._process = subprocess.Popen(
-            cmd, cwd=str(cwd), env=env, text=True,
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            bufsize=1,
-        )
+        try:
+            self._process = subprocess.Popen(
+                cmd, cwd=str(cwd), env=env, text=True,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                bufsize=1,
+            )
+        except OSError as exc:
+            # The flag is set under the lock but the spawn happens outside it,
+            # so without this the runner stays busy forever and every later run
+            # is refused with "a run is already going". Nothing is running.
+            with self._lock:
+                self._job = replace(job, stage=Stage.FAILED, finished_at=_now(),
+                                    error=f"could not start the pipeline ({exc})")
+                failed = self._job
+                self._active = False
+            self._on_update(failed)
+            raise RuntimeError(failed.error) from exc
+
         threading.Thread(target=self._watch, daemon=True).start()
         return job
 
