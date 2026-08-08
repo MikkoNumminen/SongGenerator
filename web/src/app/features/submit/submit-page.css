@@ -1,0 +1,11 @@
+.submit { max-width: 42rem; }
+.lead { opacity: 0.8; margin-bottom: 1.5rem; }
+form { display: grid; gap: 0.35rem; }
+label { font-weight: 600; margin-top: 0.75rem; }
+input, select { padding: 0.5rem 0.6rem; font: inherit; border-radius: 6px;
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent); }
+button { margin-top: 1.25rem; justify-self: start; padding: 0.6rem 1.1rem;
+  font: inherit; border-radius: 6px; cursor: pointer; }
+button[disabled] { cursor: not-allowed; opacity: 0.55; }
+.field-error { color: #c0392b; margin: 0.15rem 0 0; }
+.note { opacity: 0.8; margin-top: 1rem; }
