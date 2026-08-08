@@ -28,15 +28,16 @@ class SongError(Exception):
 class _Fetched(Protocol):
     """The part of the pipeline's FetchResult this module reads.
 
+    Only what is actually read. `already_present` is deliberately absent: a
+    song already on disk is handled by doing nothing about it, so declaring
+    the field would tie this to a name it never consults.
+
     Read-only members, because that is what this module needs and because a
     frozen dataclass cannot satisfy a protocol that declares settable ones.
     """
 
     @property
     def path(self) -> Path: ...
-
-    @property
-    def already_present(self) -> bool: ...
 
     @property
     def conflicting_url(self) -> str | None: ...

@@ -335,6 +335,11 @@ def test_the_real_wiring_builds_and_registers_every_route(tmp_path, monkeypatch)
     the tests always injected and the production wiring never supplied, so the
     route that matters answered 503 to anybody who pressed go.
 
+    This is also what pins that the production wiring supplies a fetcher, since
+    `prepare_song` is required: a `build` that forgot it cannot reach the point
+    of registering a route. Asserting the fetcher separately needed the app to
+    carry a reference to it that nothing else read, so that went away with it.
+
     The repository root is the real one, because `build` imports the pipeline
     to read its bank and level lists, and that is tracked. Only the database is
     redirected, so this writes nothing a person would miss.
@@ -370,15 +375,3 @@ def test_a_fetcher_is_not_optional(tmp_path):
             store=store, banks=BANKS, standardised_suffix=".std",
             levels=LEVELS, verifier=_verifier(),
         )
-
-
-def test_the_real_wiring_supplies_one(tmp_path, monkeypatch):
-    """And the production path does supply it, which is the half that was
-    missing. Read off the built app rather than inferred from a status code."""
-    from app.main import build
-
-    monkeypatch.setenv("SONGGEN_DATABASE_PATH", str(tmp_path / "jobs.sqlite3"))
-
-    app = build()
-
-    assert app.state.prepare_song is not None
