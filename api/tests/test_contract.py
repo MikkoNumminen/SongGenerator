@@ -88,6 +88,19 @@ class TestGeneratedTypes:
         it, which is the opposite of why the contract is generated."""
         assert "  input?: unknown;" in self._render({"input": {"title": "Input"}})
 
+    def test_a_field_name_typescript_would_reject_is_quoted(self):
+        """Field names come from Python and need not be valid JavaScript
+        identifiers. Emitted bare, `content-type` produced a syntax error in a
+        generated file, which names nothing and points nowhere."""
+        out = self._render({"content-type": {"type": "string"}})
+
+        assert '  "content-type"?: string;' in out
+
+    def test_a_reserved_word_is_left_alone(self):
+        """`class` is a perfectly good property name in TypeScript, and
+        quoting every one of them would be noise."""
+        assert "  class?: string;" in self._render({"class": {"type": "string"}})
+
     def test_a_description_survives_as_a_comment(self):
         """The reasoning in the Python docstrings is most of what makes this
         codebase readable, and it is free to carry it across."""

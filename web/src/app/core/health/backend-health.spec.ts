@@ -113,3 +113,22 @@ describe('BackendHealth', () => {
     expect(seen).toBe('ready');
   });
 });
+
+describe('BackendHealth: calling check without subscribing', () => {
+  it('does not strand the app in loading', () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: API_BASE_URL, useValue: BASE },
+      ],
+    });
+    const health = TestBed.inject(BackendHealth);
+    const http = TestBed.inject(HttpTestingController);
+
+    health.check();   // no subscribe: an easy call to write
+
+    http.expectNone(`${BASE}/health`);
+    expect(health.status().kind).not.toBe('loading');
+  });
+});

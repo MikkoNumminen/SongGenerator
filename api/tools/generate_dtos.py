@@ -23,6 +23,7 @@ drift the generation exists to prevent, so it does not guess.
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -49,6 +50,9 @@ _SCALARS = {
     "number": "number",
     "null": "null",
 }
+
+# What TypeScript accepts as a bare property name.
+_IDENTIFIER = re.compile(r"[A-Za-z_$][A-Za-z0-9_$]*")
 
 # Keys that carry documentation rather than type information.
 _PROSE = {"title", "description", "default", "examples"}
@@ -107,6 +111,23 @@ def _ts_type(spec: dict[str, Any], where: str) -> str:
     )
 
 
+def _key(prop: str) -> str:
+    """A property name TypeScript will accept.
+
+    Field names come from Python and need not be valid JavaScript
+    identifiers: an alias like `content-type` is legal in pydantic and legal
+    in JSON. Emitted bare it produced `content-type?: string`, which is a
+    syntax error, so the failure arrived as a parse error in a generated file
+    rather than as anything naming the field. Quoting is valid TypeScript and
+    reads the same to a caller using dot access where dot access works.
+
+    Reserved words are deliberately NOT quoted: `class` and `default` are
+    perfectly good property names in TypeScript, and quoting them would be
+    noise.
+    """
+    return prop if _IDENTIFIER.fullmatch(prop) else json.dumps(prop)
+
+
 def _interface(name: str, body: dict[str, Any]) -> str:
     properties = body.get("properties") or {}
     required = set(body.get("required") or ())
@@ -126,7 +147,7 @@ def _interface(name: str, body: dict[str, Any]) -> str:
         # same as present-and-null. Both are expressed, so a caller cannot
         # treat a missing field as a null one by accident.
         mark = "" if prop in required else "?"
-        lines.append(f"  {prop}{mark}: {ts};")
+        lines.append(f"  {_key(prop)}{mark}: {ts};")
 
     lines.append("}")
     return "\n".join(lines)

@@ -65,8 +65,14 @@ describe('what the failure says', () => {
     expect(detailOf(failure(400, { detail: '   ' }))).toBeUndefined();
   });
 
-  it('survives a body that is not JSON at all', () => {
-    // A proxy error page reaches here as an HTML string.
-    expect(stateForFailure(failure(500, '<html>gateway</html>')).kind).toBe('error');
+  it('never puts a proxy error page in front of the reader', () => {
+    // A tunnel or proxy answers with a whole HTML document. The edge only
+    // ever sends JSON, so a string body did not come from it, and showing it
+    // renders markup where a sentence should be.
+    const state = stateForFailure(
+      failure(500, '<html><body><h1>502 Bad Gateway</h1></body></html>'),
+    );
+
+    expect(state).toEqual({ kind: 'error', message: 'The server answered 500.' });
   });
 });

@@ -41,23 +41,6 @@ export const failed = (message: string): AsyncState<never> => ({
 export const ready = <T>(value: T): AsyncState<T> => ({ kind: 'ready', value });
 
 /**
- * `ready` unless the value is an empty collection, in which case `empty`.
- *
- * Callers that build a list state should reach for this rather than deciding
- * per view, because "did anything come back" is one decision and having it in
- * one place is what stops one list rendering an empty table where another
- * renders its empty state.
- */
-export function readyOrEmpty<T>(value: readonly T[]): AsyncState<readonly T[]> {
-  return value.length === 0 ? empty() : ready(value);
-}
-
-/** Whether a spinner belongs on screen. */
-export function isBusy(state: AsyncState<unknown>): boolean {
-  return state.kind === 'loading';
-}
-
-/**
  * The value, or undefined in every state that does not have one.
  *
  * Deliberately not a throwing accessor: a template asking for the value of a

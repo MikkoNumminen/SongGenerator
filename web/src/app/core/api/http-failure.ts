@@ -36,9 +36,10 @@ export function isUnreachable(status: number): boolean {
  */
 export function detailOf(error: HttpErrorResponse): string | undefined {
   const body: unknown = error.error;
-  if (typeof body === 'string' && body.trim() !== '') {
-    return body;
-  }
+  // A plain-string body is deliberately ignored. The edge always answers with
+  // JSON, so a string came from something in between: a tunnel or a proxy,
+  // whose body is usually a full HTML page. Passing that through put markup
+  // in front of the reader as if the server had written them a sentence.
   if (body && typeof body === 'object' && 'detail' in body) {
     const detail = (body as { detail: unknown }).detail;
     if (typeof detail === 'string' && detail.trim() !== '') {

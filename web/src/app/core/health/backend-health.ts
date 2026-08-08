@@ -1,6 +1,6 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { Observable, catchError, map, of, tap } from 'rxjs';
+import { Observable, catchError, defer, map, of, tap } from 'rxjs';
 
 import { API_BASE_URL } from '../api/api-config';
 import { stateForFailure } from '../api/http-failure';
@@ -62,8 +62,15 @@ export class BackendHealth {
    * the answer can, without reaching into the signal and polling it.
    */
   check(): Observable<AsyncState<HealthReply>> {
-    this.state.set(loading());
-    return this.http.get<HealthReply>(`${this.baseUrl}/health`).pipe(
+    // Everything, including the move to `loading`, happens on subscribe.
+    // Setting it eagerly and returning a cold request meant `check()` without
+    // a subscribe left the state at `loading` forever with no request ever
+    // made: a spinner that never stops, which is the exact failure the six
+    // states exist to prevent.
+    return defer(() => {
+      this.state.set(loading());
+      return this.http.get<HealthReply>(`${this.baseUrl}/health`);
+    }).pipe(
       // `ready` even when the reply says auth is unconfigured or a run is
       // going: both are answers from a machine that is plainly awake, and
       // that is the only question this service is asking.
