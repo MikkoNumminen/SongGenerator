@@ -149,11 +149,18 @@ been quoted.
 | 8 | Actionable errors | 7 | 9 |
 | 9 | Domain glossary | 1 | 10 |
 | 10 | Runbooks | 3 | 10 |
-| 11 | Audible verification | 6 | 6 |
+| 11 | Audible verification | 0 | 6 |
 
-**Mean: 9.3**, up from 5.0 but down from the 9.6 this claimed while scoring
-only ten dimensions. The suite was 159 tests at baseline; what it is now lives
-in the README, which is checked against it.
+**Mean: 9.3**, against **4.5** at baseline scored the same way.
+
+Both of those numbers are over eleven dimensions. The baseline was published as
+5.0 and every iteration score above it was a mean over ten, so comparing today
+against 5.0 would be comparing different rubrics. Dimension 11 scores 0 at
+baseline rather than being left blank, because the repo genuinely had nothing
+that measured what a render sounds like; the dimension is new, the gap is not.
+
+The suite was 159 tests at baseline; what it is now lives in the README, which
+is checked against it.
 
 Audible verification (6) is the largest single gap and the one most worth
 closing next, because it is the only dimension where a green suite says nothing
