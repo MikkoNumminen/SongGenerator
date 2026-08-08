@@ -115,6 +115,44 @@ Each song writes both playfulness levels, so twenty songs is 280 files.
 `--play conservative` narrows it to one level when that is more listening than
 you want.
 
+### Running it in parallel, without taking the machine down
+
+`batch` renders one song at a time. Running several at once is tempting and is
+how a workstation gets wedged, so the numbers are written down here rather than
+rediscovered.
+
+A render is **single-threaded and holds about 3.5 GB**. Measured: 99% of one
+core, which on a 24-core machine reads as 4% in Task Manager and looks like
+nothing is happening. It is.
+
+The ceiling is memory, not cores. Eight at once against 19 GB free exhausted
+RAM, and the swapping pinned the disk at 100% until the machine had to be
+restarted. Divide the free memory by 4 GB and use that, and remember anything
+else on the box counts: a local model server can hold 15 GB of RAM and 8 GB of
+VRAM on its own, which leaves room for exactly one render.
+
+Five things that each cost an hour to learn:
+
+- **Killing the launcher does not kill the pool.** `xargs -P` keeps refilling
+  after its parent shell dies, so a second run silently doubles the
+  concurrency. Write the `xargs` pid to a lock file, refuse to start when it is
+  live, and kill *that* pid to stop.
+- **`--device cpu` does not spare the GPU, it wrecks the run.** Melody
+  extraction is torchcrepe, and on this material one song went from 167 seconds
+  to over nine minutes without the card. Every render needs the GPU, not just
+  the first: `analysis.json` is written each run and never read back.
+- **`CUDA_VISIBLE_DEVICES=""` does not hide the card.** Torch still reports
+  cuda available and builds a context, so ten workers filled 11.7 GB doing no
+  GPU work at all. `-1` genuinely hides it. To leave room for other GPU work
+  instead, use `GPU_MEMORY_FRACTION`.
+- **Do not pass `--separator` to a re-render.** Stems cache as
+  `work/<song>/vocal.wav` whatever produced them, and naming a backend can send
+  it off to separate from scratch, which on CPU never finishes.
+- **Redirect stdout and Python buffers it.** A run that has printed only its
+  header looks hung and is not. Use `python -u`, or you will kill working jobs.
+  For the same reason, grep batch logs with `-a`: one `ä` in a song title makes
+  GNU grep call the file binary and print nothing.
+
 ---
 
 ## Bring back a take that worked

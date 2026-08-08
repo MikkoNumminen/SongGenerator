@@ -14,7 +14,7 @@ behind.
 
 import pytest
 
-from song_generator import config
+from song_generator import config, util
 from song_generator.util import expand, word_similarity
 
 
@@ -94,3 +94,98 @@ class TestWordSimilarity:
         """
         monkeypatch.setattr(config, "MATCH_PREFIX_SCORE", 0.93)
         assert stage_score("kilo") == pytest.approx(0.93)
+
+
+class TestGpuMemoryCap:
+    """Leaving part of the card free for whatever else is on it.
+
+    The machine that runs this also runs other GPU work, and a separator that
+    takes the whole card either evicts that or is evicted by it. These use a
+    stand-in for torch, so they pin the decision rather than needing a GPU.
+    """
+
+    def _fake_torch(self, monkeypatch, calls):
+        import sys
+        import types
+
+        torch = types.ModuleType("torch")
+
+        class _Device:
+            def __init__(self, name):
+                self.index = None if ":" not in name else int(name.split(":")[1])
+
+        torch.device = _Device
+        torch.cuda = types.SimpleNamespace(
+            is_available=lambda: True,
+            set_per_process_memory_fraction=lambda f, i: calls.append((f, i)),
+        )
+        monkeypatch.setitem(sys.modules, "torch", torch)
+        return torch
+
+    def test_the_configured_share_is_what_gets_asked_for(self, monkeypatch):
+        calls = []
+        self._fake_torch(monkeypatch, calls)
+        monkeypatch.setattr(config, "GPU_MEMORY_FRACTION", 0.8)
+
+        assert util.cap_gpu_memory("cuda") is True
+        assert calls == [(0.8, 0)]
+
+    def test_a_named_device_index_is_honoured(self, monkeypatch):
+        """Capping device 0 while the work runs on device 1 would leave the
+        card it actually uses uncapped, and look like it had worked."""
+        calls = []
+        self._fake_torch(monkeypatch, calls)
+        monkeypatch.setattr(config, "GPU_MEMORY_FRACTION", 0.5)
+
+        util.cap_gpu_memory("cuda:1")
+
+        assert calls == [(0.5, 1)]
+
+    @pytest.mark.parametrize("fraction", [0.0, 1.0, -0.2, 1.5])
+    def test_nonsense_and_disabling_values_cap_nothing(self, monkeypatch, fraction):
+        """1.0 means the whole card, which is the same as no cap. Anything
+        outside the range would be rejected by torch, and a cap that raised
+        would fail a render over a courtesy."""
+        calls = []
+        self._fake_torch(monkeypatch, calls)
+        monkeypatch.setattr(config, "GPU_MEMORY_FRACTION", fraction)
+
+        assert util.cap_gpu_memory("cuda") is False
+        assert calls == []
+
+    def test_resolving_a_cuda_device_caps_it(self, monkeypatch):
+        """Every GPU user resolves its device through here, which is the only
+        reason one place can hold this decision."""
+        calls = []
+        self._fake_torch(monkeypatch, calls)
+        monkeypatch.setattr(config, "GPU_MEMORY_FRACTION", 0.8)
+        monkeypatch.setattr(config, "DEVICE", None)
+
+        assert util.resolve_device() == "cuda"
+        assert calls == [(0.8, 0)]
+
+    def test_asking_for_cpu_touches_no_gpu_setting(self, monkeypatch):
+        calls = []
+        self._fake_torch(monkeypatch, calls)
+        monkeypatch.setattr(config, "GPU_MEMORY_FRACTION", 0.8)
+
+        assert util.resolve_device("cpu") == "cpu"
+        assert calls == []
+
+    def test_a_card_that_cannot_be_capped_does_not_fail_the_render(self, monkeypatch):
+        """No CUDA, or a device that does not exist. Capping is a courtesy to
+        other work, never a reason to refuse to make a song."""
+        import sys
+        import types
+
+        torch = types.ModuleType("torch")
+        torch.device = lambda name: types.SimpleNamespace(index=0)
+
+        def angry(fraction, index):
+            raise RuntimeError("no CUDA-capable device is detected")
+
+        torch.cuda = types.SimpleNamespace(set_per_process_memory_fraction=angry)
+        monkeypatch.setitem(sys.modules, "torch", torch)
+        monkeypatch.setattr(config, "GPU_MEMORY_FRACTION", 0.8)
+
+        assert util.cap_gpu_memory("cuda") is False

@@ -65,6 +65,24 @@ ROFORMER_MODEL = "model_mel_band_roformer_ep_3005_sdr_11.4360.ckpt"
 # "cuda" or "cpu". None = autodetect, preferring cuda.
 DEVICE = None
 
+# The most of the card this process may take, as a fraction. 0 or 1 disables
+# the cap.
+#
+# 0.8 leaves a fifth of the GPU free, because this machine also runs other GPU
+# work and a separator that takes the whole card either evicts that or is
+# evicted by it. On the 12 GB card here that is a ceiling of about 9.8 GB
+# against a measured separation peak of 8.7 GB, so it is headroom rather than a
+# limit anything normally reaches.
+#
+# Torch enforces this PER PROCESS, which only gives the intended guarantee
+# because the pipeline separates one song at a time. Several separations at
+# once would each be allowed this share and overrun the card between them.
+#
+# Going over raises out-of-memory rather than spilling to host RAM. That is
+# deliberate: a song that genuinely needs more should say so, not silently drag
+# the machine. Raise this if that happens on a longer track.
+GPU_MEMORY_FRACTION = 0.15
+
 
 # ---------------------------------------------------------------------------
 # STAGE 1b -- MODE DETECTION (does this song have vocals at all?)
