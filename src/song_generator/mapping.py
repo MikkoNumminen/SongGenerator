@@ -1176,7 +1176,7 @@ def build_segments(p: Placement) -> tuple[list, float]:
                          follows the tune; it simply is not taken apart to
                          do so.
     """
-    from .pitchshift import Segment, fold_shift
+    from .pitchshift import Segment, fold_shift, fold_unit
 
     spans = p.unit.syllable_spans()
     lo, hi = config.TIME_STRETCH_RANGE
@@ -1206,6 +1206,7 @@ def build_segments(p: Placement) -> tuple[list, float]:
     origin = p.onset_s
 
     if p.target_s is None:
+        pieces = []
         for i, (src_a, src_b) in enumerate(spans):
             if i >= len(p.slots):
                 break
@@ -1215,7 +1216,16 @@ def build_segments(p: Placement) -> tuple[list, float]:
                 continue
 
             raw = config.SHOUT_KEEP_RAW and p.unit.is_shout_syllable(i)
-            shift = 0.0 if raw else fold_shift(slot.midi - source)
+            pieces.append((src_a, src_b, slot, raw,
+                           0.0 if raw else slot.midi - source))
+
+        # One octave for the whole word rather than one per syllable, so the
+        # intervals inside it are the ones the melody asked for. A shout keeps
+        # its own pitch, so it neither votes on the octave nor takes it.
+        folded = iter(fold_unit([w for *_, raw, w in pieces if not raw]))
+
+        for src_a, src_b, slot, raw, _ in pieces:
+            shift = 0.0 if raw else next(folded)
             shifts.append(shift)
             segments.append(Segment(
                 src_start_s=src_a,
@@ -1226,6 +1236,7 @@ def build_segments(p: Placement) -> tuple[list, float]:
                 # makes it a shout.
                 out_dur_s=(src_b - src_a) if raw else slot.dur_s,
                 semitones=shift,
+                glide=not raw,
             ))
 
         total = (p.slots[-1].offset_s - origin) if p.slots else p.unit.duration_s
@@ -1244,17 +1255,23 @@ def build_segments(p: Placement) -> tuple[list, float]:
     flex_s = sum(b - a for (a, b), raw in zip(spans, raw_flags) if not raw)
     ratio = min(max((p.target_s - raw_s) / flex_s, lo), hi) if flex_s > 0 else 1.0
 
-    cursor = 0.0
-    for i, (src_a, src_b) in enumerate(spans):
-        # Reciting never drops a syllable. Past the last landing slot the
-        # last slot's pitch is reused, and a syllable with no measured pitch
-        # sounds unshifted rather than not at all: half a spoken word is not
-        # a shorter word.
+    # Reciting never drops a syllable. Past the last landing slot the last
+    # slot's pitch is reused, and a syllable with no measured pitch sounds
+    # unshifted rather than not at all: half a spoken word is not a shorter
+    # word. None marks the syllables that take no shift, and so take no part in
+    # choosing the word's octave either.
+    wanted: list[float | None] = []
+    for i in range(len(spans)):
         landing = p.slots[min(i, len(p.slots) - 1)] if p.slots else None
         source = p.unit.source_midi(i)
+        wanted.append(None if raw_flags[i] or landing is None or source is None
+                      else landing.midi - source)
+    folded = iter(fold_unit([w for w in wanted if w is not None]))
+
+    cursor = 0.0
+    for i, (src_a, src_b) in enumerate(spans):
         raw = raw_flags[i]
-        shift = (0.0 if raw or landing is None or source is None
-                 else fold_shift(landing.midi - source))
+        shift = 0.0 if wanted[i] is None else next(folded)
         shifts.append(shift)
 
         out_dur = (src_b - src_a) * (1.0 if raw else ratio)
@@ -1264,6 +1281,7 @@ def build_segments(p: Placement) -> tuple[list, float]:
             out_start_s=cursor,
             out_dur_s=out_dur,
             semitones=shift,
+            glide=not raw,
         ))
         cursor += out_dur
 

@@ -792,6 +792,24 @@ FORMANT_SCALE = 1.0
 # Beyond 12 is untested by ear. 15 measures worse again and buys little.
 SHIFT_CAP_SEMITONES = 12.0
 
+# How long a word takes to slide from one of its syllables' pitches to the
+# next, in milliseconds. 0 disables it and the pitch steps on the frame
+# boundary, which is what this did before.
+#
+# The step is what makes a word read as a run of syllables rather than as one
+# word carrying a tune. A sung voice arrives at a note through its approach,
+# and the ear hears the approach as much as the note.
+#
+# Applies inside a word only, and never across silence: the gap between two
+# words is where the pitch is allowed to change outright. WORLD only, because
+# Rubber Band transposes by a fixed amount per pass and cannot follow a contour
+# within one; that engine still steps.
+#
+# 60ms is roughly a fast singer's portamento. Long enough to be heard as a
+# slide rather than a smeared edge, short enough that a syllable of ordinary
+# length still spends most of itself on its own pitch.
+GLIDE_MS = 60.0
+
 # Prefer the take whose recorded pitch is nearest the note it has to land on,
 # so it is shifted as little as possible.
 #
