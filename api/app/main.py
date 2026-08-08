@@ -37,6 +37,7 @@ from .auth import AuthError, Principal, google_verifier, verify
 from .banks import catalog
 from .config import Settings, load_settings
 from .jobs import Job, JobRequest, JobRunner
+from .songs import SongError, prepare
 from .store import JobStore, open_store
 
 # Levels the pipeline offers. Read from its config at wiring time rather than
@@ -92,8 +93,12 @@ def create_app(
     banks: dict[str, str],
     standardised_suffix: str,
     levels: tuple[str, ...],
+    # Required, not optional. It used to default to None and the submit route
+    # answered 503 when nothing supplied it, which meant production wiring
+    # could forget the one thing this service exists to do and only say so at
+    # request time. A missing collaborator is now a wiring error.
+    prepare_song: Callable[[str], Path],
     verifier: Callable[[str, str], dict[str, object]] = google_verifier,
-    prepare_song: Callable[[str], Path] | None = None,
 ) -> FastAPI:
     """Build the app around already-made collaborators."""
     app = FastAPI(title="SongGenerator edge", version="0.1.0")
@@ -166,14 +171,13 @@ def create_app(
             level=body.level, mimicry=body.mimicry, engine=body.engine,
             arrangement=body.arrangement,
         )
-        if prepare_song is None:
-            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE,
-                                "this edge cannot fetch songs yet")
         try:
             song = prepare_song(body.source_url)
-        except Exception as exc:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST,
-                                f"could not fetch that link ({exc})") from exc
+        except SongError as exc:
+            # The link itself is the problem: a playlist, a removed video, or a
+            # title that collides with a song already here. The caller can fix
+            # all of those, so it is theirs rather than a server fault.
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
 
         # The runner records the job itself, before it spawns anything, so
         # there is one writer for that row rather than two racing.
@@ -235,7 +239,12 @@ def build() -> FastAPI:
     store.reconcile(datetime.now(UTC).isoformat(timespec="seconds"))
 
     runner = JobRunner(on_update=store.save)
+
+    def fetch_song(url: str) -> Path:
+        return prepare(url, settings.repo_root / "input")
+
     return create_app(
+        prepare_song=fetch_song,
         settings=settings,
         runner=runner,
         store=store,
