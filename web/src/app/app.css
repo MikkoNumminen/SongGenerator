@@ -1,0 +1,12 @@
+:host { display: block; max-width: 64rem; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
+header { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center;
+  justify-content: space-between; margin-bottom: 1.5rem; }
+nav { display: flex; gap: 1rem; }
+nav a { text-decoration: none; padding: 0.3rem 0; border-bottom: 2px solid transparent; }
+nav a.active { border-bottom-color: currentColor; }
+.who { display: flex; gap: 0.6rem; align-items: center; }
+.email { opacity: 0.8; }
+.note { opacity: 0.65; }
+button { padding: 0.4rem 0.8rem; font: inherit; border-radius: 6px; cursor: pointer; }
+.banner { padding: 0.75rem 1rem; border-radius: 8px; margin: 0 0 1.5rem;
+  background: color-mix(in srgb, currentColor 8%, transparent); }

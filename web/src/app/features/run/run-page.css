@@ -1,0 +1,21 @@
+.run { max-width: 42rem; }
+.source { font-family: ui-monospace, monospace; word-break: break-all; opacity: 0.85; }
+.meta { opacity: 0.7; margin-top: -0.5rem; }
+.stages { list-style: none; padding: 0; margin: 1.5rem 0; display: grid; gap: 0.6rem; }
+.stages li { display: flex; align-items: center; gap: 0.6rem; opacity: 0.45; }
+.stages li.done, .stages li.current { opacity: 1; }
+.dot { width: 0.7rem; height: 0.7rem; border-radius: 50%;
+  border: 2px solid currentColor; }
+.done .dot { background: currentColor; }
+.current .dot { background: currentColor; animation: pulse 1.2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .current .dot { animation: none; } }
+.percent { opacity: 0.7; }
+.verdict { padding: 1rem 1.25rem; border-radius: 8px; margin: 1.25rem 0; }
+.verdict p { margin: 0 0 0.5rem; } .verdict p:last-child { margin-bottom: 0; }
+.refused { background: color-mix(in srgb, currentColor 6%, transparent); }
+.failed { background: color-mix(in srgb, #c0392b 12%, transparent); }
+.done { background: color-mix(in srgb, #27ae60 12%, transparent); }
+.path { font-family: ui-monospace, monospace; word-break: break-all; }
+.note { opacity: 0.75; }
+.cancel { padding: 0.5rem 1rem; font: inherit; border-radius: 6px; cursor: pointer; }

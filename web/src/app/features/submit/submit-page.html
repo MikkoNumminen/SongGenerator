@@ -1,0 +1,65 @@
+<section class="submit">
+  <h1>Make a song</h1>
+  <p class="lead">
+    Paste a link. The singing is replaced with words from a bank of recordings,
+    on the same notes, at the same moments.
+  </p>
+
+  <app-state-panel
+    [state]="banks()"
+    busyLabel="Asking which banks this machine has..."
+    emptyLabel="This machine has no banks built yet."
+    (retry)="loadBanks()" />
+
+  @if (health.reachable() && banks().kind === 'ready') {
+    @if (usableBanks().length === 0) {
+      <p class="note">
+        None of the banks on that machine have clips built yet, so there is
+        nothing to sing with. Building one is done at the machine itself.
+      </p>
+    }
+
+    <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <label for="source_url">Link to a song</label>
+      <input
+        id="source_url"
+        type="url"
+        formControlName="source_url"
+        placeholder="https://..."
+        autocomplete="off"
+        spellcheck="false" />
+      @if (form.controls.source_url.touched && form.controls.source_url.invalid) {
+        <p class="field-error">That does not look like a link.</p>
+      }
+
+      <label for="bank">Bank</label>
+      <select id="bank" formControlName="bank">
+        <option value="" disabled>Choose a bank</option>
+        @for (bank of usableBanks(); track bank.name) {
+          <option [value]="bank.name">{{ bank.name }} ({{ bank.units }} clips)</option>
+        }
+      </select>
+
+      <label for="level">Playfulness</label>
+      <select id="level" formControlName="level">
+        <option value="">Both, so you can pick by ear</option>
+        @for (level of levels(); track level) {
+          <option [value]="level">{{ level }}</option>
+        }
+      </select>
+
+      <button type="submit" [disabled]="!canSubmit()">
+        {{ submitting().kind === 'loading' ? 'Starting...' : 'Make it' }}
+      </button>
+
+      @if (health.busy()) {
+        <p class="note">
+          That machine is already making one. It takes a single run at a time,
+          so this waits until that one is done.
+        </p>
+      }
+    </form>
+
+    <app-state-panel [state]="submitting()" [canRetry]="false" />
+  }
+</section>

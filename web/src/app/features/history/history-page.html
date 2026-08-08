@@ -1,0 +1,35 @@
+<section class="history">
+  <h1>Earlier runs</h1>
+
+  <app-state-panel
+    [state]="state()"
+    busyLabel="Reading the history..."
+    emptyLabel="Nothing has been made on that machine yet."
+    (retry)="load()" />
+
+  @if (state().kind === 'ready') {
+    <table>
+      <caption class="visually-hidden">Runs, newest first</caption>
+      <thead>
+        <tr>
+          <th scope="col">When</th>
+          <th scope="col">Bank</th>
+          <th scope="col">Outcome</th>
+          <th scope="col">Song</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (run of rows(); track run.id) {
+          <tr>
+            <td>{{ when(run.created_at) }}</td>
+            <td>{{ run.bank }}</td>
+            <td><span class="stage {{ run.stage }}">{{ run.stage }}</span></td>
+            <td class="song">
+              <a [routerLink]="['/runs', run.id]">{{ run.song ?? run.source_url }}</a>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</section>

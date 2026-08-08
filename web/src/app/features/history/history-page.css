@@ -1,0 +1,12 @@
+.history { max-width: 56rem; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 15%, transparent); }
+th { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.7; }
+.song { max-width: 24rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stage { padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.85rem;
+  background: color-mix(in srgb, currentColor 10%, transparent); }
+.stage.done { background: color-mix(in srgb, #27ae60 18%, transparent); }
+.stage.failed { background: color-mix(in srgb, #c0392b 18%, transparent); }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; }

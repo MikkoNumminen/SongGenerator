@@ -1,0 +1,26 @@
+# How GitHub should read this repository.
+#
+# GitHub detects languages, not frameworks: there is no "Angular" for it to
+# find, and there never will be. What it can get right is which files are
+# written by a person and which are produced by a tool, and by default it
+# counts both. That skews the language bar and buries real changes under
+# generated ones in every diff.
+#
+# `linguist-generated` does two things: keeps the file out of the language
+# statistics, and collapses it in pull requests. Both are what you want for a
+# file whose only correct edit is to regenerate it.
+
+# The contract. Produced by api/tools/dump_openapi.py and generate_dtos.py from
+# the response models, and checked by tests that fail if either is stale. Its
+# header says as much; a hand edit here is a lie about what the server sends.
+web/src/app/core/contract/openapi.json linguist-generated=true
+web/src/app/core/contract/dto.ts       linguist-generated=true
+
+# npm's resolution of the dependency tree. Committed on purpose so a build is
+# reproducible, but nobody writes it.
+web/package-lock.json                  linguist-generated=true
+
+# Normalise line endings so a file written on Windows and one written by a tool
+# do not show up as wholly rewritten. Git already warns about this on nearly
+# every commit here.
+* text=auto
