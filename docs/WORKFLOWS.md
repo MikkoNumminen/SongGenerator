@@ -467,24 +467,33 @@ Every route but the health check is behind Google sign-in and an allowlist of
 named accounts, because the pipeline takes an arbitrary link and spends a GPU
 on it. The browser only carries a token; the edge decides who may use anything.
 
-**1. Make an OAuth client.** Google Cloud console, APIs and Services,
-Credentials, Create credentials, OAuth client ID, type Web application.
+**1. Make an OAuth client.** In the Google Cloud console this lives under
+**Google Auth platform**, then **Clients**, then **Create client**. It used to
+be under APIs and Services, Credentials, and older instructions still say so.
 
-Under **Authorised JavaScript origins**, add the site and, if you develop
-against it, the dev server:
+Application type **Web application**.
+
+Under **Authorised JavaScript origins**, add the site, and the dev server if
+you develop against it. Google wants the port-less form as well as the one with
+a port:
 
 ```
 https://<the site hostname>
+http://localhost
 http://localhost:4200
 ```
 
-Authorised **redirect** URIs are left empty. Google Identity Services hands the
-token back to the page rather than redirecting, and an unnecessary redirect URI
-is one more thing to get wrong.
+Authorised **redirect URIs** stay empty. Identity Services hands the token back
+to the page through a callback rather than redirecting anywhere, so a redirect
+URI here is one more thing to get wrong for no benefit.
 
-On the consent screen, External with yourself as a test user is enough and is
-the honest shape for this: the service is meant for a named few, not for
-whoever finds it.
+If this is the first client in the project, the console asks for the consent
+screen first. **External**, with yourself added as a **test user**, is enough
+and is the honest shape: the service is meant for a named few rather than for
+whoever finds it. Leaving it in Testing rather than publishing it costs nothing
+here, because only ID tokens are used and a fresh one is issued at each
+sign-in; the seven-day limit that catches people in Testing applies to refresh
+tokens, which this never asks for.
 
 **2. Give the client id to both halves.** The pipeline variable
 `GOOGLE_CLIENT_ID` puts it in the site. The edge needs the same id, plus the
