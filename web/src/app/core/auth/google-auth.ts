@@ -60,6 +60,7 @@ export class GoogleAuth implements AuthContext {
   private readonly claims = signal<IdTokenClaims | null>(null);
   private raw: string | null = null;
   private loading: Promise<void> | null = null;
+  private initialised = false;
 
   readonly user = computed<SignedInUser | null>(() => {
     const claims = this.claims();
@@ -136,12 +137,18 @@ export class GoogleAuth implements AuthContext {
     if (typeof google === 'undefined') {
       throw new Error('Google sign-in could not be loaded.');
     }
-    // Initialising twice is harmless and re-registers the same callback, which
-    // is what makes both entry points safe to call in either order.
-    google.accounts.id.initialize({
-      client_id: this.clientId,
-      callback: (response) => this.accept(response.credential),
-    });
+    // Once, however many entry points ask. Both the button and One Tap need
+    // the library initialised, and calling it twice is not harmless as an
+    // earlier comment here claimed: Google logs "initialize() is called
+    // multiple times ... only the last initialized instance will be used",
+    // which was visible in the console of the deployed site.
+    if (!this.initialised) {
+      google.accounts.id.initialize({
+        client_id: this.clientId,
+        callback: (response) => this.accept(response.credential),
+      });
+      this.initialised = true;
+    }
     return google;
   }
 
