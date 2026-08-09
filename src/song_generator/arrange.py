@@ -691,9 +691,14 @@ def realise(arrangement: Arrangement, slots, units: list[Unit],
     """Turn a description back into a plan, exactly.
 
     Placements are rebuilt from the file rather than replanned, so an edited
-    arrangement produces what it says and nothing else. Each line is anchored
-    to the slot nearest the time it records; a line that cannot be anchored is
-    refused by name, since a silently misaligned word is worse than a stop.
+    arrangement produces what it says and nothing else. An arranged bank's
+    line is anchored to the slot nearest the time it records, and a line that
+    cannot be anchored is refused by name, since a silently misaligned word is
+    worse than a stop.
+
+    A recitation is anchored differently, because its onsets are not slot
+    onsets to begin with: mapping.recite lays the units out again at the
+    cursor's pace, in the order the file gives them. See the branch below.
 
     bank_dir is the same argument build takes: where the bank's declaration
     lives. The .arr file records what was placed where and deliberately not
@@ -705,7 +710,7 @@ def realise(arrangement: Arrangement, slots, units: list[Unit],
     and cutting them to their slots.
     """
     from . import banks
-    from .mapping import Placement
+    from .mapping import Placement, recite
 
     whole = banks.never_split(bank_dir)
     recited = False
@@ -735,6 +740,39 @@ def realise(arrangement: Arrangement, slots, units: list[Unit],
     if not whole and not any("#" in u.name for u in pool):
         pool = pool + slice_words(units)
     by_word = index_by_word(pool)
+
+    if recited:
+        # A recitation keeps the delivery's own rhythm: each word follows the
+        # last by RECITE_WORD_GAP_S rather than waiting for the next note. So
+        # the time in the file is not any slot's onset, and rebuilding a line
+        # by anchoring it to the nearest slot picked a different slot than the
+        # one the word was placed on -- the replay came back a fraction early
+        # and on the wrong note.
+        #
+        # The times are re-derived by running the placement rule again over
+        # the units the file names, exactly as never_split and reading_speed
+        # are re-derived rather than read back. The file says which clips, in
+        # what order; when they sound follows from that and from the bank's
+        # pace, and one rule owns it.
+        chosen = []
+        for line in arrangement.lines:
+            unit = unit_for(line.words, pool, by_word, line.take)
+            if unit is None:
+                raise ArrangementError(
+                    f"{clock(line.onset_s)}: cannot say {' '.join(line.words)!r} "
+                    f"with this bank. No clip holds those words.")
+            chosen.append(unit)
+
+        plan = recite(slots, lambda k: chosen[k] if k < len(chosen) else None,
+                      speed, split=not whole)
+        if len(plan.placements) != len(chosen):
+            # Silently dropping the tail would hand back a shorter song that
+            # still claimed to be this arrangement.
+            raise ArrangementError(
+                f"this song has room for {len(plan.placements)} of the "
+                f"{len(chosen)} lines in this arrangement. It was written for "
+                "a different song, or the analysis has changed.")
+        return plan
 
     plan = Plan(slots_total=len(slots))
     for line in arrangement.lines:

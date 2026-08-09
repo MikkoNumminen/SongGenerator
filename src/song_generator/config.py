@@ -781,6 +781,25 @@ PLAY_LEVELS = {
 # never overwritten, so an older arrangement stays reproducible.
 PLAY_LOG_DIR = "arrangements"
 
+# The pause left between two recited clips inside a phrase, in seconds.
+#
+# Small and fixed, rather than borrowed from the source.
+#
+# Two earlier attempts got this wrong in opposite directions. Placing each clip
+# on a melody note left 45 seconds of silence in a three minute song, because
+# the words waited for the tune. Carrying the source's own gaps instead
+# replayed its whole timeline, instrumental breaks and all: 43 words where
+# there had been 156.
+#
+# What this bank wants is neither. Keeping the words coming matters more than
+# reproducing how the original singer phrased them, so clips follow each other
+# closely and the melody supplies pitch alone.
+#
+# A phrase boundary still stops it. The singer paused long enough there for
+# group_phrases to call it a new phrase, so the line ends and the next one
+# starts on the next note.
+RECITE_WORD_GAP_S = 0.06
+
 
 # ---------------------------------------------------------------------------
 # STAGE 4 -- PITCH SHIFTING                    (built in commit 4)

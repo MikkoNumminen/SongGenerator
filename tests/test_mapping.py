@@ -488,3 +488,61 @@ class TestWordsSingThrough:
         segments, _ = build_segments(self._placement(rest_s=0.25))
 
         assert segments[0].sustain_to_s is not None
+
+
+class TestRecitingNeverCutsAWord:
+    """A bank whose order carries the meaning cannot afford a clipped word.
+
+    `plan_words` chooses units to fit the slots it was given and shortens one
+    that does not, which is right when the words are vocabulary. Reciting is
+    the opposite: the words are a recording of somebody saying something, and
+    half a word is not a shorter word, it is a different sound.
+
+    So this pins the property rather than the setting. A bank declaring
+    `sequence` gets it whatever else its bank.json says.
+    """
+
+    def _units(self, n=6):
+        from song_generator.mapping import plan_sequence
+
+        bank = [make_unit(["bravo"], name=f"a_{i:04d}.wav") for i in range(n)]
+        for i, unit in enumerate(bank):
+            unit.variant = f"{i:04d}"
+        return bank, plan_sequence
+
+    def _dropped(self, plan):
+        """Source audio that never reaches the output, in seconds."""
+        worst = 0.0
+        for p in plan.placements:
+            segments, _ = build_segments(p)
+            played = sum(s.src_end_s - s.src_start_s for s in segments)
+            worst = max(worst, p.unit.duration_s - played)
+        return worst
+
+    def test_every_clip_is_played_whole(self):
+        bank, plan_sequence = self._units()
+
+        plan = plan_sequence(_slots(40, dur=0.2), bank)
+
+        assert plan.placements, "nothing was placed, so nothing is proven"
+        assert self._dropped(plan) < 0.02
+
+    def test_slots_far_shorter_than_the_words_still_do_not_clip_them(self):
+        """The case that would tempt a planner to trim: a fast melody against
+        clips that take longer to say than any note lasts. Reciting lets the
+        word run past its slot instead, and the cursor absorbs it."""
+        bank, plan_sequence = self._units()
+
+        plan = plan_sequence(_slots(40, dur=0.06), bank)
+
+        assert self._dropped(plan) < 0.02
+
+    @pytest.mark.parametrize("speed", [0.6, 1.0, 1.3, 1.9])
+    def test_no_reading_speed_clips_a_word(self, speed):
+        """Pace changes how long a word takes to say, never how much of it is
+        said. A faster recitation is the whole word, faster."""
+        bank, plan_sequence = self._units()
+
+        plan = plan_sequence(_slots(40, dur=0.2), bank, reading_speed=speed)
+
+        assert self._dropped(plan) < 0.02

@@ -991,19 +991,42 @@ def plan_sequence(slots: list[Slot], units: list[Unit],
     """
     from .banks import deliverable_speed
 
-    plan = Plan(slots_total=len(slots))
     ordered = sorted(units, key=lambda u: (u.variant, u.name))
     if not ordered:
-        return plan
+        return Plan(slots_total=len(slots))
 
-    speed = deliverable_speed(reading_speed)
+    return recite(slots, lambda k: ordered[k % len(ordered)],
+                  deliverable_speed(reading_speed), split=split)
+
+
+def recite(slots: list[Slot], next_unit, speed: float,
+           split: bool = True) -> Plan:
+    """Lay a run of units along the slots at the reciting cursor's pace.
+
+    Split out of plan_sequence because replay needs the identical timing and
+    had been computing its own. A recitation's onset is deliberately not its
+    slot's onset, so the time in a saved arrangement no longer says which
+    slot the word was placed on, and rebuilding a plan by anchoring each line
+    to the nearest slot found a different one: the take that came back was
+    not the take that was rendered. The rule is deterministic, so the honest
+    fix is for both callers to run it rather than to agree about it.
+
+    next_unit(k) supplies the unit for the k-th placement, or None when there
+    are none left. plan_sequence rotates through the bank; arrange.realise
+    hands over the units a saved arrangement names, in its order.
+
+    Everything below is the placement rule itself, unchanged.
+    """
+    plan = Plan(slots_total=len(slots))
     flat = [slot for group in group_phrases(slots) for slot in group]
 
-    at = 0                  # where the rotation has got to in the bank
+    at = 0                  # how many placements have been made
     cursor = float("-inf")  # when the previous word stops sounding
+    last_phrase: int | None = None
     i = 0
     while i < len(flat):
         slot = flat[i]
+        same_phrase = slot.phrase == last_phrase
         if slot.onset_s < cursor - 1e-9:
             # The previous word is still sounding here. Sung over, not
             # silent, so it counts as used; it is simply nothing's landing.
@@ -1011,7 +1034,9 @@ def plan_sequence(slots: list[Slot], units: list[Unit],
             i += 1
             continue
 
-        unit = ordered[at % len(ordered)]
+        unit = next_unit(at)
+        if unit is None:
+            break
         at += 1
         target = unit.duration_s / speed
 
@@ -1022,9 +1047,30 @@ def plan_sequence(slots: list[Slot], units: list[Unit],
             covered.append(flat[j])
             j += 1
 
+        # Where the word actually starts.
+        #
+        # Not the note's onset. Reciting to a melody means keeping the
+        # delivery's own rhythm and borrowing only its pitch: two words said
+        # 90ms apart are said 90ms apart here too, whatever the singer was
+        # doing in between. Waiting for the next note instead inserted 45
+        # seconds of silence into a three minute song and chopped every
+        # phrase into note-shaped pieces.
+        #
+        # A phrase boundary is the exception, and it is why this reads the
+        # phrase rather than a gap threshold. The singer stopped there long
+        # enough for group_phrases to call it a new phrase, so the recitation
+        # stops too and picks up on the next phrase's first note. Small rests
+        # inside a phrase are sung straight through; long ones end the
+        # sentence.
+        onset = slot.onset_s
+        if same_phrase and cursor != float("-inf"):
+            # Straight after the previous word, wherever the melody's next note
+            # happens to be. Keeping the words coming is what this is for.
+            onset = cursor + config.RECITE_WORD_GAP_S
+
         plan.placements.append(Placement(
             unit=unit,
-            onset_s=slot.onset_s,
+            onset_s=onset,
             slot_span_s=covered[-1].offset_s - covered[0].onset_s,
             play_s=target,
             n_slots=len(covered),
@@ -1038,7 +1084,8 @@ def plan_sequence(slots: list[Slot], units: list[Unit],
             target_s=target,
         ))
         plan.slots_used += len(covered)
-        cursor = slot.onset_s + target
+        cursor = onset + target
+        last_phrase = slot.phrase
         i = j
 
     return plan
