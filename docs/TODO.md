@@ -101,6 +101,29 @@ never see. Resolve it on a real vocal.
 
 ## Open items
 
+- **Give the site a name under mikkonumminen.dev. Parked, and not important.**
+
+  It works now at the Azure address. Everything below is cosmetics.
+
+  `mikkonumminen.dev/songGenerator` turned out to cost more than it is worth. The
+  domain's DNS is on Cloudflare but the record is DNS-only, so traffic goes
+  straight to Vercel and a Cloudflare worker never sees it. Making the path work
+  means proxying the apex, which puts Cloudflare in front of the whole personal
+  site to serve one subpath. A worker was written, deployed, found inert, and
+  deleted again.
+
+  If it is ever picked up, a subdomain is the cheaper shape: one CNAME from
+  `songgenerator.mikkonumminen.dev` to the Static Web App, left unproxied so
+  Azure can issue its own certificate. Azure supports two custom domains on the
+  free plan, so no proxy is needed at all and the app keeps a root base href.
+  Adding the record needs a token with DNS edit on that zone; the one wrangler
+  logs in with carries `zone:read` only, which finds the zone and cannot write
+  to it.
+
+  The one thing here that is not cosmetic is already its own item below: from a
+  machine on the tailnet the site reports the backend as unreachable, because
+  MagicDNS resolves the funnel name to a private address.
+
 - **Put the edge behind Cloudflare too, not just the site.**
 
   The backend is reachable at a Tailscale Funnel address, and that works for
