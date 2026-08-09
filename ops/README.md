@@ -38,6 +38,49 @@ That systemd supervises it properly was measured rather than assumed. A probe
 unit reported `active`, the Windows process wrote to journald, and after
 `systemctl --user stop` no Windows process was left behind.
 
+## The interop trap
+
+A Windows process launched from WSL does **not** inherit the unit's environment.
+WSL only carries variables named in `WSLENV`, and nothing warns you when one is
+missing: the service starts, `/health` answers `ok`, and the edge quietly has no
+client id and no allowlist. It fails closed, so nobody gets in, but it looks
+healthy while being unusable.
+
+The unit therefore lists every variable twice, once in the env file and once in
+`WSLENV`. Adding a setting means editing both.
+
+Measured, not guessed: a plain variable arrives as `None` on the Windows side,
+and the same variable with `WSLENV` naming it arrives intact.
+
+The other thing systemd will not accept is a backslash-escaped space in an
+executable path. `/mnt/c/Program\ Files/...` is refused outright with
+"Executable path contains special characters"; the path has to be quoted.
+
+## The site looks broken from this machine, and only from this machine
+
+Opened here, the site reports "that machine is not answering" while `curl` to
+the same address returns in 20 ms. Both are correct.
+
+MagicDNS resolves `paskamyrsky.tail6ed53b.ts.net` to `100.101.51.19`, the
+node's own tailnet address, for anything on the tailnet. Chrome then sees a
+page served from a public site asking for something on a private network and
+refuses. It is the same protection that produced the "access other apps and
+services on this device" prompt earlier, and it is right to.
+
+Everywhere else the name resolves to Tailscale's public ingress and the request
+is one public host calling another, which nothing objects to. That was checked
+from outside the tailnet rather than assumed: `/health` fetched from an
+unrelated network returns `{"status":"ok","auth_configured":true,"busy":false}`.
+
+So the site works for everyone except the person most likely to be testing it.
+To see it as a visitor does, open it on a phone with wifi off, or from any
+machine not signed in to the tailnet. `curl` from here is not a substitute: it
+has no private-network policy and will happily succeed while a browser refuses.
+
+If this becomes tiresome, the fix is to stop using a tailnet name for the
+backend: a Cloudflare tunnel to a real hostname makes it public everywhere,
+including here.
+
 ## Ports, and the ones not to touch
 
 | what | where |
