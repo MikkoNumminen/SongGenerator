@@ -254,37 +254,44 @@ class TestReadingSpeed:
 # same fixture slots, three spoken units, one exact expectation. If this
 # fails, the question is not "is the new expectation right", it is "did I
 # mean to change what a sequence bank recites".
+#
+# Re-recorded once, deliberately, when reciting stopped waiting for the next
+# note. The units are 0.4s and RECITE_WORD_GAP_S is 0.06, so inside a phrase
+# every word now starts 0.46s after the one before, wherever the melody's
+# notes happen to fall; the old 0.50 steps were the notes' own onsets. Each
+# phrase still opens on its first note, because a phrase boundary is where
+# the singer stopped for long enough to end the sentence.
 SEQUENCE_1987 = [
     "phrase 0",
     "   0:00.00  x2  =0.50  delta                             [raw_0001.wav]",
-    "   0:00.50  x2  =0.50  delta                             [raw_0002.wav]",
-    "   0:01.00  x2  =0.50  delta                             [raw_0003.wav]",
-    "   0:01.50  x2  =0.50  delta                             [raw_0001.wav]",
+    "   0:00.46  x2  =0.50  delta                             [raw_0002.wav]",
+    "   0:00.92  x2  =0.50  delta                             [raw_0003.wav]",
+    "   0:01.38  x2  =0.50  delta                             [raw_0001.wav]",
     "phrase 1",
     "   0:02.50  x2  =0.50  delta                             [raw_0002.wav]",
-    "   0:03.00  x2  =0.50  delta                             [raw_0003.wav]",
-    "   0:03.50  x2  =0.50  delta                             [raw_0001.wav]",
-    "   0:04.00  x2  =0.50  delta                             [raw_0002.wav]",
+    "   0:02.96  x2  =0.50  delta                             [raw_0003.wav]",
+    "   0:03.42  x2  =0.50  delta                             [raw_0001.wav]",
+    "   0:03.88  x2  =0.50  delta                             [raw_0002.wav]",
     "phrase 2",
     "   0:05.00  x2  =0.50  delta                             [raw_0003.wav]",
-    "   0:05.50  x2  =0.50  delta                             [raw_0001.wav]",
-    "   0:06.00  x2  =0.50  delta                             [raw_0002.wav]",
-    "   0:06.50  x2  =0.50  delta                             [raw_0003.wav]",
+    "   0:05.46  x2  =0.50  delta                             [raw_0001.wav]",
+    "   0:05.92  x2  =0.50  delta                             [raw_0002.wav]",
+    "   0:06.38  x2  =0.50  delta                             [raw_0003.wav]",
     "phrase 3",
     "   0:07.50  x2  =0.50  delta                             [raw_0001.wav]",
-    "   0:08.00  x2  =0.50  delta                             [raw_0002.wav]",
-    "   0:08.50  x2  =0.50  delta                             [raw_0003.wav]",
-    "   0:09.00  x2  =0.50  delta                             [raw_0001.wav]",
+    "   0:07.96  x2  =0.50  delta                             [raw_0002.wav]",
+    "   0:08.42  x2  =0.50  delta                             [raw_0003.wav]",
+    "   0:08.88  x2  =0.50  delta                             [raw_0001.wav]",
     "phrase 4",
     "   0:10.00  x2  =0.50  delta                             [raw_0002.wav]",
-    "   0:10.50  x2  =0.50  delta                             [raw_0003.wav]",
-    "   0:11.00  x2  =0.50  delta                             [raw_0001.wav]",
-    "   0:11.50  x2  =0.50  delta                             [raw_0002.wav]",
+    "   0:10.46  x2  =0.50  delta                             [raw_0003.wav]",
+    "   0:10.92  x2  =0.50  delta                             [raw_0001.wav]",
+    "   0:11.38  x2  =0.50  delta                             [raw_0002.wav]",
     "phrase 5",
     "   0:12.50  x2  =0.50  delta                             [raw_0003.wav]",
-    "   0:13.00  x2  =0.50  delta                             [raw_0001.wav]",
-    "   0:13.50  x2  =0.50  delta                             [raw_0002.wav]",
-    "   0:14.00  x2  =0.50  delta                             [raw_0003.wav]",
+    "   0:12.96  x2  =0.50  delta                             [raw_0001.wav]",
+    "   0:13.42  x2  =0.50  delta                             [raw_0002.wav]",
+    "   0:13.88  x2  =0.50  delta                             [raw_0003.wav]",
 ]
 
 
@@ -459,6 +466,46 @@ class TestSequenceReplay:
             _slots(), units, bank_dir=bank_dir)
         assert self._fingerprint(replayed) == self._fingerprint(plan)
 
+    def test_replay_keeps_the_recitation_off_the_notes(self, tmp_path):
+        """The defect, named. A recitation starts each word
+        RECITE_WORD_GAP_S after the last one stopped rather than on a note,
+        so the time written in the file is not any slot's onset. Replay
+        anchored every line to the nearest slot, which snapped the words back
+        onto the melody and, where the next note was far away, anchored them
+        to a different slot than the one they had been placed on. The take
+        that came back was not the take that was rendered.
+        """
+        bank_dir = self._bank_dir(tmp_path)
+        units = _spoken(5)
+        plan, arrangement, _ = arrange.build(
+            _slots(), units, "conservative", 7,
+            song="fixture", bank="fixture", bank_dir=bank_dir)
+        replayed = arrange.realise(
+            arrange.parse_text(arrange.render_text(arrangement)),
+            _slots(), units, bank_dir=bank_dir)
+
+        notes = {round(s.onset_s, 6) for s in _slots()}
+        off = [p for p in replayed.placements
+               if round(p.onset_s, 6) not in notes]
+        assert off, ("every replayed word landed on a note, so the "
+                     "recitation was snapped back onto the melody")
+        assert ([round(p.onset_s, 6) for p in replayed.placements]
+                == [round(p.onset_s, 6) for p in plan.placements])
+
+    def test_an_arrangement_longer_than_the_song_is_refused(self, tmp_path):
+        """Handing back a shorter song that still claimed to be this
+        arrangement would be a silent truncation, which is the failure the
+        whole replay path is arranged to avoid."""
+        bank_dir = self._bank_dir(tmp_path)
+        units = _spoken(5)
+        _, arrangement, _ = arrange.build(
+            _slots(), units, "conservative", 7,
+            song="fixture", bank="fixture", bank_dir=bank_dir)
+        with pytest.raises(arrange.ArrangementError, match="room for"):
+            arrange.realise(
+                arrange.parse_text(arrange.render_text(arrangement)),
+                _slots(n=8), units, bank_dir=bank_dir)
+
     def test_replay_does_not_slice_a_never_split_bank(self, tmp_path):
         bank_dir = self._bank_dir(tmp_path)
         units = _spoken(5)
@@ -471,6 +518,30 @@ class TestSequenceReplay:
         for p in replayed.placements:
             assert "#" not in p.unit.name, "a spoken clip came back as a slice"
             assert p.split is False
+
+    @pytest.mark.parametrize("never_split", [True, False])
+    @pytest.mark.parametrize("units_fn", [_spoken, _raw_spoken])
+    def test_replay_reproduces_whether_or_not_the_bank_splits(
+            self, tmp_path, never_split, units_fn):
+        """Every other test in this class declares never_split, but a sequence
+        bank is not obliged to. Without it the pool is enriched with slices and
+        joins, so unit_for is choosing from a different and much larger set,
+        and the take named in the file has to still win against them."""
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "levels": {"conservative": {"strategy": "sequence"}},
+            "never_split": never_split,
+        }), encoding="utf-8")
+        units = units_fn(5)
+        plan, arrangement, _ = arrange.build(
+            _slots(), units, "conservative", 11,
+            song="fixture", bank="fixture", bank_dir=tmp_path)
+
+        replayed = arrange.realise(
+            arrange.parse_text(arrange.render_text(arrangement),
+                               bank_words={w for u in units for w in u.words}),
+            _slots(), units, bank_dir=tmp_path)
+
+        assert self._fingerprint(replayed) == self._fingerprint(plan)
 
     def test_replay_without_a_bank_dir_stays_exactly_as_before(self, tmp_path):
         """The default is the behaviour every existing .arr depends on."""

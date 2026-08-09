@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import random
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -959,24 +960,10 @@ def plan_sequence(slots: list[Slot], units: list[Unit],
     there is no vocabulary to cover. Two calls over the same slots and units
     are the same plan.
 
-    Nothing is shortened to fit its slots either. A spoken word cut short
-    stops being the word, so every placement's target is the time the unit
-    needs to be said at reading_speed: its natural duration over that speed,
-    written to target_s and play_s both.
-
-    One time cursor decides everything else. A unit starts on the first slot
-    at or past where the previous unit stops sounding, takes the slots inside
-    its own span, and moves the cursor to its own end. The cursor is the
-    single authority on collision, so a unit that needs more time than its
-    slots give simply takes longer to clear: at the end of a phrase it runs
-    into the gap the singer left, which is silence and collides with nothing,
-    and a slot the cursor has already passed is sung over rather than landed
-    on. Nothing overlaps and nothing is starved, and there is no backtracking
-    to do either of those jobs badly.
-
-    Phrases come from group_phrases and a placement's slots never cross a
-    group, the same as plan_words, so a phrase number in the log means the
-    same thing whichever planner wrote it.
+    What happens once the order is decided belongs to recite, which lays the
+    units out at the cursor's pace and is documented there. This function is
+    the ordering and the rotation; arrange.realise runs the same placement
+    over units a saved arrangement names instead.
 
     reading_speed is the pace of the reciting: 1.0 is the pace the words were
     spoken at, lower is slower. A slower pace widens every span, so it also
@@ -991,19 +978,64 @@ def plan_sequence(slots: list[Slot], units: list[Unit],
     """
     from .banks import deliverable_speed
 
-    plan = Plan(slots_total=len(slots))
     ordered = sorted(units, key=lambda u: (u.variant, u.name))
     if not ordered:
-        return plan
+        return Plan(slots_total=len(slots))
 
-    speed = deliverable_speed(reading_speed)
+    return recite(slots, lambda k: ordered[k % len(ordered)],
+                  deliverable_speed(reading_speed), split=split)
+
+
+def recite(slots: list[Slot], next_unit: Callable[[int], Unit | None],
+           speed: float, split: bool = True) -> Plan:
+    """Lay a run of units along the slots at the reciting cursor's pace.
+
+    Where a recitation is actually placed, for both the planner and replay.
+    It lives in one function because they have to agree exactly: a recited
+    onset is deliberately not its slot's onset, so the time in a saved
+    arrangement does not say which slot the word was placed on, and replay
+    anchoring each line to the nearest slot found a different one. The take
+    that came back was not the take that was rendered. Two copies of a rule
+    can disagree; one cannot.
+
+    next_unit(k) supplies the unit for the k-th placement, or None when there
+    are none left. plan_sequence rotates through the bank; arrange.realise
+    hands over the units a saved arrangement names, in its order.
+
+    Nothing is shortened to fit its slots. A spoken word cut short stops
+    being the word, so every placement's target is the time the unit needs to
+    be said at this speed: its natural duration over that speed, written to
+    target_s and play_s both.
+
+    One time cursor decides the rest. Inside a phrase a unit starts
+    RECITE_WORD_GAP_S after the previous one stops sounding, wherever the
+    melody's next note happens to fall, because keeping the words coming
+    matters more than reproducing how the original singer phrased them; the
+    melody supplies pitch alone. At a phrase boundary it starts on that
+    phrase's first note instead, since the singer paused long enough there
+    for group_phrases to call it a new phrase, which is where a sentence
+    ends.
+
+    The cursor is the single authority on collision, so a unit that needs
+    more time than its slots give simply takes longer to clear, and a slot
+    the cursor has already passed is sung over rather than landed on.
+    Nothing overlaps and nothing is starved, and there is no backtracking to
+    do either of those jobs badly.
+
+    Phrases come from group_phrases and a placement's slots never cross a
+    group, the same as plan_words, so a phrase number in the log means the
+    same thing whichever planner wrote it.
+    """
+    plan = Plan(slots_total=len(slots))
     flat = [slot for group in group_phrases(slots) for slot in group]
 
-    at = 0                  # where the rotation has got to in the bank
+    at = 0                  # how many placements have been made
     cursor = float("-inf")  # when the previous word stops sounding
+    last_phrase: int | None = None
     i = 0
     while i < len(flat):
         slot = flat[i]
+        same_phrase = slot.phrase == last_phrase
         if slot.onset_s < cursor - 1e-9:
             # The previous word is still sounding here. Sung over, not
             # silent, so it counts as used; it is simply nothing's landing.
@@ -1011,7 +1043,9 @@ def plan_sequence(slots: list[Slot], units: list[Unit],
             i += 1
             continue
 
-        unit = ordered[at % len(ordered)]
+        unit = next_unit(at)
+        if unit is None:
+            break
         at += 1
         target = unit.duration_s / speed
 
@@ -1022,9 +1056,30 @@ def plan_sequence(slots: list[Slot], units: list[Unit],
             covered.append(flat[j])
             j += 1
 
+        # Where the word actually starts.
+        #
+        # Not the note's onset. Reciting to a melody means keeping the
+        # delivery's own rhythm and borrowing only its pitch: two words said
+        # 90ms apart are said 90ms apart here too, whatever the singer was
+        # doing in between. Waiting for the next note instead inserted 45
+        # seconds of silence into a three minute song and chopped every
+        # phrase into note-shaped pieces.
+        #
+        # A phrase boundary is the exception, and it is why this reads the
+        # phrase rather than a gap threshold. The singer stopped there long
+        # enough for group_phrases to call it a new phrase, so the recitation
+        # stops too and picks up on the next phrase's first note. Small rests
+        # inside a phrase are sung straight through; long ones end the
+        # sentence.
+        onset = slot.onset_s
+        if same_phrase and cursor != float("-inf"):
+            # Straight after the previous word, wherever the melody's next note
+            # happens to be. Keeping the words coming is what this is for.
+            onset = cursor + config.RECITE_WORD_GAP_S
+
         plan.placements.append(Placement(
             unit=unit,
-            onset_s=slot.onset_s,
+            onset_s=onset,
             slot_span_s=covered[-1].offset_s - covered[0].onset_s,
             play_s=target,
             n_slots=len(covered),
@@ -1038,7 +1093,8 @@ def plan_sequence(slots: list[Slot], units: list[Unit],
             target_s=target,
         ))
         plan.slots_used += len(covered)
-        cursor = slot.onset_s + target
+        cursor = onset + target
+        last_phrase = slot.phrase
         i = j
 
     return plan
