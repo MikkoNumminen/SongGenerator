@@ -10,9 +10,14 @@
 // site's own fallback would answer with index.html: a page that loads and then
 // fails to run, which reads as a blank screen.
 //
-// The app is built with `--base-href /songGenerator/` to match, so the browser
-// asks for the prefixed paths this then removes. The two have to agree; change
-// one and the other stops working.
+// For this to work the app has to be built with `--base-href /songGenerator/`,
+// so the browser asks for the prefixed paths this then removes. The two have to
+// agree; change one and the other stops working.
+//
+// The pipeline does NOT pass that flag. This route is parked (see docs/TODO.md)
+// and the site is served from the root of its Azure hostname, where a prefixed
+// base href would 404 every asset. Deploying this worker means setting the flag
+// in azure-pipelines.yml in the same change.
 
 const PREFIX = '/songGenerator';
 const ORIGIN = 'green-bay-0f4fe1d03.7.azurestaticapps.net';

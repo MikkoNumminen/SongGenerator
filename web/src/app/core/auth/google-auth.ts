@@ -42,6 +42,16 @@ declare const google: GoogleIdentity | undefined;
 const SCRIPT_URL = 'https://accounts.google.com/gsi/client';
 
 /**
+ * How long to wait for Google's script before calling it unavailable.
+ *
+ * Generous, because a slow connection is not a broken one, and the page is
+ * usable without signing in while this runs. It exists so the wait is bounded
+ * at all: a request that is silently dropped rather than refused produces no
+ * error event, and the button would otherwise say "loading" indefinitely.
+ */
+const LOAD_TIMEOUT_MS = 15_000;
+
+/**
  * Sign-in, as far as a browser is allowed to be involved in it.
  *
  * This carries a token and nothing more. Whether the person holding it may
@@ -187,22 +197,47 @@ export class GoogleAuth implements AuthContext {
     // One load, however many callers ask. Two script tags would register two
     // callbacks and sign in twice.
     this.loading ??= new Promise<void>((resolve, reject) => {
+      // Whatever happens, this settles. A promise that never does leaves the
+      // button on "Loading sign-in..." for as long as the page is open, which
+      // is the empty-space failure this component exists to avoid, wearing a
+      // different hat.
+      const timer = setTimeout(() => {
+        fail(new Error('Google sign-in did not load in time.'));
+      }, LOAD_TIMEOUT_MS);
+
+      const done = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+      // Clearing `loading` on the way out is what lets a later attempt try
+      // again. Leaving the rejected promise cached meant the first failure was
+      // permanent: every subsequent call returned the same rejection, so a
+      // blocked extension or a dropped connection could never be recovered
+      // from without a reload.
+      const fail = (error: Error) => {
+        clearTimeout(timer);
+        this.loading = null;
+        reject(error);
+      };
+
+      // A tag somebody else put there, or one from a previous attempt. Its
+      // load event may already have fired, in which case listening for it
+      // waits forever; the timeout is what bounds that case.
       const existing = document.querySelector<HTMLScriptElement>(
         `script[src="${SCRIPT_URL}"]`,
       );
       if (existing) {
-        existing.addEventListener('load', () => resolve());
-        existing.addEventListener('error', () => reject(new Error('load failed')));
+        existing.addEventListener('load', done);
+        existing.addEventListener('error', () =>
+          fail(new Error('Google sign-in could not be loaded.')),
+        );
         return;
       }
       const script = document.createElement('script');
       script.src = SCRIPT_URL;
       script.async = true;
-      script.onload = () => resolve();
-      script.onerror = () => {
-        this.loading = null; // so a later attempt can try again
-        reject(new Error('Google sign-in could not be loaded.'));
-      };
+      script.onload = done;
+      script.onerror = () => fail(new Error('Google sign-in could not be loaded.'));
       document.head.appendChild(script);
     });
     return this.loading;

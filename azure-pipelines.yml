@@ -51,12 +51,17 @@ steps:
     displayName: Test
     workingDirectory: web
 
-  # The site is reached at mikkonumminen.dev/songGenerator, which Cloudflare
-  # proxies to the Static Web App, so every asset path has to carry that prefix.
-  # Azure would serve it happily from the root of its own hostname; the domain
-  # in front is what makes this necessary. Wrong, and the page loads and then
-  # 404s every script, which looks like a blank screen.
-  - script: npx ng build --base-href /songGenerator/
+  # No --base-href. A Static Web App serves from the root of its own hostname,
+  # unlike a GitHub project page, so the default is right and passing a path
+  # here would 404 every script after the page loaded.
+  #
+  # It carried `--base-href /songGenerator/` for a while, for a Cloudflare
+  # proxy serving the app under a subpath of mikkonumminen.dev. That work is
+  # parked (see docs/TODO.md) and the site is reached at the Azure address, so
+  # the prefix pointed every asset at a path nothing serves. If the subpath
+  # domain is ever picked up, this flag and the worker's PREFIX have to change
+  # together; a subdomain, the cheaper shape suggested there, needs neither.
+  - script: npx ng build
     displayName: Build
     workingDirectory: web
 
