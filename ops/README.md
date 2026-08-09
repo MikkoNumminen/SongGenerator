@@ -61,11 +61,11 @@ executable path. `/mnt/c/Program\ Files/...` is refused outright with
 Opened here, the site reports "that machine is not answering" while `curl` to
 the same address returns in 20 ms. Both are correct.
 
-MagicDNS resolves `paskamyrsky.tail6ed53b.ts.net` to `100.101.51.19`, the
-node's own tailnet address, for anything on the tailnet. Chrome then sees a
-page served from a public site asking for something on a private network and
-refuses. It is the same protection that produced the "access other apps and
-services on this device" prompt earlier, and it is right to.
+MagicDNS resolves the funnel's `*.ts.net` name to the node's own `100.x`
+tailnet address for anything on the tailnet. Chrome then sees a page served
+from a public site asking for something on a private network and refuses. It
+is the same protection that produced the "access other apps and services on
+this device" prompt earlier, and it is right to.
 
 Everywhere else the name resolves to Tailscale's public ingress and the request
 is one public host calling another, which nothing objects to. That was checked
@@ -103,9 +103,17 @@ on" never means this one is.
 
 ## Where the public address goes
 
-The edge answers at `https://paskamyrsky.tail6ed53b.ts.net:10000`. That is the
-value of `API_BASE_URL` for the site, and it is the one thing that changes if
-the node is renamed or the port moves.
+The edge answers at `https://<node>.<tailnet>.ts.net:10000`. `tailscale status`
+prints the node's own name, and `tailscale funnel status` prints the whole URL
+as served. That URL is the value of `API_BASE_URL` for the site, and it is the
+one thing that changes if the node is renamed or the port moves.
+
+The real name is not written down here on purpose. This repository is public,
+the funnel is a home machine, and the same machine serves the RAG chat on 443
+and the oauth2-proxy on 8443. Publishing the hostname invites traffic to all
+three, and the runbook loses nothing by not naming it: what is worth writing
+down is the shape and the traps, not one string that `tailscale status` will
+tell you.
 
 Google needs nothing when it changes. The origin registered with the OAuth
 client is the *site's* origin, not the backend's.
