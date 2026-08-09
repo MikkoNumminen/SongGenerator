@@ -698,7 +698,12 @@ def realise(arrangement: Arrangement, slots, units: list[Unit],
 
     A recitation is anchored differently, because its onsets are not slot
     onsets to begin with: mapping.recite lays the units out again at the
-    cursor's pace, in the order the file gives them. See the branch below.
+    cursor's pace, in the order the file gives them. So for a recitation the
+    words and their order are what an edit changes; the time, the slot count
+    and the span are re-derived from the bank's pace, and editing those
+    columns does nothing. That is what the file's own header says to edit
+    anyway, and it is the same reason never_split and reading_speed are not
+    read back either.
 
     bank_dir is the same argument build takes: where the bank's declaration
     lives. The .arr file records what was placed where and deliberately not
@@ -758,9 +763,15 @@ def realise(arrangement: Arrangement, slots, units: list[Unit],
         for line in arrangement.lines:
             unit = unit_for(line.words, pool, by_word, line.take)
             if unit is None:
+                # A never_split bank has no slices to fall back on, so saying
+                # none exist would blame the wrong thing; a sequence bank that
+                # does split has them, and the arranged path's wording applies.
+                slices = ("." if whole
+                          else " and no slices exist for all of them.")
                 raise ArrangementError(
-                    f"{clock(line.onset_s)}: cannot say {' '.join(line.words)!r} "
-                    f"with this bank. No clip holds those words.")
+                    f"{clock(line.onset_s)}: cannot say "
+                    f"{' '.join(line.words)!r} with this bank. No clip holds "
+                    f"those words{slices}")
             chosen.append(unit)
 
         plan = recite(slots, lambda k: chosen[k] if k < len(chosen) else None,

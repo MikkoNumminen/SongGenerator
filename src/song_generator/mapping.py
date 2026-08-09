@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import random
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -959,24 +960,10 @@ def plan_sequence(slots: list[Slot], units: list[Unit],
     there is no vocabulary to cover. Two calls over the same slots and units
     are the same plan.
 
-    Nothing is shortened to fit its slots either. A spoken word cut short
-    stops being the word, so every placement's target is the time the unit
-    needs to be said at reading_speed: its natural duration over that speed,
-    written to target_s and play_s both.
-
-    One time cursor decides everything else. A unit starts on the first slot
-    at or past where the previous unit stops sounding, takes the slots inside
-    its own span, and moves the cursor to its own end. The cursor is the
-    single authority on collision, so a unit that needs more time than its
-    slots give simply takes longer to clear: at the end of a phrase it runs
-    into the gap the singer left, which is silence and collides with nothing,
-    and a slot the cursor has already passed is sung over rather than landed
-    on. Nothing overlaps and nothing is starved, and there is no backtracking
-    to do either of those jobs badly.
-
-    Phrases come from group_phrases and a placement's slots never cross a
-    group, the same as plan_words, so a phrase number in the log means the
-    same thing whichever planner wrote it.
+    What happens once the order is decided belongs to recite, which lays the
+    units out at the cursor's pace and is documented there. This function is
+    the ordering and the rotation; arrange.realise runs the same placement
+    over units a saved arrangement names instead.
 
     reading_speed is the pace of the reciting: 1.0 is the pace the words were
     spoken at, lower is slower. A slower pace widens every span, so it also
@@ -999,23 +986,45 @@ def plan_sequence(slots: list[Slot], units: list[Unit],
                   deliverable_speed(reading_speed), split=split)
 
 
-def recite(slots: list[Slot], next_unit, speed: float,
-           split: bool = True) -> Plan:
+def recite(slots: list[Slot], next_unit: Callable[[int], Unit | None],
+           speed: float, split: bool = True) -> Plan:
     """Lay a run of units along the slots at the reciting cursor's pace.
 
-    Split out of plan_sequence because replay needs the identical timing and
-    had been computing its own. A recitation's onset is deliberately not its
-    slot's onset, so the time in a saved arrangement no longer says which
-    slot the word was placed on, and rebuilding a plan by anchoring each line
-    to the nearest slot found a different one: the take that came back was
-    not the take that was rendered. The rule is deterministic, so the honest
-    fix is for both callers to run it rather than to agree about it.
+    Where a recitation is actually placed, for both the planner and replay.
+    It lives in one function because they have to agree exactly: a recited
+    onset is deliberately not its slot's onset, so the time in a saved
+    arrangement does not say which slot the word was placed on, and replay
+    anchoring each line to the nearest slot found a different one. The take
+    that came back was not the take that was rendered. Two copies of a rule
+    can disagree; one cannot.
 
     next_unit(k) supplies the unit for the k-th placement, or None when there
     are none left. plan_sequence rotates through the bank; arrange.realise
     hands over the units a saved arrangement names, in its order.
 
-    Everything below is the placement rule itself, unchanged.
+    Nothing is shortened to fit its slots. A spoken word cut short stops
+    being the word, so every placement's target is the time the unit needs to
+    be said at this speed: its natural duration over that speed, written to
+    target_s and play_s both.
+
+    One time cursor decides the rest. Inside a phrase a unit starts
+    RECITE_WORD_GAP_S after the previous one stops sounding, wherever the
+    melody's next note happens to fall, because keeping the words coming
+    matters more than reproducing how the original singer phrased them; the
+    melody supplies pitch alone. At a phrase boundary it starts on that
+    phrase's first note instead, since the singer paused long enough there
+    for group_phrases to call it a new phrase, which is where a sentence
+    ends.
+
+    The cursor is the single authority on collision, so a unit that needs
+    more time than its slots give simply takes longer to clear, and a slot
+    the cursor has already passed is sung over rather than landed on.
+    Nothing overlaps and nothing is starved, and there is no backtracking to
+    do either of those jobs badly.
+
+    Phrases come from group_phrases and a placement's slots never cross a
+    group, the same as plan_words, so a phrase number in the log means the
+    same thing whichever planner wrote it.
     """
     plan = Plan(slots_total=len(slots))
     flat = [slot for group in group_phrases(slots) for slot in group]
