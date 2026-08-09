@@ -81,6 +81,7 @@ def test_constants_named_in_docs_actually_exist(doc):
     # Words that look like constants but are prose or JSON keys.
     allowed = {
         "AGENTS", "README", "GLOSSARY", "ARCHITECTURE", "WORKFLOWS", "CLAUDE",
+        "AZURE",
         "DEMUCS", "WORLD", "PATH", "JSON", "LUFS", "PYTHONPATH", "GPU",
         "NVIDIA", "TSV", "BOM", "DENSITY", "CLIMAXES", "STAGE", "LISTEN",
         "FIRST", "FORMATS", "BRAVO", "OTHER", "PLAYFULNESS", "SOURCES",
@@ -88,6 +89,17 @@ def test_constants_named_in_docs_actually_exist(doc):
         # runbook because setting them wrongly is what makes a parallel run
         # take the machine down.
         "CUDA_VISIBLE_DEVICES", "OMP_NUM_THREADS", "MKL_NUM_THREADS",
+        # Deployment settings for the web front end and the edge, which are
+        # real and checked elsewhere: SONGGEN_ALLOWED_ORIGINS is read in
+        # api/app/config.py, and the other two are an injection token in
+        # web/src/app/core plus the repository variable that fills it. This
+        # test guards the pipeline's own constants, and pulling those two
+        # trees into it would make config.py the place every deployment name
+        # has to be declared, which it is not.
+        "SONGGEN_ALLOWED_ORIGINS", "API_BASE_URL", "GOOGLE_CLIENT_ID",
+        # The one real credential in the deployment, and the only reason it is
+        # named in a runbook is to say it must be marked secret.
+        "AZURE_STATIC_WEB_APPS_API_TOKEN",
     }
     missing = sorted(_referenced_constants(read(ROOT / doc)) - known - allowed)
     assert not missing, f"{doc} names constants that do not exist: {missing}"

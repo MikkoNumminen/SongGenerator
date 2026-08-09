@@ -59,7 +59,15 @@ export class SubmitPage implements OnInit {
   ngOnInit(): void {
     // Health is asked once by the shell, at the top. Asking again here spent a
     // second request on every visit to answer a question already on screen.
-    this.loadBanks();
+    //
+    // With no backend configured there is nothing to ask. The address would be
+    // empty, so the request would go to `/banks` on this site, which a static
+    // host answers with index.html: a 200 full of HTML that arrives as a JSON
+    // parse error and tells nobody anything. The shell says what is actually
+    // wrong.
+    if (this.health.configured) {
+      this.loadBanks();
+    }
   }
 
   loadBanks(): void {

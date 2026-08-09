@@ -3,6 +3,7 @@ import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, inject, signal 
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 
+import { API_BASE_URL } from '../../core/api/api-config';
 import { stateForFailure } from '../../core/api/http-failure';
 import { JobReply } from '../../core/contract/dto';
 import { RUN_SOURCE } from '../../core/ports/run-source.port';
@@ -19,6 +20,7 @@ import { StatePanel } from '../../shared/state-panel/state-panel';
 export class HistoryPage implements OnInit {
   private readonly runs = inject(RUN_SOURCE);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly configured = inject(API_BASE_URL) !== '';
 
   readonly state = signal<AsyncState<readonly JobReply[]>>(idle());
 
@@ -27,6 +29,12 @@ export class HistoryPage implements OnInit {
   }
 
   load(): void {
+    // Nothing to read from. An empty address would request `/jobs` on this
+    // site, which a static host answers with index.html.
+    if (!this.configured) {
+      this.state.set(empty());
+      return;
+    }
     this.state.set(loading());
     this.runs.history().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       // An empty history is a real answer with its own wording, not a table

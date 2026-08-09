@@ -2,10 +2,11 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { EMPTY, Observable, catchError, defer, expand, map, of, startWith, switchMap, timer } from 'rxjs';
 
+import { API_BASE_URL } from '../api/api-config';
 import { stateForFailure } from '../api/http-failure';
 import { JobReply } from '../contract/dto';
 import { RUN_SOURCE } from '../ports/run-source.port';
-import { AsyncState, loading, ready } from '../state/async-state';
+import { AsyncState, failed, loading, ready } from '../state/async-state';
 
 /** How often to ask while a run is going. */
 export const POLL_MS = 1_500;
@@ -37,8 +38,15 @@ export const OFFLINE_POLL_MS = 8_000;
 @Injectable({ providedIn: 'root' })
 export class RunWatcher {
   private readonly runs = inject(RUN_SOURCE);
+  private readonly configured = inject(API_BASE_URL) !== '';
 
   watch(id: string): Observable<AsyncState<JobReply>> {
+    // With no address the request would go to `/jobs/<id>` on this site, which
+    // a static host answers with index.html, and the poll would keep asking
+    // forever for HTML it cannot read.
+    if (!this.configured) {
+      return of(failed('This site has not been told where its backend is.'));
+    }
     return defer(() => this.ask(id)).pipe(
       expand((state) =>
         this.isFinal(state)

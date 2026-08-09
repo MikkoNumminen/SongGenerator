@@ -5,7 +5,7 @@ import { Observable, catchError, defer, map, of, tap } from 'rxjs';
 import { API_BASE_URL } from '../api/api-config';
 import { stateForFailure } from '../api/http-failure';
 import { HealthReply } from '../contract/dto';
-import { AsyncState, idle, loading, ready, valueOf } from '../state/async-state';
+import { AsyncState, failed, idle, loading, ready, valueOf } from '../state/async-state';
 
 /**
  * Whether the machine that does the work is switched on.
@@ -32,6 +32,17 @@ export class BackendHealth {
 
   /** The raw state, for a view that renders all six cases. */
   readonly status = this.state.asReadonly();
+
+  /**
+   * Whether this deployment was told where its backend is.
+   *
+   * Distinct from being unreachable, and the difference matters to whoever is
+   * looking: "not answering" says a machine exists and is asleep, while this
+   * says nobody ever wrote down an address. Without the distinction a
+   * half-finished deployment looks like a switched-off desktop and the wrong
+   * person goes looking.
+   */
+  readonly configured = this.baseUrl !== '';
 
   /** Answered at least once, and answered. */
   readonly reachable = computed(() => this.state().kind === 'ready');
@@ -62,6 +73,20 @@ export class BackendHealth {
    * the answer can, without reaching into the signal and polling it.
    */
   check(): Observable<AsyncState<HealthReply>> {
+    // No address, no request. This used to fall back to localhost, which is
+    // fine on the machine running the edge and is a public page reaching into
+    // a stranger's computer anywhere else. Browsers now prompt about exactly
+    // that, and being the site that triggers the prompt is worse than being
+    // the site that admits it is unfinished.
+    if (!this.configured) {
+      const unset = failed(
+        'This site has not been told where its backend is, so there is ' +
+        'nothing for it to ask.',
+      );
+      this.state.set(unset);
+      return of(unset);
+    }
+
     // Everything, including the move to `loading`, happens on subscribe.
     // Setting it eagerly and returning a cold request meant `check()` without
     // a subscribe left the state at `loading` forever with no request ever

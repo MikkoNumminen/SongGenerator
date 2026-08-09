@@ -1,0 +1,5 @@
+{
+  "_comment": "Copy to config.json to point a local build somewhere other than the defaults. config.json is gitignored; the deployed one is written by .github/workflows/deploy-web.yml from repository variables.",
+  "apiBaseUrl": "http://127.0.0.1:8000",
+  "googleClientId": ""
+}
