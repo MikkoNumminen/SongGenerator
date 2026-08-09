@@ -519,6 +519,30 @@ class TestSequenceReplay:
             assert "#" not in p.unit.name, "a spoken clip came back as a slice"
             assert p.split is False
 
+    @pytest.mark.parametrize("never_split", [True, False])
+    @pytest.mark.parametrize("units_fn", [_spoken, _raw_spoken])
+    def test_replay_reproduces_whether_or_not_the_bank_splits(
+            self, tmp_path, never_split, units_fn):
+        """Every other test in this class declares never_split, but a sequence
+        bank is not obliged to. Without it the pool is enriched with slices and
+        joins, so unit_for is choosing from a different and much larger set,
+        and the take named in the file has to still win against them."""
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "levels": {"conservative": {"strategy": "sequence"}},
+            "never_split": never_split,
+        }), encoding="utf-8")
+        units = units_fn(5)
+        plan, arrangement, _ = arrange.build(
+            _slots(), units, "conservative", 11,
+            song="fixture", bank="fixture", bank_dir=tmp_path)
+
+        replayed = arrange.realise(
+            arrange.parse_text(arrange.render_text(arrangement),
+                               bank_words={w for u in units for w in u.words}),
+            _slots(), units, bank_dir=tmp_path)
+
+        assert self._fingerprint(replayed) == self._fingerprint(plan)
+
     def test_replay_without_a_bank_dir_stays_exactly_as_before(self, tmp_path):
         """The default is the behaviour every existing .arr depends on."""
         units = _arranged_bank()
