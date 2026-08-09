@@ -1,0 +1,61 @@
+# SongGenerator, as homelab-control sees it.
+#
+# Install to ~/.config/systemd/user/homelab-songgenerator.service inside WSL.
+# The control panel discovers any unit matching homelab-*; see
+# control-cli/ONBOARDING.md for the contract this follows.
+#
+# This one differs from the other three in a way worth stating: ExecStart is a
+# WINDOWS executable, run over WSL interop. The pipeline needs the GPU and the
+# Windows venv that torch is installed into, so the process has to be a Windows
+# one. systemd still supervises it properly, which was measured rather than
+# assumed: the unit reports active, the Windows process logs into journald, and
+# stopping the unit leaves nothing behind.
+#
+# It is the same interop trick ragctl already uses to drive tailscale.exe.
+
+[Unit]
+Description=SongGenerator edge on 8020, public on Funnel port 10000
+After=network.target
+
+[Service]
+Type=simple
+
+# Deployment settings live outside the repository, so a home machine's
+# addresses and an allowlist of real people are not committed. Copy
+# ops/songgenerator.env.example to ~/.config/songgenerator.env and fill it in.
+EnvironmentFile=%h/.config/songgenerator.env
+
+# Every one of those has to be named here as well, or the Windows process never
+# sees it. WSL does not pass Linux environment variables across the interop
+# boundary unless WSLENV lists them, and nothing warns you: the service starts,
+# answers /health with "ok", and reports auth_configured false because it was
+# handed no client id and no allowlist. It fails closed, so nobody gets in, but
+# it looks healthy while being unusable.
+#
+# Measured rather than guessed: a plain variable arrives as None on the Windows
+# side, and the same variable with WSLENV naming it arrives intact.
+Environment=WSLENV=SONGGEN_GOOGLE_CLIENT_ID:SONGGEN_ALLOWED_EMAILS:SONGGEN_ALLOWED_ORIGINS
+
+WorkingDirectory=/mnt/d/koodaamista/LuokkaretkiGenerator
+ExecStart=/mnt/d/koodaamista/LuokkaretkiGenerator/.venv/Scripts/python.exe -m uvicorn app.main:build --factory --app-dir api --host 127.0.0.1 --port 8020
+
+# The funnel goes up with the service and down with it, so the toggle in the
+# control panel is the whole truth about whether this is reachable.
+#
+# Scoped to port 10000 and nothing else. The funnel is shared: 443 belongs to
+# the RAG chat and 8443 to the oauth2-proxy. `tailscale funnel reset` or a
+# blanket `off` would tear those down, so neither appears here.
+# The path is quoted, not backslash-escaped. systemd refuses an executable
+# path containing an escaped space outright: "Executable path contains
+# special characters ... unit will not be started".
+ExecStartPost="/mnt/c/Program Files/Tailscale/tailscale.exe" funnel --bg --https=10000 8020
+ExecStopPost=-"/mnt/c/Program Files/Tailscale/tailscale.exe" funnel --https=10000 off
+
+Restart=on-failure
+RestartSec=3
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=songgenerator
+
+[Install]
+WantedBy=default.target

@@ -461,6 +461,70 @@ blank screen rather than as an error:
 
 ---
 
+## Let people sign in
+
+Every route but the health check is behind Google sign-in and an allowlist of
+named accounts, because the pipeline takes an arbitrary link and spends a GPU
+on it. The browser only carries a token; the edge decides who may use anything.
+
+**1. Make an OAuth client.** In the Google Cloud console this lives under
+**Google Auth platform**, then **Clients**, then **Create client**. It used to
+be under APIs and Services, Credentials, and older instructions still say so.
+
+Application type **Web application**.
+
+Under **Authorised JavaScript origins**, add the site, and the dev server if
+you develop against it. Google wants the port-less form as well as the one with
+a port:
+
+```
+https://<the site hostname>
+http://localhost
+http://localhost:4200
+```
+
+Authorised **redirect URIs** stay empty. Identity Services hands the token back
+to the page through a callback rather than redirecting anywhere, so a redirect
+URI here is one more thing to get wrong for no benefit.
+
+If this is the first client in the project, the console asks for the consent
+screen first. **External**, with yourself added as a **test user**, is enough
+and is the honest shape: the service is meant for a named few rather than for
+whoever finds it. Leaving it in Testing rather than publishing it costs nothing
+here, because only ID tokens are used and a fresh one is issued at each
+sign-in; the seven-day limit that catches people in Testing applies to refresh
+tokens, which this never asks for.
+
+**2. Give the client id to both halves.** The pipeline variable
+`GOOGLE_CLIENT_ID` puts it in the site. The edge needs the same id, plus the
+list of who may actually use it:
+
+```powershell
+$env:SONGGEN_GOOGLE_CLIENT_ID = "<client id>.apps.googleusercontent.com"
+$env:SONGGEN_ALLOWED_EMAILS   = "you@example.com,someone.else@example.com"
+```
+
+Both are required for anyone to get in. With either missing the edge reports
+sign-in as unconfigured, and the site says so rather than showing a button that
+cannot work.
+
+The two lists do different jobs and both matter. The client id decides which
+site Google will issue a token to; the allowlist decides whose token this
+service accepts. A real Google account that is not on the list gets no further
+than no account at all.
+
+**3. Check it.** Sign in on the site, then confirm the edge agrees:
+
+```powershell
+curl.exe -H "Authorization: Bearer <token>" https://<edge>/banks
+```
+
+A 200 means the whole chain works. A 401 naming the allowlist means Google
+issued a token for somebody this service does not accept, which is the check
+doing its job.
+
+---
+
 ## Verify a change
 
 ```powershell

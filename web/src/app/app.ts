@@ -2,12 +2,13 @@ import { ChangeDetectionStrategy, Component, OnInit, inject } from '@angular/cor
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 import { BackendHealth } from './core/health/backend-health';
+import { GoogleSignIn } from './core/auth/google-sign-in';
 import { AUTH_CONTEXT } from './core/ports/auth-context.port';
 
 @Component({
   selector: 'app-root',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, GoogleSignIn],
   templateUrl: './app.html',
   styleUrl: './app.css',
 })
@@ -23,12 +24,5 @@ export class App implements OnInit {
     // first frame instead of each one discovering the machine is off for
     // itself.
     this.health.check().subscribe();
-  }
-
-  signIn(): void {
-    void this.auth.signIn().catch(() => {
-      // Sign-in failing is not a page-breaking event. The user stays signed
-      // out, and every guarded route already says what that means.
-    });
   }
 }

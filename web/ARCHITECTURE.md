@@ -51,11 +51,17 @@ fresh clone and would have to be edited every time a bank is added.
 
 ```
 src/app/
-  core/      ports, adapters, auth, health. Injectable, no components
+  core/      ports, adapters, auth, health. Injectable, and one component
   shared/    presentational pieces with no feature knowledge
   features/
     submit/  job/  results/  history/
 ```
+
+The one component in `core` is the Google sign-in button, and the exception is
+worth stating rather than hiding. It is not presentational: Google renders into
+the element itself, from a script the adapter loads, using a client id only the
+adapter knows. Taking all of that through inputs would be the same code with an
+extra hop, and would leave `shared` knowing what Google is.
 
 A feature may import `core` and `shared`. **A feature may never import another
 feature.** Where two need the same thing, it moves to `shared`, or they talk

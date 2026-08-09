@@ -101,6 +101,59 @@ never see. Resolve it on a real vocal.
 
 ## Open items
 
+- **Give the site a name under mikkonumminen.dev. Parked, and not important.**
+
+  It works now at the Azure address. Everything below is cosmetics.
+
+  `mikkonumminen.dev/songGenerator` turned out to cost more than it is worth. The
+  domain's DNS is on Cloudflare but the record is DNS-only, so traffic goes
+  straight to Vercel and a Cloudflare worker never sees it. Making the path work
+  means proxying the apex, which puts Cloudflare in front of the whole personal
+  site to serve one subpath. A worker was written, deployed, found inert, and
+  deleted again.
+
+  If it is ever picked up, a subdomain is the cheaper shape: one CNAME from
+  `songgenerator.mikkonumminen.dev` to the Static Web App, left unproxied so
+  Azure can issue its own certificate. Azure supports two custom domains on the
+  free plan, so no proxy is needed at all and the app keeps a root base href.
+  Adding the record needs a token with DNS edit on that zone; the one wrangler
+  logs in with carries `zone:read` only, which finds the zone and cannot write
+  to it.
+
+  The one thing here that is not cosmetic is already its own item below: from a
+  machine on the tailnet the site reports the backend as unreachable, because
+  MagicDNS resolves the funnel name to a private address.
+
+- **Put the edge behind Cloudflare too, not just the site.**
+
+  The backend is reachable at a Tailscale Funnel address, and that works for
+  everybody except the person most likely to be testing it. On a machine signed
+  in to the tailnet, MagicDNS resolves the funnel hostname to the node's own
+  `100.x` address, so a browser sees a public page reaching into a private
+  network and refuses. The site then reports the machine as not answering while
+  `curl` to the same address returns in 20 ms, because curl has no such policy.
+  Checked from outside the tailnet, `/health` answers normally, so this is
+  purely an operator-side problem, and purely a permanent one.
+
+  A Cloudflare tunnel to a real hostname removes it. The name resolves to a
+  public address everywhere, including at the machine running the service, so
+  the site behaves the same for the operator as for anyone else. There is
+  already a Cloudflare worker in `ops/cloudflare/` serving the site under
+  `mikkonumminen.dev/songGenerator`, so the account, the domain and the tooling
+  are all in place; this is a second route rather than new infrastructure.
+
+  It also collapses a class of setup. With the API under the same domain as the
+  site there is no cross-origin request at all, which means no
+  `SONGGEN_ALLOWED_ORIGINS` to keep in step and no preflight to debug when it is
+  wrong.
+
+  What it costs is the funnel's honesty about being off. The systemd unit
+  currently opens and closes the funnel with the service, so the toggle in the
+  control panel is the whole truth about reachability. A Cloudflare tunnel is a
+  separate daemon with its own lifetime, so keeping that property means the unit
+  starting and stopping `cloudflared` as well, or accepting that the hostname
+  resolves while the service behind it is down.
+
 - **Words hold together now. The break inside a shout pairing is the next
   gain, and it is a bank problem more than a code one.**
 
