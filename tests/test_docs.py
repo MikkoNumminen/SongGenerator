@@ -96,7 +96,8 @@ def test_constants_named_in_docs_actually_exist(doc):
         # test guards the pipeline's own constants, and pulling those two
         # trees into it would make config.py the place every deployment name
         # has to be declared, which it is not.
-        "SONGGEN_ALLOWED_ORIGINS", "API_BASE_URL", "GOOGLE_CLIENT_ID",
+        "SONGGEN_ALLOWED_ORIGINS", "SONGGEN_ALLOWED_EMAILS",
+        "SONGGEN_GOOGLE_CLIENT_ID", "API_BASE_URL", "GOOGLE_CLIENT_ID",
         # The one real credential in the deployment, and the only reason it is
         # named in a runbook is to say it must be marked secret.
         "AZURE_STATIC_WEB_APPS_API_TOKEN",

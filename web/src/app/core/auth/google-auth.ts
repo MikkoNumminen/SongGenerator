@@ -25,6 +25,13 @@ interface GoogleIdentity {
         auto_select?: boolean;
       }): void;
       prompt(): void;
+      renderButton(parent: HTMLElement, options: {
+        type?: 'standard' | 'icon';
+        theme?: 'outline' | 'filled_blue' | 'filled_black';
+        size?: 'large' | 'medium' | 'small';
+        text?: 'signin_with' | 'signup_with' | 'continue_with';
+        shape?: 'rectangular' | 'pill';
+      }): void;
       disableAutoSelect(): void;
     };
   };
@@ -84,7 +91,42 @@ export class GoogleAuth implements AuthContext {
     return this.raw;
   }
 
+  /**
+   * Put Google's own button in `element`.
+   *
+   * This is the way in, rather than One Tap. `prompt()` is suppressed often
+   * and quietly: a cooldown after somebody dismissed it once, third-party
+   * cookie rules, a browser that has moved to FedCM. When it is suppressed it
+   * does nothing at all, so a person clicks Sign in and the page sits there.
+   * A rendered button is the flow Google treats as primary, and it is visibly
+   * present or visibly absent.
+   *
+   * Throws if it cannot be shown, so a caller can say so instead of leaving an
+   * empty space where a button should be.
+   */
+  async mountButton(element: HTMLElement): Promise<void> {
+    const identity = await this.ready();
+    identity.accounts.id.renderButton(element, {
+      type: 'standard',
+      theme: 'outline',
+      size: 'large',
+      text: 'signin_with',
+      shape: 'rectangular',
+    });
+  }
+
+  /**
+   * One Tap, offered on top of the button rather than instead of it.
+   *
+   * Kept because the port declares it and because when it does appear it is
+   * the shortest path in. Nothing depends on it working.
+   */
   async signIn(): Promise<void> {
+    const identity = await this.ready();
+    identity.accounts.id.prompt();
+  }
+
+  private async ready(): Promise<GoogleIdentity> {
     if (!this.configured) {
       throw new Error(
         'Sign-in is not configured for this deployment: no Google client id.',
@@ -94,11 +136,13 @@ export class GoogleAuth implements AuthContext {
     if (typeof google === 'undefined') {
       throw new Error('Google sign-in could not be loaded.');
     }
+    // Initialising twice is harmless and re-registers the same callback, which
+    // is what makes both entry points safe to call in either order.
     google.accounts.id.initialize({
       client_id: this.clientId,
       callback: (response) => this.accept(response.credential),
     });
-    google.accounts.id.prompt();
+    return google;
   }
 
   signOut(): void {

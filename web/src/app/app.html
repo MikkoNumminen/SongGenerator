@@ -8,12 +8,8 @@
     @if (auth.user(); as user) {
       <span class="email">{{ user.email }}</span>
       <button type="button" (click)="auth.signOut()">Sign out</button>
-    } @else if (!auth.configured) {
-      <span class="note" title="No Google client id is set for this deployment">
-        Sign-in not configured
-      </span>
     } @else {
-      <button type="button" (click)="signIn()">Sign in with Google</button>
+      <app-google-sign-in />
     }
   </div>
 </header>
