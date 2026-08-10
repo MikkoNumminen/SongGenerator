@@ -458,16 +458,26 @@ reports the backend as unreachable for the one person most likely to be testing
 it, while working for everyone else. Vercel's edge is not on the tailnet, so
 routing through it makes the address behave the same for everybody.
 
-**5. Let the browser call it.** A page on `azurestaticapps.net` calling that
-address is cross-origin, so the edge has to allow it. On the machine running
-the edge:
+**5. Let the browser call it.** A page on `azurestaticapps.net` calling the edge
+is cross-origin, so the edge has to allow it. On the machine running the edge:
 
 ```powershell
 $env:SONGGEN_ALLOWED_ORIGINS = "https://<the site hostname>"
 ```
 
+**The site's hostname, not the API's.** An origin is a property of the page
+making the request, so routing through the proxy does not change it: the
+browser still says it came from the Static Web App. Adding the proxy's domain
+here allows nothing and protects nothing.
+
 Without it every request fails the preflight and the site reports the machine
 as unreachable, which is technically true and thoroughly unhelpful.
+
+Measured through the proxy rather than assumed. A preflight for an
+authenticated `GET`, carrying the site's origin, comes back with
+`Access-Control-Allow-Origin` echoing that origin, `Allow-Headers` including
+`Authorization`, and `Vary: Origin`. So the proxy forwards the preflight and
+the edge answers it as if the browser had called directly.
 
 Two things about a single page app on a static host, both of which fail as a
 blank screen rather than as an error:
