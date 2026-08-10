@@ -488,6 +488,37 @@ blank screen rather than as an error:
 - There is no file at `/runs/abc`, so `web/public/staticwebapp.config.json`
   rewrites unknown paths to `index.html` and hands them to the router.
 
+### Publishing without the pipeline
+
+The pipeline is the normal way and this is the way out when it is unreachable,
+which has happened: `dev.azure.com` redirects a personal Microsoft account into
+the Azure Portal, and the portal's tenant picker then refuses that account
+outright (`AADSTS16000`). With no access to the pipeline there is no way to
+change a variable and no way to press Run, and a broken site stays broken.
+
+`az` on a machine that is signed in can hand over the deploy token, and the
+Static Web Apps CLI takes it directly:
+
+```bash
+token=$(az staticwebapp secrets list --name songgen-web \
+        --query "properties.apiKey" -o tsv)
+cd web && npx ng build
+cat > dist/songgen-web/browser/config.json <<'JSON'
+{ "apiBaseUrl": "...", "googleClientId": "..." }
+JSON
+npx --yes @azure/static-web-apps-cli deploy dist/songgen-web/browser \
+    --deployment-token "$token" --env production
+```
+
+The config file is written by hand here because nothing else is going to write
+it; the pipeline step that normally does is exactly what is being skipped.
+
+**What this costs is the guarantee that the site matches `main`.** A pipeline
+run is reproducible from a commit and this is not, so after using it, land the
+same change in git before the next push does. Any push touching `web/*` or
+`azure-pipelines.yml` triggers the pipeline, which rebuilds from `main` and
+silently reverts whatever was deployed by hand.
+
 ---
 
 ## Let people sign in
