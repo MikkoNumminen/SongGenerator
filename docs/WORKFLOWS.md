@@ -407,12 +407,11 @@ Hosted parallelism is no longer granted automatically. A new organisation needs
 either a grant request or an Azure subscription linked with billing configured,
 after which the free grant applies. This is friction rather than cost.
 
-**3. Give the pipeline three variables.** Pipeline, Edit, Variables:
+**3. Give the pipeline two variables.** Pipeline, Edit, Variables:
 
 | Variable | Value | Secret |
 |---|---|---|
 | `AZURE_STATIC_WEB_APPS_API_TOKEN` | see below | yes |
-| `API_BASE_URL` | the tunnel address, no trailing slash | no |
 | `GOOGLE_CLIENT_ID` | the OAuth client id, once there is one | no |
 
 The token is the one credential here, and it is enough on its own to publish to
@@ -422,13 +421,24 @@ the site, so it is marked secret and never committed:
 az staticwebapp secrets list --name songgen-web --query "properties.apiKey" -o tsv
 ```
 
-The other two are not secret and cannot be. The browser has to know where to
-send requests, so the address is in the shipped files however it gets there.
-Keeping them out of the repository stops a home machine's address living in git
-history; the allowlist on the edge is what actually protects the service.
+The client id is not secret and cannot be. The browser has to know which client
+signs people in, so it is in the shipped files however it gets there. The
+allowlist on the edge is what actually protects the service.
 
-Missing either is not a failure. The site falls back to the local backend and
-reports that nothing is answering, which it renders honestly.
+The backend address is no longer among these. It is `apiBaseUrl` in
+`azure-pipelines.yml`, because the edge is reached through a proxy on a domain
+this repository names everywhere, and hiding a public hostname bought nothing.
+Committing it also removes a trap worth knowing about even now: **editing a
+variable in the UI does not start a build**, and `config.json` is written
+during one, so the value changed and the site did not. A push to the pipeline
+file triggers the deploy that applies it.
+
+If you ever put the address back in the UI, use a different name. A variable
+set in the pipeline UI overrides one set in the YAML, so a UI `apiBaseUrl`
+would win silently over the committed one.
+
+Missing the client id is not a failure. The site falls back to the local
+backend and reports that nothing is answering, which it renders honestly.
 
 **4. Reach the backend from the internet.** It runs on a desktop behind a home
 connection, so it needs a tunnel. Tailscale Funnel is the free one:
@@ -437,18 +447,37 @@ connection, so it needs a tunnel. Tailscale Funnel is the free one:
 tailscale funnel 8000
 ```
 
-The address it prints is `API_BASE_URL`.
+The address it prints is where the edge answers. The site does not call it
+directly: `mikkonumminen.dev` proxies `/api/songgen/*` to it, and `apiBaseUrl`
+in `azure-pipelines.yml` points at that proxy instead.
 
-**5. Let the browser call it.** A page on `azurestaticapps.net` calling that
-address is cross-origin, so the edge has to allow it. On the machine running
-the edge:
+The proxy is not decoration. On any machine signed in to the tailnet, MagicDNS
+resolves a `*.ts.net` name to the node's own `100.x` address, so a browser sees
+a public page reaching into a private network and blocks it. The site then
+reports the backend as unreachable for the one person most likely to be testing
+it, while working for everyone else. Vercel's edge is not on the tailnet, so
+routing through it makes the address behave the same for everybody.
+
+**5. Let the browser call it.** A page on `azurestaticapps.net` calling the edge
+is cross-origin, so the edge has to allow it. On the machine running the edge:
 
 ```powershell
 $env:SONGGEN_ALLOWED_ORIGINS = "https://<the site hostname>"
 ```
 
+**The site's hostname, not the API's.** An origin is a property of the page
+making the request, so routing through the proxy does not change it: the
+browser still says it came from the Static Web App. Adding the proxy's domain
+here allows nothing and protects nothing.
+
 Without it every request fails the preflight and the site reports the machine
 as unreachable, which is technically true and thoroughly unhelpful.
+
+Measured through the proxy rather than assumed. A preflight for an
+authenticated `GET`, carrying the site's origin, comes back with
+`Access-Control-Allow-Origin` echoing that origin, `Allow-Headers` including
+`Authorization`, and `Vary: Origin`. So the proxy forwards the preflight and
+the edge answers it as if the browser had called directly.
 
 Two things about a single page app on a static host, both of which fail as a
 blank screen rather than as an error:
@@ -458,6 +487,37 @@ blank screen rather than as an error:
   every script after the page loads.
 - There is no file at `/runs/abc`, so `web/public/staticwebapp.config.json`
   rewrites unknown paths to `index.html` and hands them to the router.
+
+### Publishing without the pipeline
+
+The pipeline is the normal way and this is the way out when it is unreachable,
+which has happened: `dev.azure.com` redirects a personal Microsoft account into
+the Azure Portal, and the portal's tenant picker then refuses that account
+outright (`AADSTS16000`). With no access to the pipeline there is no way to
+change a variable and no way to press Run, and a broken site stays broken.
+
+`az` on a machine that is signed in can hand over the deploy token, and the
+Static Web Apps CLI takes it directly:
+
+```bash
+token=$(az staticwebapp secrets list --name songgen-web \
+        --query "properties.apiKey" -o tsv)
+cd web && npx ng build
+cat > dist/songgen-web/browser/config.json <<'JSON'
+{ "apiBaseUrl": "...", "googleClientId": "..." }
+JSON
+npx --yes @azure/static-web-apps-cli deploy dist/songgen-web/browser \
+    --deployment-token "$token" --env production
+```
+
+The config file is written by hand here because nothing else is going to write
+it; the pipeline step that normally does is exactly what is being skipped.
+
+**What this costs is the guarantee that the site matches `main`.** A pipeline
+run is reproducible from a commit and this is not, so after using it, land the
+same change in git before the next push does. Any push touching `web/*` or
+`azure-pipelines.yml` triggers the pipeline, which rebuilds from `main` and
+silently reverts whatever was deployed by hand.
 
 ---
 

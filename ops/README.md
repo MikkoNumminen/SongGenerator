@@ -56,30 +56,30 @@ The other thing systemd will not accept is a backslash-escaped space in an
 executable path. `/mnt/c/Program\ Files/...` is refused outright with
 "Executable path contains special characters"; the path has to be quoted.
 
-## The site looks broken from this machine, and only from this machine
+## Why the site does not call the funnel directly
 
-Opened here, the site reports "that machine is not answering" while `curl` to
-the same address returns in 20 ms. Both are correct.
+It cannot, from this machine. Fixed now, but the reason is worth keeping,
+because anything that points the browser back at a `*.ts.net` name brings it
+straight back.
 
-MagicDNS resolves the funnel's `*.ts.net` name to the node's own `100.x`
-tailnet address for anything on the tailnet. Chrome then sees a page served
-from a public site asking for something on a private network and refuses. It
-is the same protection that produced the "access other apps and services on
-this device" prompt earlier, and it is right to.
+MagicDNS resolves the funnel's name to the node's own `100.x` tailnet address
+for anything on the tailnet. Chrome then sees a page served from a public site
+asking for something on a private network and refuses. It is the same
+protection that produced the "access other apps and services on this device"
+prompt earlier, and it is right to. The site reported "that machine is not
+answering" while `curl` to the same address returned in 20 ms, and both were
+correct: curl has no private-network policy and will happily succeed while a
+browser refuses.
 
 Everywhere else the name resolves to Tailscale's public ingress and the request
-is one public host calling another, which nothing objects to. That was checked
-from outside the tailnet rather than assumed: `/health` fetched from an
-unrelated network returns `{"status":"ok","auth_configured":true,"busy":false}`.
+is one public host calling another, which nothing objects to. So the site
+worked for everyone except the person most likely to be testing it.
 
-So the site works for everyone except the person most likely to be testing it.
-To see it as a visitor does, open it on a phone with wifi off, or from any
-machine not signed in to the tailnet. `curl` from here is not a substitute: it
-has no private-network policy and will happily succeed while a browser refuses.
-
-If this becomes tiresome, the fix is to stop using a tailnet name for the
-backend: a Cloudflare tunnel to a real hostname makes it public everywhere,
-including here.
+The fix was to stop giving the browser a tailnet name. `mikkonumminen.dev`
+proxies `/api/songgen/*` to the funnel, and Vercel's edge is not on the
+tailnet, so it resolves the public ingress like any other visitor. The browser
+only ever talks to `mikkonumminen.dev`. The RAG chat on the same machine had
+already been arranged this way; this is the same trick, one project later.
 
 ## Ports, and the ones not to touch
 
@@ -105,8 +105,16 @@ on" never means this one is.
 
 The edge answers at `https://<node>.<tailnet>.ts.net:10000`. `tailscale status`
 prints the node's own name, and `tailscale funnel status` prints the whole URL
-as served. That URL is the value of `API_BASE_URL` for the site, and it is the
-one thing that changes if the node is renamed or the port moves.
+as served.
+
+The site does not use that URL. `mikkonumminen.dev` proxies `/api/songgen/*` to
+it, one rewrite per endpoint, and the site is pointed at the proxy through
+`apiBaseUrl` in `azure-pipelines.yml`. So renaming the node or moving the port
+means editing that proxy's rewrites, not the site's build.
+
+Routing through the proxy is what makes the site work on this machine at all;
+see the MagicDNS section above for why a tailnet name cannot be called from a
+browser here.
 
 The real name is not written down here on purpose. This repository is public,
 the funnel is a home machine, and the same machine serves the RAG chat on 443

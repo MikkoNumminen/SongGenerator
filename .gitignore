@@ -112,3 +112,9 @@ src/song_generator/vocabulary_local.py
 # Written per deployment, and per machine in development. See
 # web/public/config.example.json.
 web/public/config.json
+
+# Wrangler's local state. Its account cache carries a Cloudflare account id and
+# the account holder's email, and this repository is public. Ignored rather
+# than tidied away, because the way it got committed was a `git add -A` over
+# ops/, which will happen again.
+ops/cloudflare/

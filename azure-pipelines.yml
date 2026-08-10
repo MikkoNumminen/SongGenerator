@@ -35,6 +35,24 @@ variables:
   - name: outputPath
     value: web/dist/songgen-web/browser
 
+  # Where the browser sends its requests.
+  #
+  # This was a variable in the pipeline UI, so that a home machine's address
+  # did not live in git history. It no longer is one: the edge is reached
+  # through a proxy on a domain that is already named all over this repository,
+  # and hiding a public hostname buys nothing.
+  #
+  # Committing it also removes a trap. Editing a variable in the UI does not
+  # start a build, and config.json is written during one, so the value changed
+  # and the site did not, which looks exactly like the change not working.
+  # Here, a push to this file triggers the deploy that applies it.
+  #
+  # The name deliberately differs from the old API_BASE_URL. A variable set in
+  # the pipeline UI overrides one set here, so reusing the name would leave the
+  # stale UI value winning silently.
+  - name: apiBaseUrl
+    value: https://mikkonumminen.dev/api/songgen
+
 steps:
   - task: NodeTool@0
     displayName: Node 22
@@ -55,31 +73,38 @@ steps:
   # unlike a GitHub project page, so the default is right and passing a path
   # here would 404 every script after the page loaded.
   #
-  # It carried `--base-href /songGenerator/` for a while, for a Cloudflare
-  # proxy serving the app under a subpath of mikkonumminen.dev. That work is
-  # parked (see docs/TODO.md) and the site is reached at the Azure address, so
-  # the prefix pointed every asset at a path nothing serves. If the subpath
-  # domain is ever picked up, this flag and the worker's PREFIX have to change
-  # together; a subdomain, the cheaper shape suggested there, needs neither.
+  # It carried `--base-href /songGenerator/` for a while, for a proxy that was
+  # going to serve the app under a subpath. It does not: mikkonumminen.dev
+  # redirects `/songgenerator` here rather than proxying it, so the browser
+  # ends up on this hostname and the root is correct. A prefix would have
+  # pointed every asset at a path nothing serves.
+  #
+  # Only a proxy that keeps the subpath in the address bar would need it, and
+  # nothing does that today. See docs/TODO.md.
   - script: npx ng build
     displayName: Build
     workingDirectory: web
 
-  # Where the edge is and which client id signs people in. Written at deploy
-  # time rather than committed, so a home machine's address does not live in
-  # git history. Neither value is secret and neither can be: the browser has to
-  # know where to send requests. The allowlist on the edge is the protection.
+  # Where the edge is and which client id signs people in. Neither value is
+  # secret and neither can be: the browser has to know where to send requests,
+  # so both are in the shipped files however they get there. The allowlist on
+  # the edge is the protection.
+  #
+  # The address comes from the variables block above; the client id is still a
+  # pipeline variable, since it belongs to the deployment rather than to this
+  # file.
   #
   # Absent, the site falls back to the local backend and honestly reports that
   # nothing is answering, which is a state it renders properly.
   - script: |
       cat > "$(outputPath)/config.json" <<JSON
       {
-        "apiBaseUrl": "$(API_BASE_URL)",
+        "apiBaseUrl": "$(apiBaseUrl)",
         "googleClientId": "$(GOOGLE_CLIENT_ID)"
       }
       JSON
       echo "wrote $(outputPath)/config.json"
+      cat "$(outputPath)/config.json"
     displayName: Write the runtime config
 
   - task: AzureStaticWebApp@0
