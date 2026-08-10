@@ -125,14 +125,108 @@ class FetchResult:
         }
 
 
+# Which YouTube client to ask as, in order, and why there is more than one.
+#
+# The default is best: it is what yt-dlp picks for itself and it offers the
+# high resolutions _FORMAT wants. But YouTube serves some videos nothing at all
+# through it -- the page loads and only storyboards come back, so the failure
+# reads as "This video is not available" when the video is fine and a browser
+# plays it happily. Measured on three children's songs in a row.
+#
+# Asking as the Android app gets those, at 360p with audio rather than at the
+# best available. That is a real loss for cutting the video afterwards and no
+# loss at all for the singing, which is the part this pipeline needs, so it is
+# a fallback rather than the default: try for quality, settle for existing.
+_CLIENTS: tuple[dict[str, Any], ...] = (
+    {},
+    {"extractor_args": {"youtube": {"player_client": ["android"]}}},
+)
+
+
 def _probe(url: str) -> dict[str, Any]:
     """Ask the site what the URL holds, without downloading. Network."""
     import yt_dlp
 
-    opts = {"quiet": True, "noplaylist": True, "format": _FORMAT}
+    last: Exception | None = None
+    for client in _CLIENTS:
+        opts = {"quiet": True, "no_warnings": True, "noplaylist": True,
+                "format": _FORMAT, **client}
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+            return dict(info or {})
+        except Exception as exc:
+            last = exc
+    raise last if last else FetchError(f"could not read {url}")
+
+
+def _has_media(info: dict[str, Any]) -> bool:
+    """Whether anything in this page's formats is actually a song.
+
+    Storyboards are the thumbnail grids every YouTube page carries, and they
+    are formats like any other, so "it returned formats" is not the same as
+    "there is something to download".
+    """
+    for fmt in info.get("formats") or []:
+        if fmt.get("protocol") == "mhtml" or fmt.get("ext") == "mhtml":
+            continue
+        if fmt.get("acodec", "none") != "none" or fmt.get("vcodec", "none") != "none":
+            return True
+    return False
+
+
+def _probe_without_format_filter(url: str) -> dict[str, Any]:
+    """Ask what formats exist at all, rather than which one to take. Network.
+
+    Separate from _probe in two ways that both matter here. No format filter,
+    because _FORMAT fails selection before the formats can be looked at, and
+    the formats are the question. And the web client, because the default one
+    gives up before reporting any.
+    """
+    import yt_dlp
+
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "noplaylist": True,
+        "extractor_args": {"youtube": {"player_client": ["web"]}},
+        # Omitting a format is not the same as not selecting one: yt-dlp then
+        # applies its own default and raises "Requested format is not
+        # available" on exactly the pages this exists to describe, which is
+        # how the first version of this silently never fired.
+        "ignore_no_formats_error": True,
+    }
     with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-    return dict(info or {})
+        return dict(ydl.extract_info(url, download=False) or {})
+
+
+def _diagnose(url: str, exc: Exception) -> str:
+    """A truer sentence than the one yt-dlp hands back, where there is one.
+
+    "This video is not available" covers two different situations and reads
+    like the first: the page is gone, or the page is fine and YouTube is
+    withholding every playable stream from a non-browser client. Told the
+    first when it is the second, somebody edits the address, tries the same
+    link again, and concludes the tool is broken. It is not; it is being
+    refused.
+
+    The default client cannot tell them apart, because it fails before it
+    reports any formats. The web client extracts the page and answers with
+    storyboards alone, which is the signal. It costs one extra request, only
+    ever on the path that has already failed.
+    """
+    generic = f"could not read {url}: {exc}"
+    try:
+        info = _probe_without_format_filter(url)
+    except Exception:
+        return generic
+
+    if info and not _has_media(info):
+        return (f"{url} loads, but the site offered this tool no audio or "
+                f"video for it, only thumbnails. No change to the address "
+                f"helps. A browser can still play it, so saving the audio "
+                f"another way and passing that file works.")
+    return generic
 
 
 def _download(url: str, target: Path) -> None:
@@ -148,18 +242,31 @@ def _download(url: str, target: Path) -> None:
     """
     import yt_dlp
 
-    opts = {
-        "format": _FORMAT,
-        "merge_output_format": "mp4",
-        # The extension placeholder is required; merging rewrites it to mp4.
-        "outtmpl": str(target.with_suffix("")) + ".%(ext)s",
-        "noplaylist": True,
-        "postprocessors": [{"key": "FFmpegMetadata"}],
-        "quiet": True,
-        "no_warnings": True,
-    }
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        ydl.download([url])
+    # The same fallback the probe makes, for the same reason. Without it a
+    # video that probed only because the Android client answered would fail
+    # here instead, which is a worse place to fail: after the caller has been
+    # told the title, the duration and where the file is going.
+    last: Exception | None = None
+    for client in _CLIENTS:
+        opts = {
+            "format": _FORMAT,
+            "merge_output_format": "mp4",
+            # The extension placeholder is required; merging rewrites it to mp4.
+            "outtmpl": str(target.with_suffix("")) + ".%(ext)s",
+            "noplaylist": True,
+            "postprocessors": [{"key": "FFmpegMetadata"}],
+            "quiet": True,
+            "no_warnings": True,
+            **client,
+        }
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                ydl.download([url])
+            return
+        except Exception as exc:
+            last = exc
+    if last:
+        raise last
 
 
 def recorded_address(slug: str, sources: Path) -> str | None:
@@ -231,7 +338,7 @@ def fetch(url: str, out_dir: str | Path = "input") -> FetchResult:
     except FetchError:
         raise
     except Exception as exc:  # yt-dlp raises its own hierarchy; wrap it once.
-        raise FetchError(f"could not read {url}: {exc}") from exc
+        raise FetchError(_diagnose(url, exc)) from exc
 
     if info.get("_type") == "playlist":
         raise FetchError(
