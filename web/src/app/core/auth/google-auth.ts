@@ -2,6 +2,7 @@ import { Injectable, InjectionToken, computed, inject, signal } from '@angular/c
 
 import { AuthContext, SignedInUser } from '../ports/auth-context.port';
 import { IdTokenClaims, isExpired, readClaims } from './id-token';
+import { SessionStore } from './session-store';
 
 /**
  * The Google client id this deployment signs in with.
@@ -66,9 +67,21 @@ const LOAD_TIMEOUT_MS = 15_000;
 @Injectable({ providedIn: 'root' })
 export class GoogleAuth implements AuthContext {
   private readonly clientId = inject(GOOGLE_CLIENT_ID);
+  private readonly sessions = inject(SessionStore);
 
   private readonly claims = signal<IdTokenClaims | null>(null);
   private raw: string | null = null;
+
+  constructor() {
+    // A session survives a page load, which is the difference between being
+    // signed in and being asked again on every refresh. Restored through the
+    // same door a fresh credential comes in by, so a stored token that has
+    // expired or been tampered with is discarded rather than trusted.
+    const stored = this.sessions.read();
+    if (stored) {
+      this.accept(stored);
+    }
+  }
   private loading: Promise<void> | null = null;
   private initialised = false;
 
@@ -183,11 +196,19 @@ export class GoogleAuth implements AuthContext {
     }
     this.raw = credential ?? null;
     this.claims.set(claims);
+    if (credential) {
+      this.sessions.write(credential);
+    }
   }
 
   private forget(): void {
     this.raw = null;
     this.claims.set(null);
+    // Cleared here rather than only in signOut, because this is also the path
+    // an expired token takes. A token left behind would be restored on the
+    // next load and thrown away again, which looks like a session that comes
+    // back for a moment and then does not.
+    this.sessions.clear();
   }
 
   private loadScript(): Promise<void> {
