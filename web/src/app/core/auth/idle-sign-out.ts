@@ -38,17 +38,22 @@ export class IdleSignOut {
       return;
     }
     const seen = () => (this.lastSeen = Date.now());
+    // Named, so it can be taken off again. As an inline arrow it stayed on the
+    // document for good: harmless for one application that is destroyed with
+    // the page, and a leak across a suite, where every test adds another to
+    // the same document.
+    const woken = () => {
+      if (!this.document.hidden) {
+        seen();
+      }
+    };
     const events = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
 
     this.zone.runOutsideAngular(() => {
       for (const name of events) {
         this.document.addEventListener(name, seen, { passive: true });
       }
-      this.document.addEventListener('visibilitychange', () => {
-        if (!this.document.hidden) {
-          seen();
-        }
-      });
+      this.document.addEventListener('visibilitychange', woken);
 
       // Checked on a coarse interval rather than by scheduling a timeout for
       // the exact moment. A machine that sleeps stops timers, and a session
@@ -68,6 +73,7 @@ export class IdleSignOut {
       for (const name of events) {
         this.document.removeEventListener(name, seen);
       }
+      this.document.removeEventListener('visibilitychange', woken);
       if (this.timer !== null) {
         clearInterval(this.timer);
         this.timer = null;
