@@ -16,8 +16,14 @@ trigger:
     # The audio pipeline is most of this repository and has nothing to do with
     # the site. Building it on every commit would burn the free minutes on
     # changes that cannot affect what gets published.
+    #
+    # `web`, not `web/*`. These are path prefixes rather than globs, so the
+    # starred version was looked for literally and matched nothing: every
+    # deploy this site has had was triggered by a change to this file, and a
+    # front end rewritten under `web/src` sat in main without ever being
+    # published. A directory here means everything beneath it.
     include:
-      - web/*
+      - web
       - azure-pipelines.yml
 
 # No validation build on pull requests. The free grant is 1800 minutes a month
