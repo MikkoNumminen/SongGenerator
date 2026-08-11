@@ -474,8 +474,8 @@ weak stem is the usual cause.
 ## Put the site online
 
 The front end is hosted on Azure Static Web Apps, Free plan, and published by
-`azure-pipelines.yml`. What runs in Azure and what deliberately does not is in
-[AZURE.md](AZURE.md).
+`.github/workflows/deploy.yml`. What runs in Azure and what deliberately does
+not is in [AZURE.md](AZURE.md).
 
 **1. Create the site.** Once, from a machine signed in with `az login`:
 
@@ -487,45 +487,57 @@ az deployment sub create  --location westeurope --template-file infra\main.bicep
 `what-if` changes nothing and prints what the second command would do. Both
 create a resource group `rg-songgen-web` and a Free-plan site in it.
 
-**2. Point a pipeline at this repository.** Azure DevOps, Pipelines, New, using
-the existing `azure-pipelines.yml`.
+**2. Nothing to point anywhere.** `.github/workflows/deploy.yml` is already in
+the repository, so a push to `main` that touches `web/` builds and publishes.
+GitHub Actions is unmetered on standard runners for a public repository: no
+grant request, no second console, no organisation to belong to.
 
-Hosted parallelism is no longer granted automatically. A new organisation needs
-either a grant request or an Azure subscription linked with billing configured,
-after which the free grant applies. This is friction rather than cost.
+This used to be Azure DevOps and `azure-pipelines.yml`, which is still here
+with its trigger off so the two can be read side by side.
+[AZURE.md](AZURE.md) has why it moved. The short version is that it stopped
+producing runs and nothing in the repository could tell.
 
-**3. Give the pipeline two variables.** Pipeline, Edit, Variables:
+**3. Give the repository two secrets.** GitHub, Settings, Secrets and
+variables, Actions:
 
-| Variable | Value | Secret |
-|---|---|---|
-| `AZURE_STATIC_WEB_APPS_API_TOKEN` | see below | yes |
-| `GOOGLE_CLIENT_ID` | the OAuth client id, once there is one | no |
+| Secret | Value |
+|---|---|
+| `AZURE_STATIC_WEB_APPS_API_TOKEN` | see below |
+| `GOOGLE_CLIENT_ID` | the OAuth client id, once there is one |
 
 The token is the one credential here, and it is enough on its own to publish to
-the site, so it is marked secret and never committed:
+the site, so it is never committed:
 
 ```powershell
 az staticwebapp secrets list --name songgen-web --query "properties.apiKey" -o tsv
+gh secret set AZURE_STATIC_WEB_APPS_API_TOKEN
+gh secret set GOOGLE_CLIENT_ID
 ```
+
+`gh secret set` with no value prompts for one and does not echo it, which is
+why it is written that way rather than piped from the command above it.
 
 The client id is not secret and cannot be. The browser has to know which client
 signs people in, so it is in the shipped files however it gets there. The
 allowlist on the edge is what actually protects the service.
 
-The backend address is no longer among these. It is `apiBaseUrl` in
-`azure-pipelines.yml`, because the edge is reached through a proxy on a domain
-this repository names everywhere, and hiding a public hostname bought nothing.
-Committing it also removes a trap worth knowing about even now: **editing a
-variable in the UI does not start a build**, and `config.json` is written
-during one, so the value changed and the site did not. A push to the pipeline
-file triggers the deploy that applies it.
+Both are secrets here even though only one is. GitHub's plain variables are
+readable by any workflow in any fork's pull request, and the client id being
+public in the shipped files is not a reason to hand it to arbitrary workflow
+code as well.
 
-If you ever put the address back in the UI, use a different name. A variable
-set in the pipeline UI overrides one set in the YAML, so a UI `apiBaseUrl`
-would win silently over the committed one.
+The backend address is not among these. It is `API_BASE_URL` in
+`.github/workflows/deploy.yml`, because the edge is reached through a proxy on
+a domain this repository names everywhere, and hiding a public hostname bought
+nothing. Committing it also removes a trap worth knowing about even now:
+**editing a value in a web UI does not start a build**, and `config.json` is
+written during one, so the value changed and the site did not. Editing the
+workflow triggers the deploy that applies it.
 
-Missing the client id is not a failure. The site falls back to the local
-backend and reports that nothing is answering, which it renders honestly.
+Missing the client id is not a failure. Sign-in is unavailable and the site
+says so, which it renders honestly. Missing the address is not a failure
+either: away from localhost the site assumes no backend rather than probing the
+visitor's own machine, and reports that nothing is answering.
 
 **4. Check that a deploy actually happened.** Not optional, and not the same
 question as whether the build was green:
@@ -543,13 +555,13 @@ This step exists because a front end was rewritten, reviewed, merged with
 everything green, and never published: the site went on serving a build six
 commits old while nothing anywhere said so.
 
-The filter read `web/*` at the time, and it is now `web`, which under every
-reading of the documentation means everything beneath the directory. The
-starred form is genuinely ambiguous: Azure Pipelines supports wildcards in path
-filters and `**` is the form that crosses directories, which would leave a
-single `*` matching only the files sitting directly in `web`, while for older
-servers the documentation says a trailing `*` does nothing different from
-naming the directory. Writing the directory sidesteps the question.
+The suspect at the time was the Azure pipeline's path filter, `web/*`, which
+is genuinely ambiguous: Azure Pipelines supports wildcards and `**` is the form
+that crosses directories, which would leave a single `*` matching only the
+files sitting directly in `web`, while for older servers the documentation says
+a trailing `*` does nothing different from naming the directory. It was changed
+to `web`, and nothing ran. The workflow that publishes today writes `web/**`,
+where GitHub's own documentation is unambiguous.
 
 **What is established, and what is not.** All five deploys this site has had
 came from commits that also touched `azure-pipelines.yml`, the filter's other
@@ -559,17 +571,20 @@ and it is not a proof: the merge that should have published the design added
 under every reading, and no build ran. So something else may be involved, and
 the repository cannot see it.
 
-The Azure DevOps run list is where to look, in this order:
+The repository's Actions tab is where to look now, in this order:
 
-1. **Is there a run at all** for the commit? If not, the trigger did not fire.
-   Check the pipeline's own Triggers tab for "Override the YAML trigger from
-   here", which silently replaces what this file says.
-2. **Is a run queued and not starting?** That is usually the free parallelism
-   grant being used up. It queues forever rather than failing, which looks
-   exactly like no trigger at all.
-3. **Did a run fail?** Then the step that failed says why, and the site keeps
-   serving the previous build, which is the intended behaviour rather than a
-   second fault.
+1. **Is there a run at all** for the commit? If not, the paths filter did not
+   match, and `web/**` is the thing to read.
+2. **Did the publish step succeed while the check step failed?** Then the
+   upload went somewhere other than this site, and the deployment token is the
+   thing to check.
+3. **Did a run fail earlier than that?** Then the step that failed says why,
+   and the site keeps serving the previous build, which is the intended
+   behaviour rather than a second fault.
+
+The workflow ends by asking the site what it is serving and fails if it is not
+this build, so a green run means a live change rather than a successful
+upload.
 
 **5. Reach the backend from the internet.** It runs on a desktop behind a home
 connection, so it needs a tunnel. Tailscale Funnel is the free one:
@@ -579,8 +594,9 @@ tailscale funnel 8000
 ```
 
 The address it prints is where the edge answers. The site does not call it
-directly: `mikkonumminen.dev` proxies `/api/songgen/*` to it, and `apiBaseUrl`
-in `azure-pipelines.yml` points at that proxy instead.
+directly: `mikkonumminen.dev` proxies `/api/songgen/*` to it, and
+`API_BASE_URL` in `.github/workflows/deploy.yml` points at that proxy
+instead.
 
 The proxy is not decoration. On any machine signed in to the tailnet, MagicDNS
 resolves a `*.ts.net` name to the node's own `100.x` address, so a browser sees
@@ -619,13 +635,14 @@ blank screen rather than as an error:
 - There is no file at `/runs/abc`, so `web/public/staticwebapp.config.json`
   rewrites unknown paths to `index.html` and hands them to the router.
 
-### Publishing without the pipeline
+### Publishing without the workflow
 
-The pipeline is the normal way and this is the way out when it is unreachable,
-which has happened: `dev.azure.com` redirects a personal Microsoft account into
-the Azure Portal, and the portal's tenant picker then refuses that account
-outright (`AADSTS16000`). With no access to the pipeline there is no way to
-change a variable and no way to press Run, and a broken site stays broken.
+`.github/workflows/deploy.yml` is the normal way and this is the way out when
+it cannot run, which has happened to the publisher before: `dev.azure.com`
+redirects a personal Microsoft account into the Azure Portal, and the portal's
+tenant picker then refuses that account outright (`AADSTS16000`). With no
+access to the thing that publishes there is no way to change a value and no way
+to press Run, and a broken site stays broken.
 
 `az` on a machine that is signed in can hand over the deploy token, and the
 Static Web Apps CLI takes it directly:
@@ -642,13 +659,13 @@ npx --yes @azure/static-web-apps-cli deploy dist/songgen-web/browser \
 ```
 
 The config file is written by hand here because nothing else is going to write
-it; the pipeline step that normally does is exactly what is being skipped.
+it; the workflow step that normally does is exactly what is being skipped.
 
-**What this costs is the guarantee that the site matches `main`.** A pipeline
+**What this costs is the guarantee that the site matches `main`.** A workflow
 run is reproducible from a commit and this is not, so after using it, land the
-same change in git before the next push does. Any push touching `web` or
-`azure-pipelines.yml` triggers the pipeline, which rebuilds from `main` and
-silently reverts whatever was deployed by hand.
+same change in git before the next push does. Any push touching `web` or the
+workflow itself rebuilds from `main` and silently reverts whatever was
+deployed by hand.
 
 ---
 

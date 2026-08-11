@@ -58,20 +58,40 @@ to learn what it does.
 
 The deployment token is deliberately **not** an output. Outputs are kept in the
 deployment history and readable by anyone with access to the group, and that
-token alone is enough to publish to the site. The pipeline fetches it at run
-time.
+token alone is enough to publish to the site. It is read out of the site with
+`az` and stored as a repository secret, once, by hand; nothing that publishes
+holds an Azure credential of its own.
 
-### Azure DevOps Pipelines
+### Azure DevOps Pipelines, and why it is not used any more
 
-`azure-pipelines.yml` builds, tests and publishes. It runs only when `web/` or
-the pipeline itself changed: the audio pipeline is most of this repository and
-cannot affect what gets published, so building it would spend the free minutes
-on nothing.
+`azure-pipelines.yml` built, tested and published the site until 2026-08-11.
+It is still in the repository, with its trigger off, because the Azure version
+of this deployment is worth reading next to the one that replaced it.
 
-One caveat that is friction rather than cost: Microsoft no longer grants hosted
-parallelism automatically. A new organisation needs either a grant request or
-an Azure subscription linked with billing configured, after which the free
-grant applies.
+What went wrong was not the YAML. The pipeline simply stopped producing runs,
+and nothing in the repository could see that: a front end was rewritten,
+reviewed and merged with a green suite and a clean build, and the site went on
+serving a build two days old. The theory at the time was the trigger's path
+filter, `web/*`, which is genuinely ambiguous in Azure's own documentation. It
+was corrected, and correcting it edited this file, which was the one trigger
+that had always worked, and still nothing ran.
+
+The likeliest cause is the caveat that was already written down here: Microsoft
+no longer grants hosted parallelism automatically, and a build with no grant
+sits queued rather than failing, which looks exactly like no trigger at all.
+That cannot be confirmed from the repository. It needs the run list at
+`dev.azure.com`, and getting to it means a personal Microsoft account that the
+Azure Portal's tenant picker refuses, which `docs/WORKFLOWS.md` records
+happening before.
+
+**So the publisher moved to `.github/workflows/deploy.yml`.** This repository
+is public, GitHub Actions is unmetered on standard runners for public
+repositories, and it needs no grant request and no second console. It does the
+same work with the same deployment token, and it ends by asking the site what
+it is serving, which is the check whose absence let all of this happen quietly.
+
+Nothing else about the Azure side changed. The site is a Static Web App, made
+by Bicep, and free.
 
 ## Not used
 
@@ -112,6 +132,7 @@ that reason, so the change would be one class rather than a rewrite.
 | piece | runs on | why |
 |---|---|---|
 | Angular front end | Azure Static Web Apps | static files, free, global |
+| building and publishing it | GitHub Actions | unmetered for a public repository, and next to the code |
 | FastAPI edge | the desktop | starts runs, reads and writes their files |
 | audio pipeline | the desktop | needs the GPU |
 | job history | SQLite on the desktop | must match the processes it describes |

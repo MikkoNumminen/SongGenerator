@@ -1,0 +1,164 @@
+# Build the front end and publish it to Azure Static Web Apps.
+#
+# The site is still hosted on Azure and still created by `infra/main.bicep`.
+# Only the thing that presses the button moved here, from Azure DevOps, and
+# `docs/AZURE.md` says why under "Azure DevOps Pipelines, and why it is not
+# used any more".
+#
+# The site being reachable by anyone is not a hole. It is HTML and JavaScript
+# carrying no credentials, and it can do nothing without a token the edge
+# accepts. What must never be openly usable is the pipeline that makes songs,
+# and that is guarded on the machine that runs it, against an allowlist of
+# named accounts.
+#
+# Setting this up is in docs/WORKFLOWS.md under "Put the site online".
+
+name: Publish the site
+
+on:
+  push:
+    branches: [main]
+    # `web/**` really does mean everything beneath `web`. GitHub matches these
+    # as globs where `**` crosses directories, which is the thing the Azure
+    # DevOps filter was ambiguous about, so it is written explicitly here.
+    #
+    # The audio pipeline is most of this repository and cannot affect what gets
+    # published, so it does not build the site.
+    paths:
+      - 'web/**'
+      - '.github/workflows/deploy.yml'
+  # So the site can be republished without an empty commit, which is what
+  # anybody wants the first time a deployment does not go out.
+  workflow_dispatch:
+
+# Read the code, and nothing else. The one thing this needs write access to is
+# the Static Web App, and that is the deployment token rather than a
+# permission on this repository.
+permissions:
+  contents: read
+
+# Two pushes in a minute must not race each other onto the same site. The
+# later one wins, which is what "publish main" means.
+concurrency:
+  group: publish-the-site
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+
+    env:
+      # The site's own hostname, which Azure generated when the Static Web App
+      # was created. Recreating the site from `infra/main.bicep` produces a
+      # different one, and this is then the thing to change: the upload would
+      # go on succeeding while the check at the end reported the site serving
+      # something else forever.
+      SITE_URL: https://green-bay-0f4fe1d03.7.azurestaticapps.net
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # A dispatch can name any branch, and this publishes to the live site.
+      # Refusing out loud beats a green run that quietly put a feature branch
+      # in front of visitors, which is the same class of failure as the one
+      # this workflow exists to end.
+      - name: Publish main, or nothing
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Dispatched from $GITHUB_REF. This workflow publishes main."
+          exit 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      # Before anything is published. A green site with a broken front end is
+      # worse than no site.
+      - name: Test
+        run: npm test -- --watch=false
+
+      # No --base-href. A Static Web App serves from the root of its own
+      # hostname, unlike a GitHub project page, so the default is right and
+      # passing a path here would 404 every script after the page loaded.
+      - name: Build
+        run: npx ng build
+
+      # Where the edge is and which client id signs people in. Neither value is
+      # secret and neither can be: the browser has to know where to send
+      # requests, so both are in the shipped files however they get there. The
+      # allowlist on the edge is the protection.
+      #
+      # The address is committed, in `env` below, because the edge is reached
+      # through a proxy on a domain this repository names everywhere. The
+      # client id is a repository secret because it belongs to the deployment
+      # rather than to this file.
+      #
+      # Absent, the site falls back to reporting that nothing is answering,
+      # which is a state it renders properly.
+      - name: Write the runtime config
+        env:
+          API_BASE_URL: https://mikkonumminen.dev/api/songgen
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+        run: |
+          cat > dist/songgen-web/browser/config.json <<JSON
+          {
+            "apiBaseUrl": "${API_BASE_URL}",
+            "googleClientId": "${GOOGLE_CLIENT_ID}"
+          }
+          JSON
+          echo "wrote dist/songgen-web/browser/config.json"
+          cat dist/songgen-web/browser/config.json
+
+      # Already built and tested above, so the action uploads rather than
+      # building again with its own toolchain and its own idea of the config.
+      # `app_location` is relative to the repository root rather than to the
+      # working directory the other steps use.
+      - name: Publish
+        uses: Azure/static-web-apps-deploy@v1
+        with:
+          azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
+          action: upload
+          app_location: web/dist/songgen-web/browser
+          output_location: ''
+          skip_app_build: true
+          skip_api_build: true
+
+      # The one step the old pipeline never had, and the reason a rewritten
+      # front end sat unpublished for two days. It asks the site what it is
+      # serving rather than trusting that a green build means a live change.
+      #
+      # An empty answer is a failure and never a match, on either side. A build
+      # whose bundle this cannot name and a site that answers with nothing both
+      # read as an empty string, and comparing those two would pass the step in
+      # precisely the case it exists to catch.
+      #
+      # `-L` because a redirect answers with a body that names no bundle, and a
+      # site behind one is not a site that is failing to serve this build.
+      - name: Check the site is serving this build
+        run: |
+          built=$(grep -o 'main-[A-Za-z0-9]*\.js' dist/songgen-web/browser/index.html | head -1)
+          if [ -z "$built" ]; then
+            echo "::error::No main-*.js in this build's own index.html, so there is nothing to ask the site about."
+            exit 1
+          fi
+          echo "this build: $built"
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if [ "$attempt" -gt 1 ]; then sleep 15; fi
+            live=$(curl -sSL --max-time 15 "$SITE_URL/?ci=$GITHUB_RUN_ID-$attempt" \
+                   | grep -o 'main-[A-Za-z0-9]*\.js' | head -1)
+            echo "attempt $attempt, the site says: ${live:-nothing}"
+            if [ -n "$live" ] && [ "$live" = "$built" ]; then
+              echo "the site is serving this build"
+              exit 0
+            fi
+          done
+          echo "::error::The upload reported success and the site is still serving ${live:-an unreadable page}, not $built."
+          exit 1

@@ -109,7 +109,7 @@ as served.
 
 The site does not use that URL. `mikkonumminen.dev` proxies `/api/songgen/*` to
 it, one rewrite per endpoint, and the site is pointed at the proxy through
-`apiBaseUrl` in `azure-pipelines.yml`. So renaming the node or moving the port
+`API_BASE_URL` in `.github/workflows/deploy.yml`. So renaming the node or moving the port
 means editing that proxy's rewrites, not the site's build.
 
 Routing through the proxy is what makes the site work on this machine at all;
