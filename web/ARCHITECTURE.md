@@ -22,11 +22,11 @@ needs cannot leak into pipeline behaviour.
 Every piece of data the UI shows arrives through an interface, not a concrete
 client.
 
-| Port | Today | Later |
-|---|---|---|
-| `RunSource` | live API | a second implementation reading static assets |
-| `BankCatalog` | live API | unchanged; the list simply grows |
-| `AuthContext` | Google token | unchanged |
+| Port          | Today        | Later                                         |
+| ------------- | ------------ | --------------------------------------------- |
+| `RunSource`   | live API     | a second implementation reading static assets |
+| `BankCatalog` | live API     | unchanged; the list simply grows              |
+| `AuthContext` | Google token | unchanged                                     |
 
 Snapshot mode is then one class and one provider swap, chosen at bootstrap by a
 health check. No component learns which one it got.
@@ -95,6 +95,14 @@ Every async view is one of `idle | loading | ready | empty | error | offline`,
 rendered explicitly. `offline` is separate from `error` on purpose: the backend
 being a desktop that is often off is the normal case, not a fault, and it must
 never read as a broken app.
+
+## Everything visual is in one file
+
+`src/styles.css` holds the palette, the type scale, the spacing scale and the
+shared pieces (cards, buttons, fields, badges). A component stylesheet
+positions things and takes every value from a token, which is why a change of
+palette is one block rather than twelve files. `DESIGN.md` is the rest of that
+argument, including why the light theme is written out twice.
 
 ## Testing boundaries
 

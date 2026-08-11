@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, DestroyRef, OnDestroy, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  OnDestroy,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
 import { Subscription } from 'rxjs';
@@ -96,6 +105,38 @@ export class RunPage implements OnInit, OnDestroy {
       next: () => this.cancelling.set(false),
       error: () => this.cancelling.set(false),
     });
+  }
+
+  /**
+   * How full a stage's segment of the meter is drawn, as a percentage.
+   *
+   * Only the stage being worked on has a partial answer, and only when the
+   * pipeline reported one. A stage with no percentage yet reads as empty and
+   * is left to the sweep animation to show as alive, rather than being drawn
+   * half full on a guess.
+   */
+  fill(stage: string): number {
+    const at = this.positionOf(stage);
+    if (at === 'done') {
+      return 100;
+    }
+    if (at !== 'current') {
+      return 0;
+    }
+    return this.job()?.percent ?? 0;
+  }
+
+  /** The colour a stage name is worth, which is only ever three answers. */
+  badgeFor(stage: string): string {
+    if (stage === 'done') {
+      return 'badge--ok';
+    }
+    if (stage === 'failed') {
+      return 'badge--bad';
+    }
+    // A refusal is a verdict about the song rather than a fault, so it gets
+    // the neutral badge and says the rest in its own words below.
+    return stage === 'refused' ? '' : 'badge--busy';
   }
 
   /** How far along a stage is: done, current, or still ahead. */

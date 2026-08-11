@@ -1,5 +1,13 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -15,6 +23,18 @@ import { StatePanel } from '../../shared/state-panel/state-panel';
 /** A link this app is willing to send. The edge checks again; this is for typing. */
 const LOOKS_LIKE_A_LINK = /^https?:\/\/\S+$/i;
 
+/**
+ * The heights of the bars under the heading, as percentages.
+ *
+ * Decoration, and said so plainly: it is a clip hit and decaying, not a
+ * reading of anything. It is data rather than thirty-two elements typed into
+ * the template because the shape is the only interesting part of it.
+ */
+const WAVE = [
+  22, 38, 30, 54, 46, 70, 58, 84, 66, 92, 74, 100, 80, 62, 88, 54, 70, 44, 60, 36, 52, 30, 44, 26,
+  38, 22, 34, 18, 28, 14, 22, 10,
+] as const;
+
 @Component({
   selector: 'app-submit-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -29,6 +49,7 @@ export class SubmitPage implements OnInit {
   readonly health = inject(BackendHealth);
   private readonly destroyRef = inject(DestroyRef);
 
+  readonly wave = WAVE;
   readonly banks = signal<AsyncState<readonly BankReply[]>>(idle());
   readonly levels = signal<readonly string[]>([]);
   readonly submitting = signal<AsyncState<null>>(idle());
@@ -72,19 +93,22 @@ export class SubmitPage implements OnInit {
 
   loadBanks(): void {
     this.banks.set(loading());
-    this.catalog.list().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: (reply) => {
-        this.levels.set(reply.levels);
-        this.banks.set(ready(reply.banks));
-        // Pre-pick the only sensible answer rather than making somebody choose
-        // from a list of one.
-        const usable = reply.banks.filter((b) => b.usable);
-        if (usable.length === 1) {
-          this.form.controls.bank.setValue(usable[0].name);
-        }
-      },
-      error: (error: HttpErrorResponse) => this.banks.set(stateForFailure(error)),
-    });
+    this.catalog
+      .list()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (reply) => {
+          this.levels.set(reply.levels);
+          this.banks.set(ready(reply.banks));
+          // Pre-pick the only sensible answer rather than making somebody choose
+          // from a list of one.
+          const usable = reply.banks.filter((b) => b.usable);
+          if (usable.length === 1) {
+            this.form.controls.bank.setValue(usable[0].name);
+          }
+        },
+        error: (error: HttpErrorResponse) => this.banks.set(stateForFailure(error)),
+      });
   }
 
   submit(): void {

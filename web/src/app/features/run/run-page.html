@@ -1,61 +1,85 @@
 <section class="run">
   <h1>Making a song</h1>
 
-  <app-state-panel
-    [state]="state()"
-    busyLabel="Looking up that run..."
-    (retry)="retry()" />
+  <app-state-panel [state]="state()" busyLabel="Looking up that run..." (retry)="retry()" />
 
   @if (job(); as run) {
-    <p class="source">{{ run.source_url }}</p>
-    <p class="meta">
-      {{ run.bank }}
-      @if (run.level) { &middot; {{ run.level }} }
-      &middot; asked for by {{ run.requested_by }}
-    </p>
+    <article class="card sheet rise">
+      <header class="sheet__head">
+        <div class="sheet__what">
+          <p class="label">From</p>
+          <p class="source mono">{{ run.source_url }}</p>
+        </div>
+        <span class="badge" [class]="badgeFor(run.stage)">
+          <span class="dot" [class.dot--live]="!run.settled"></span>
+          {{ run.stage }}
+        </span>
+      </header>
 
-    @if (run.stage === 'refused') {
-      <div class="verdict refused">
-        <p><strong>That song has no vocal to borrow.</strong></p>
-        <p>
-          The whole trick is stealing the melody and the timing from the
-          original singer. With nothing to take them from, the tool refuses
-          rather than inventing a tune and pretending.
-        </p>
-      </div>
-    } @else if (run.stage === 'failed') {
-      <div class="verdict failed">
-        <p><strong>That run did not finish.</strong></p>
-        @if (run.error) { <p>{{ run.error }}</p> }
-      </div>
-    } @else {
-      <ol class="stages">
-        @for (stage of stages; track stage) {
-          <li [class]="positionOf(stage)">
-            <span class="dot"></span>
-            <span class="name">{{ stage }}</span>
-            @if (positionOf(stage) === 'current' && run.percent !== null && run.percent !== undefined) {
-              <span class="percent">{{ run.percent }}%</span>
-            }
-          </li>
+      <p class="chips">
+        <span class="chip">{{ run.bank }}</span>
+        @if (run.level) {
+          <span class="chip" [attr.data-level]="run.level">{{ run.level }}</span>
         }
-      </ol>
-    }
+        <span class="chip chip--quiet">asked for by {{ run.requested_by }}</span>
+      </p>
 
-    @if (run.stage === 'done') {
-      <div class="verdict done">
-        <p><strong>Done.</strong> Fourteen versions were written on that machine.</p>
-        @if (run.output_dir) { <p class="path">{{ run.output_dir }}</p> }
-        <p class="note">
-          The files stay on the machine that made them; nothing is uploaded.
-        </p>
-      </div>
-    }
+      @if (run.stage === 'refused') {
+        <div class="verdict verdict--refused">
+          <p><strong>That song has no vocal to borrow.</strong></p>
+          <p>
+            The whole trick is stealing the melody and the timing from the original singer. With
+            nothing to take them from, the tool refuses rather than inventing a tune and pretending.
+          </p>
+        </div>
+      } @else if (run.stage === 'failed') {
+        <div class="verdict verdict--failed">
+          <p><strong>That run did not finish.</strong></p>
+          @if (run.error) {
+            <p class="mono">{{ run.error }}</p>
+          }
+        </div>
+      } @else {
+        <div class="meter" aria-hidden="true">
+          @for (stage of stages; track stage) {
+            <span class="meter__seg" [class]="positionOf(stage)">
+              <span class="meter__fill" [style.width.%]="fill(stage)"></span>
+            </span>
+          }
+        </div>
 
-    @if (canCancel()) {
-      <button type="button" class="cancel" (click)="cancel()">
-        {{ cancelling() ? 'Stopping...' : 'Stop this run' }}
-      </button>
-    }
+        <ol class="stages">
+          @for (stage of stages; track stage) {
+            <li [class]="positionOf(stage)">
+              <span class="stages__node"></span>
+              <span class="stages__name">{{ stage }}</span>
+              @if (
+                positionOf(stage) === 'current' && run.percent !== null && run.percent !== undefined
+              ) {
+                <span class="stages__percent mono">{{ run.percent }}%</span>
+              }
+            </li>
+          }
+        </ol>
+      }
+
+      @if (run.stage === 'done') {
+        <div class="verdict verdict--done">
+          <p><strong>Done.</strong> Fourteen versions were written on that machine.</p>
+          @if (run.output_dir) {
+            <p class="path mono">{{ run.output_dir }}</p>
+          }
+          <p class="note">The files stay on the machine that made them; nothing is uploaded.</p>
+        </div>
+      }
+
+      @if (canCancel()) {
+        <div class="sheet__foot">
+          <button type="button" class="btn btn--danger btn--sm" (click)="cancel()">
+            {{ cancelling() ? 'Stopping...' : 'Stop this run' }}
+          </button>
+        </div>
+      }
+    </article>
   }
 </section>

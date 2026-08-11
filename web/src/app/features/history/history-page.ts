@@ -1,5 +1,12 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, DestroyRef, OnInit, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  OnInit,
+  inject,
+  signal,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 
@@ -36,18 +43,37 @@ export class HistoryPage implements OnInit {
       return;
     }
     this.state.set(loading());
-    this.runs.history().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      // An empty history is a real answer with its own wording, not a table
-      // with no rows and not a spinner that never stops.
-      next: (reply) =>
-        this.state.set(reply.jobs.length === 0 ? empty() : ready(reply.jobs)),
-      error: (error: HttpErrorResponse) => this.state.set(stateForFailure(error)),
-    });
+    this.runs
+      .history()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        // An empty history is a real answer with its own wording, not a table
+        // with no rows and not a spinner that never stops.
+        next: (reply) => this.state.set(reply.jobs.length === 0 ? empty() : ready(reply.jobs)),
+        error: (error: HttpErrorResponse) => this.state.set(stateForFailure(error)),
+      });
   }
 
   rows(): readonly JobReply[] {
     const state = this.state();
     return state.kind === 'ready' ? state.value : [];
+  }
+
+  /**
+   * The badge colour for an outcome.
+   *
+   * Only the two settled endings are worth a colour. Everything else, an
+   * unknown stage from a newer pipeline included, is still in progress as far
+   * as this table is concerned and gets the neutral badge.
+   */
+  toneFor(stage: string): string {
+    if (stage === 'done') {
+      return 'badge--ok';
+    }
+    if (stage === 'failed') {
+      return 'badge--bad';
+    }
+    return stage === 'refused' ? '' : 'badge--busy';
   }
 
   /** Local date and time, or the raw value if it cannot be parsed. */

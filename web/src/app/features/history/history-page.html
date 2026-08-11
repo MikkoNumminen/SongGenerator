@@ -1,35 +1,48 @@
 <section class="history">
-  <h1>Earlier runs</h1>
+  <header class="head">
+    <h1>Earlier runs</h1>
+    <p class="lead">Everything this machine has been asked for, newest first.</p>
+  </header>
 
   <app-state-panel
     [state]="state()"
     busyLabel="Reading the history..."
     emptyLabel="Nothing has been made on that machine yet."
-    (retry)="load()" />
+    (retry)="load()"
+  />
 
   @if (state().kind === 'ready') {
-    <table>
-      <caption class="visually-hidden">Runs, newest first</caption>
-      <thead>
-        <tr>
-          <th scope="col">When</th>
-          <th scope="col">Bank</th>
-          <th scope="col">Outcome</th>
-          <th scope="col">Song</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (run of rows(); track run.id) {
+    <div class="card table-card rise">
+      <table>
+        <caption class="visually-hidden">
+          Runs, newest first
+        </caption>
+        <thead>
           <tr>
-            <td>{{ when(run.created_at) }}</td>
-            <td>{{ run.bank }}</td>
-            <td><span class="stage {{ run.stage }}">{{ run.stage }}</span></td>
-            <td class="song">
-              <a [routerLink]="['/runs', run.id]">{{ run.song ?? run.source_url }}</a>
-            </td>
+            <th scope="col">When</th>
+            <th scope="col">Bank</th>
+            <th scope="col">Outcome</th>
+            <th scope="col">Song</th>
           </tr>
-        }
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          @for (run of rows(); track run.id) {
+            <tr>
+              <td data-label="When" class="when mono">{{ when(run.created_at) }}</td>
+              <td data-label="Bank">{{ run.bank }}</td>
+              <td data-label="Outcome">
+                <span class="badge" [class]="toneFor(run.stage)">
+                  <span class="dot" [class.dot--live]="!run.settled"></span>
+                  {{ run.stage }}
+                </span>
+              </td>
+              <td data-label="Song" class="song">
+                <a [routerLink]="['/runs', run.id]">{{ run.song ?? run.source_url }}</a>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
   }
 </section>

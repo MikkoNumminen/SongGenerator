@@ -1,21 +1,41 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <!-- The router replaces this per page. It is the name of the project rather
+  <head>
+    <meta charset="utf-8" />
+    <!-- The router replaces this per page. It is the name of the project rather
        than the name npm generated, which is what shows in a bookmark and in
        the tab before the application has started. -->
-  <title>SongGenerator</title>
-  <base href="/">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description"
-        content="Replaces a song's vocals with sung word clips, on the same notes, at the same moments.">
-  <!-- The songs are somebody else's recordings and the machine that makes them
+    <title>SongGenerator</title>
+    <base href="/" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Replaces a song's vocals with sung word clips, on the same notes, at the same moments."
+    />
+    <!-- The songs are somebody else's recordings and the machine that makes them
        is a desktop. Neither belongs in a search index. -->
-  <meta name="robots" content="noindex">
-  <link rel="icon" type="image/x-icon" href="favicon.ico">
-</head>
-<body>
-  <app-root></app-root>
-</body>
+    <meta name="robots" content="noindex" />
+    <!-- Two values, so the browser chrome matches whichever theme the page
+       lands in rather than framing a dark page in a white bar. -->
+    <meta name="theme-color" content="#0a0c11" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f4f2ec" media="(prefers-color-scheme: light)" />
+    <link rel="icon" type="image/svg+xml" href="icon.svg" />
+    <link rel="icon" type="image/x-icon" href="favicon.ico" />
+    <!-- The one place a colour is written outside the stylesheet. The bundle is
+       a separate request, and until it arrives the page is whatever the
+       browser's default is: a white flash in front of a dark application. -->
+    <style>
+      html {
+        background: #0a0c11;
+      }
+      @media (prefers-color-scheme: light) {
+        html {
+          background: #f4f2ec;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <app-root></app-root>
+  </body>
 </html>

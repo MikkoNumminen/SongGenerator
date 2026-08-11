@@ -1,63 +1,127 @@
 <section class="submit">
-  <h1>Make a song</h1>
-  <p class="lead">
-    Paste a link. The singing is replaced with words from a bank of recordings,
-    on the same notes, at the same moments.
-  </p>
+  <div class="hero rise">
+    <p class="eyebrow">
+      <span class="dot"></span>
+      One desktop, one run at a time
+    </p>
+    <h1>
+      <!-- Two lines where there is room for two lines, and whatever fits
+           where there is not. A hard break here read as "Take a" on a
+           phone. -->
+      <span>Take a song's melody.</span> <span>Give it back in words.</span>
+    </h1>
+    <p class="lead">
+      Paste a link. The singing is replaced with words from a bank of recordings, on the same notes,
+      at the same moments. Nothing is synthesised and nothing leaves the machine that makes it.
+    </p>
+
+    <div class="wave" aria-hidden="true">
+      @for (height of wave; track $index) {
+        <span [style.height.%]="height"></span>
+      }
+    </div>
+  </div>
 
   <app-state-panel
     [state]="banks()"
     busyLabel="Asking which banks this machine has..."
     emptyLabel="This machine has no banks built yet."
-    (retry)="loadBanks()" />
+    (retry)="loadBanks()"
+  />
 
   @if (health.reachable() && banks().kind === 'ready') {
     @if (usableBanks().length === 0) {
-      <p class="note">
-        None of the banks on that machine have clips built yet, so there is
-        nothing to sing with. Building one is done at the machine itself.
+      <p class="note card empty">
+        None of the banks on that machine have clips built yet, so there is nothing to sing with.
+        Building one is done at the machine itself.
       </p>
     }
 
-    <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
-      <label for="source_url">Link to a song</label>
-      <input
-        id="source_url"
-        type="url"
-        formControlName="source_url"
-        placeholder="https://..."
-        autocomplete="off"
-        spellcheck="false" />
-      @if (form.controls.source_url.touched && form.controls.source_url.invalid) {
-        <p class="field-error">That does not look like a link.</p>
-      }
-
-      <label for="bank">Bank</label>
-      <select id="bank" formControlName="bank">
-        <option value="" disabled>Choose a bank</option>
-        @for (bank of usableBanks(); track bank.name) {
-          <option [value]="bank.name">{{ bank.name }} ({{ bank.units }} clips)</option>
+    <form class="console card" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <div class="step">
+        <p class="step__head"><span class="step__no">1</span> The song</p>
+        <label class="label" for="source_url">Link to a song</label>
+        <div class="field">
+          <svg class="field__icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M10 13.6a4 4 0 0 0 5.7.3l2.8-2.8a4 4 0 0 0-5.7-5.7l-1.5 1.5" />
+            <path d="M14 10.4a4 4 0 0 0-5.7-.3l-2.8 2.8a4 4 0 0 0 5.7 5.7l1.5-1.5" />
+          </svg>
+          <input
+            id="source_url"
+            class="input"
+            type="url"
+            formControlName="source_url"
+            placeholder="https://..."
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </div>
+        @if (form.controls.source_url.touched && form.controls.source_url.invalid) {
+          <p class="field-error">That does not look like a link.</p>
         }
-      </select>
+      </div>
 
-      <label for="level">Playfulness</label>
-      <select id="level" formControlName="level">
-        <option value="">Both, so you can pick by ear</option>
-        @for (level of levels(); track level) {
-          <option [value]="level">{{ level }}</option>
-        }
-      </select>
+      <hr class="rule" />
 
-      <button type="submit" [disabled]="!canSubmit()">
-        {{ submitting().kind === 'loading' ? 'Starting...' : 'Make it' }}
-      </button>
+      <div class="step">
+        <p class="step__head" id="bank-label"><span class="step__no">2</span> The voice</p>
+        <p class="step__note">Which pile of recordings does the singing come from.</p>
+        <div class="picks" role="radiogroup" aria-labelledby="bank-label">
+          @for (bank of usableBanks(); track bank.name) {
+            <label class="pick">
+              <input type="radio" formControlName="bank" [value]="bank.name" />
+              <span class="pick__box">
+                <span class="pick__name">{{ bank.name }}</span>
+                <span class="pick__meta">{{ bank.units }} clips</span>
+                <span class="pick__tick" aria-hidden="true"></span>
+              </span>
+            </label>
+          }
+        </div>
+      </div>
 
-      @if (health.busy()) {
-        <p class="note">
-          That machine is already making one. It takes a single run at a time,
-          so this waits until that one is done.
+      <hr class="rule" />
+
+      <div class="step">
+        <p class="step__head" id="level-label"><span class="step__no">3</span> The nerve</p>
+        <p class="step__note">
+          How far it strays from the original phrasing. Both is the honest answer when you have not
+          heard either.
         </p>
-      }
+        <div class="segmented" role="radiogroup" aria-labelledby="level-label">
+          <label class="seg">
+            <input type="radio" formControlName="level" value="" />
+            <span>Both</span>
+          </label>
+          @for (level of levels(); track level) {
+            <label class="seg" [attr.data-level]="level">
+              <input type="radio" formControlName="level" [value]="level" />
+              <span>{{ level }}</span>
+            </label>
+          }
+        </div>
+      </div>
+
+      <div class="go">
+        <button type="submit" class="btn btn--primary" [disabled]="!canSubmit()">
+          <svg viewBox="0 0 24 24" aria-hidden="true" class="go__icon">
+            <rect x="3" y="10" width="2.6" height="4" rx="1.3" />
+            <rect x="8" y="6.5" width="2.6" height="11" rx="1.3" />
+            <rect x="13" y="3" width="2.6" height="18" rx="1.3" />
+            <rect x="18" y="8.5" width="2.6" height="7" rx="1.3" />
+          </svg>
+          {{ submitting().kind === 'loading' ? 'Starting...' : 'Make it' }}
+        </button>
+
+        @if (health.busy()) {
+          <p class="note">
+            That machine is already making one. It takes a single run at a time, so this waits until
+            that one is done.
+          </p>
+        } @else {
+          <p class="note">The finished files land on that machine, and you pick by ear.</p>
+        }
+      </div>
     </form>
 
     <app-state-panel [state]="submitting()" [canRetry]="false" />

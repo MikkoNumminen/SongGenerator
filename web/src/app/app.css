@@ -1,12 +1,221 @@
-:host { display: block; max-width: 64rem; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; }
-header { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center;
-  justify-content: space-between; margin-bottom: 1.5rem; }
-nav { display: flex; gap: 1rem; }
-nav a { text-decoration: none; padding: 0.3rem 0; border-bottom: 2px solid transparent; }
-nav a.active { border-bottom-color: currentColor; }
-.who { display: flex; gap: 0.6rem; align-items: center; }
-.email { opacity: 0.8; }
-.note { opacity: 0.65; }
-button { padding: 0.4rem 0.8rem; font: inherit; border-radius: 6px; cursor: pointer; }
-.banner { padding: 0.75rem 1rem; border-radius: 8px; margin: 0 0 1.5rem;
-  background: color-mix(in srgb, currentColor 8%, transparent); }
+:host {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+/* The whole page sits on two soft lights and a vertical wash. It is fixed, so
+   scrolling moves the content across the light rather than dragging the light
+   along with it. */
+:host::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      64rem 34rem at 10% -14%,
+      color-mix(in srgb, var(--accent) 18%, transparent),
+      transparent 66%
+    ),
+    radial-gradient(
+      50rem 32rem at 96% -6%,
+      color-mix(in srgb, var(--wild) 20%, transparent),
+      transparent 64%
+    ),
+    linear-gradient(var(--bg-deep), var(--bg) 34rem);
+}
+
+.skip {
+  position: absolute;
+  left: -100vw;
+  top: var(--space-2);
+  z-index: 40;
+  padding: 0.5rem 0.9rem;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 640;
+}
+
+.skip:focus {
+  left: var(--space-4);
+}
+
+/* ---- the bar across the top ---- */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  backdrop-filter: blur(16px) saturate(150%);
+}
+
+.topbar::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--wild) 42%, transparent 80%);
+}
+
+.topbar__inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  max-width: var(--page);
+  margin: 0 auto;
+  padding: var(--space-3) var(--space-5);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  text-decoration: none;
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: 660;
+  letter-spacing: var(--tracking-tight);
+}
+
+.brand__mark {
+  width: 1.55rem;
+  height: 1.55rem;
+  fill: var(--accent);
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--accent) 45%, transparent));
+}
+
+.brand__mark--alt {
+  fill: var(--wild);
+}
+
+/* Only the bars move, and only when somebody points at the mark. */
+.brand:hover .brand__mark rect {
+  animation: bar 900ms var(--ease) infinite alternate;
+}
+
+.brand:hover .brand__mark rect:nth-child(2) {
+  animation-delay: 120ms;
+}
+.brand:hover .brand__mark rect:nth-child(3) {
+  animation-delay: 240ms;
+}
+.brand:hover .brand__mark rect:nth-child(4) {
+  animation-delay: 60ms;
+}
+
+@keyframes bar {
+  to {
+    transform: scaleY(0.55);
+    transform-origin: center;
+  }
+}
+
+.brand__name--light {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.nav {
+  display: flex;
+  gap: var(--space-1);
+  margin-right: auto;
+}
+
+.nav a {
+  padding: 0.35rem 0.8rem;
+  border-radius: var(--radius-pill);
+  color: var(--text-muted);
+  font-weight: 560;
+  text-decoration: none;
+  transition:
+    color var(--fast) var(--ease),
+    background var(--fast) var(--ease);
+}
+
+.nav a:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.nav a.active {
+  color: var(--accent-text);
+  background: var(--accent-wash);
+}
+
+.who {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.email {
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
+
+/* ---- the page, and what interrupts it ---- */
+
+.page {
+  flex: 1;
+  width: 100%;
+  max-width: var(--page);
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-5) var(--space-8);
+}
+
+.banner {
+  display: flex;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid var(--text-faint);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-muted);
+  box-shadow: var(--shadow-sm);
+}
+
+.banner--bad {
+  border-left-color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 7%, var(--surface));
+}
+
+.footer {
+  border-top: 1px solid var(--line);
+  padding: var(--space-5);
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
+
+.footer p {
+  max-width: var(--page);
+  margin: 0 auto;
+}
+
+@media (max-width: 46rem) {
+  .topbar__inner {
+    padding: var(--space-3) var(--space-4);
+  }
+  .nav {
+    order: 3;
+    width: 100%;
+    margin-right: 0;
+  }
+  .who {
+    margin-left: auto;
+  }
+  .page {
+    padding: var(--space-5) var(--space-4) var(--space-7);
+  }
+}

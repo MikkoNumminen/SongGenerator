@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="SongGenerator">
+  <title>SongGenerator</title>
+  <rect width="32" height="32" rx="8" fill="#0e1117"/>
+  <g fill="#ffb648">
+    <rect x="6" y="13" width="3" height="6" rx="1.5"/>
+    <rect x="11" y="9" width="3" height="14" rx="1.5"/>
+    <rect x="16" y="5" width="3" height="22" rx="1.5"/>
+    <rect x="21" y="11" width="3" height="10" rx="1.5" fill="#8b7bff"/>
+  </g>
+</svg>
