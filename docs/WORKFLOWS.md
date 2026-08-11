@@ -440,7 +440,31 @@ would win silently over the committed one.
 Missing the client id is not a failure. The site falls back to the local
 backend and reports that nothing is answering, which it renders honestly.
 
-**4. Reach the backend from the internet.** It runs on a desktop behind a home
+**4. Check that a deploy actually happened.** Not optional, and not the same
+question as whether the build was green:
+
+```powershell
+curl.exe -s https://<the site hostname>/ | Select-String "theme-color"
+```
+
+Name anything only the new build has; the meta above arrived with the design
+and does for now. Nothing found means the site is still serving an older build.
+
+This step exists because the trigger silently published nothing for months. Its
+path filter read `web/*`, and Azure Pipelines path filters are prefixes rather
+than globs, so it matched no file and no change to the site ever started a
+build. Every deploy came from a commit that happened to touch
+`azure-pipelines.yml`, which is the other entry in the filter, so the site did
+keep updating and nobody looked. A whole front end was merged with a green
+suite and a clean build and was never published. `web` on its own is the
+correct filter, and asking the site what it is serving is the check that would
+have caught it in a minute.
+
+The Azure DevOps run list is the next place to look if the site has not moved:
+a build queued forever rather than failed usually means the free parallelism
+grant is used up.
+
+**5. Reach the backend from the internet.** It runs on a desktop behind a home
 connection, so it needs a tunnel. Tailscale Funnel is the free one:
 
 ```powershell
@@ -458,7 +482,7 @@ reports the backend as unreachable for the one person most likely to be testing
 it, while working for everyone else. Vercel's edge is not on the tailnet, so
 routing through it makes the address behave the same for everybody.
 
-**5. Let the browser call it.** A page on `azurestaticapps.net` calling the edge
+**6. Let the browser call it.** A page on `azurestaticapps.net` calling the edge
 is cross-origin, so the edge has to allow it. On the machine running the edge:
 
 ```powershell
@@ -515,7 +539,7 @@ it; the pipeline step that normally does is exactly what is being skipped.
 
 **What this costs is the guarantee that the site matches `main`.** A pipeline
 run is reproducible from a commit and this is not, so after using it, land the
-same change in git before the next push does. Any push touching `web/*` or
+same change in git before the next push does. Any push touching `web` or
 `azure-pipelines.yml` triggers the pipeline, which rebuilds from `main` and
 silently reverts whatever was deployed by hand.
 

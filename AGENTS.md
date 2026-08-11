@@ -111,6 +111,24 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   reported silence inside words at 37% of a song's words when the true figure
   was 67%, and the wrong number was quoted before anyone caught it. Any
   measurement of what a render sounds like has to compute the sounding length.
+- **A pipeline path filter is a prefix, not a glob.** `azure-pipelines.yml`
+  triggered on `web/*`, which Azure Pipelines looked for literally and matched
+  nothing, so no change to the site ever started a deploy. It went unnoticed
+  for five deploys because every one of them came from a commit that also
+  touched `azure-pipelines.yml` itself, which is the other entry in the filter.
+  A front end was rewritten, reviewed, merged and left unpublished while every
+  check was green. Write the directory, `web`, which means everything beneath
+  it, and after a merge that should change the site, check that it did rather
+  than assuming: `curl -s <site>/ | Select-String theme-color` names something
+  only the new build has.
+- **A green front-end suite says nothing about what a visitor sees.** The web
+  tests assert component state, and nothing in them renders at a phone's width,
+  presses Tab, or looks at a first paint. Three defects passed the suite for
+  exactly that reason: a top bar that scrolled the page sideways on a phone, a
+  skip link that never moved focus because its target could not hold it, and a
+  stored light theme that flashed dark on every load. Check a front-end change
+  in a browser, at a narrow width, with the keyboard, in both themes. See
+  `docs/AI-FIRST.md`, dimension 12.
 - **A float WAV is not a pure function of its samples.** libsndfile writes a
   PEAK chunk holding the wall-clock time of the write, at byte 60. Two runs
   producing bit-identical audio therefore produce files that differ by that one
