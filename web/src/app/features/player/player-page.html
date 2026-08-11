@@ -1,0 +1,72 @@
+<section class="player">
+  <header class="head">
+    <h1>Everything made so far</h1>
+    <p class="lead">
+      Straight off that desktop. Each song has a conservative take and a wild
+      one; which is better is a listening decision.
+    </p>
+  </header>
+
+  <app-state-panel
+    [state]="state()"
+    busyLabel="Reading the library..."
+    emptyLabel="Nothing has been made on that machine yet."
+    (retry)="load()"
+  />
+
+  @if (current(); as track) {
+    <!-- Sticky so it stays reachable while the list scrolls. A player that
+         scrolls away means hunting for it to stop the music. -->
+    <div class="now card rise">
+      <div class="now__what">
+        <strong class="now__song">{{ track.song }}</strong>
+        <span class="now__where mono">{{ track.bank }} / {{ track.level ?? 'take' }}</span>
+      </div>
+
+      @if (fetching()) {
+        <p class="now__loading" role="status">Fetching the audio...</p>
+      } @else if (source(); as url) {
+        <!-- autoplay is wanted here: pressing a track in the list IS the play
+             action, and a second press on the element would be a surprise. -->
+        <audio class="now__audio" [src]="url" controls autoplay></audio>
+        <a class="btn btn--quiet btn--sm" [href]="url" [download]="track.name">
+          Download
+        </a>
+      }
+    </div>
+  }
+
+  @if (problem(); as message) {
+    <p class="problem" role="alert">{{ message }}</p>
+  }
+
+  @if (state().kind === 'ready') {
+    <div class="songs">
+      @for (group of songs(); track group.song) {
+        <article class="card song rise">
+          <h2 class="song__title">{{ group.song }}</h2>
+          <ul class="takes">
+            @for (t of group.tracks; track t.bank + '/' + t.name) {
+              <li
+                class="take"
+                [class.take--current]="isCurrent(t)"
+                [attr.aria-current]="isCurrent(t) ? 'true' : null"
+              >
+                <button
+                  type="button"
+                  class="take__play"
+                  [disabled]="fetching()"
+                  (click)="play(t)"
+                >
+                  <span class="take__level">{{ t.level ?? 'take' }}</span>
+                  <span class="take__bank mono">{{ t.bank }}</span>
+                </button>
+                <span class="take__size mono">{{ size(t.bytes) }}</span>
+              </li>
+            }
+          </ul>
+        </article>
+      }
+    </div>
+  }
+</section>

@@ -26,6 +26,12 @@ export const routes: Routes = [
       import('./features/history/history-page').then((m) => m.HistoryPage),
   },
   {
+    path: 'songs',
+    title: 'Everything made so far',
+    loadComponent: () =>
+      import('./features/player/player-page').then((m) => m.PlayerPage),
+  },
+  {
     path: 'admin',
     title: 'Who may use this',
     loadComponent: () =>

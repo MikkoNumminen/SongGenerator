@@ -47,7 +47,7 @@
 .problem {
   margin: var(--space-3) 0 0;
   padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-2);
+  border-radius: var(--radius-sm);
   background: color-mix(in oklab, var(--danger) 12%, transparent);
   color: var(--danger);
 }
@@ -84,7 +84,7 @@ tbody tr:last-child td {
   font-size: var(--text-sm);
   padding: 0.1rem 0.5rem;
   border-radius: 999px;
-  background: color-mix(in oklab, var(--ink) 8%, transparent);
+  background: color-mix(in oklab, var(--text-muted) 14%, transparent);
   opacity: 0.8;
 }
 

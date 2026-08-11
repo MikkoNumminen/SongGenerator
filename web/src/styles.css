@@ -210,6 +210,11 @@
 
   --radius-sm: 6px;
   --radius: 10px;
+
+  /* How far down the sticky top bar reaches. Anything else that wants to stick
+     below it has to offset by this, and the bar has no fixed height of its own
+     to read. Declared with the other tokens so a page can see it. */
+  --topbar-h: 3.75rem;
   --radius-lg: 16px;
   --radius-pill: 999px;
 

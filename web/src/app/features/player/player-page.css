@@ -1,0 +1,133 @@
+.player {
+  display: grid;
+  gap: var(--space-5);
+  max-width: 56rem;
+  margin-inline: auto;
+}
+
+.head {
+  display: grid;
+  gap: var(--space-2);
+}
+
+/* The front page owns the one display-sized heading; a second competes. */
+.head h1 {
+  font-size: var(--text-xl);
+}
+
+/* Sticky, so stopping the music never means scrolling back up to find the
+   controls. Offset by the top bar's height so it does not sit under it. */
+.now {
+  position: sticky;
+  top: calc(var(--topbar-h, 4rem) + var(--space-2));
+  z-index: 2;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.now__what {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.now__song {
+  font-size: var(--text-lg);
+  overflow-wrap: anywhere;
+}
+
+.now__where {
+  opacity: 0.7;
+}
+
+.now__audio {
+  width: 100%;
+}
+
+.now__loading {
+  margin: 0;
+  opacity: 0.7;
+}
+
+.problem {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklab, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+
+.songs {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.song {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.song__title {
+  margin: 0;
+  font-size: var(--text-md);
+  /* Song folders are slugs and some of them are very long. */
+  overflow-wrap: anywhere;
+}
+
+.takes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.take {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.take--current {
+  border-color: var(--accent);
+  background: color-mix(in oklab, var(--accent) 8%, transparent);
+}
+
+.take__play {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.take__play:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.take__level {
+  font-weight: 600;
+}
+
+.take__bank,
+.take__size {
+  opacity: 0.7;
+  font-size: var(--text-sm);
+}
+
+@media (max-width: 34rem) {
+  .take {
+    flex-wrap: wrap;
+  }
+}
