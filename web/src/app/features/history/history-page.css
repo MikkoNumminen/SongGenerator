@@ -17,9 +17,12 @@
 }
 
 /* The card clips the table's corners, so the first and last rows sit inside
-   the radius instead of squaring it off. */
+   the radius instead of squaring it off. Sideways it scrolls rather than
+   clips: a run with no title shows its source link, and one long enough to
+   push the table past the card would otherwise be cut off with no way to
+   reach the rest of it. */
 .table-card {
-  overflow: hidden;
+  overflow: auto hidden;
   padding: 0;
 }
 

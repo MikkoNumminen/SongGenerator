@@ -17,6 +17,7 @@ import { RUN_SOURCE } from '../../core/ports/run-source.port';
 import { RunWatcher } from '../../core/runs/run-watcher';
 import { AsyncState, idle, valueOf } from '../../core/state/async-state';
 import { StatePanel } from '../../shared/state-panel/state-panel';
+import { stageTone } from '../../shared/stage-tone';
 
 /**
  * The stages the pipeline actually reports, in the order it reaches them.
@@ -27,6 +28,9 @@ import { StatePanel } from '../../shared/state-panel/state-panel';
  * itself instead of breaking the page.
  */
 const STAGES = ['queued', 'separating', 'analysing', 'arranging', 'rendering'] as const;
+
+/** The stages that end a run. None of them is a step on the way to one. */
+const ENDINGS = new Set(['done', 'failed', 'refused']);
 
 @Component({
   selector: 'app-run-page',
@@ -44,11 +48,26 @@ export class RunPage implements OnInit, OnDestroy {
   private watching?: Subscription;
   private current: string | null = null;
 
-  readonly stages = STAGES;
   readonly state = signal<AsyncState<JobReply>>(idle());
   readonly cancelling = signal(false);
 
   readonly job = computed(() => valueOf(this.state()));
+
+  /**
+   * The stages to draw: the ones this build knows, plus whatever the pipeline
+   * reported if it is not one of them.
+   *
+   * Without the second half a newer pipeline's stage left five grey rows and a
+   * meter with nothing moving in it, which is what a stalled run looks like.
+   * It is appended rather than slotted in because where it belongs in the
+   * order is not knowable from here, and nothing before it is claimed as
+   * finished for the same reason.
+   */
+  readonly stages = computed<readonly string[]>(() => {
+    const stage = this.job()?.stage;
+    const known = (STAGES as readonly string[]).includes(stage ?? '');
+    return !stage || known || ENDINGS.has(stage) ? STAGES : [...STAGES, stage];
+  });
 
   /** A refusal is a real answer about the song, not a failure of the run. */
   readonly refused = computed(() => this.job()?.stage === 'refused');
@@ -126,18 +145,8 @@ export class RunPage implements OnInit, OnDestroy {
     return this.job()?.percent ?? 0;
   }
 
-  /** The colour a stage name is worth, which is only ever three answers. */
-  badgeFor(stage: string): string {
-    if (stage === 'done') {
-      return 'badge--ok';
-    }
-    if (stage === 'failed') {
-      return 'badge--bad';
-    }
-    // A refusal is a verdict about the song rather than a fault, so it gets
-    // the neutral badge and says the rest in its own words below.
-    return stage === 'refused' ? '' : 'badge--busy';
-  }
+  /** The colour a stage name is worth. Shared with the history table. */
+  readonly badgeFor = stageTone;
 
   /** How far along a stage is: done, current, or still ahead. */
   positionOf(stage: string): 'done' | 'current' | 'ahead' {
@@ -153,7 +162,11 @@ export class RunPage implements OnInit, OnDestroy {
       return 'done';
     }
     if (at < 0) {
-      return 'ahead';
+      // A stage this build has never heard of. It is the only thing that can
+      // honestly be pointed at, and only while the run is still going: once a
+      // run has settled, calling its last stage current would claim it is
+      // still working.
+      return stage === job.stage && !job.settled ? 'current' : 'ahead';
     }
     return mine < at ? 'done' : mine === at ? 'current' : 'ahead';
   }

@@ -7,6 +7,7 @@ export type ThemePreference = 'system' | 'light' | 'dark';
 /** What is actually on screen. */
 export type Theme = 'light' | 'dark';
 
+/** Also read by the pre-paint script in `src/index.html`. Change both. */
 const STORAGE_KEY = 'songgen.theme';
 const DARK_QUERY = '(prefers-color-scheme: dark)';
 

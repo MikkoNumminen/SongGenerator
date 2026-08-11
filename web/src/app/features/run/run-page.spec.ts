@@ -93,9 +93,7 @@ describe('RunPage', () => {
 
   it('offers no stop button once the run has settled', () => {
     const watcher = TestBed.inject(RunWatcher);
-    vi.spyOn(watcher, 'watch').mockReturnValue(
-      of(ready(job({ stage: 'done', settled: true }))),
-    );
+    vi.spyOn(watcher, 'watch').mockReturnValue(of(ready(job({ stage: 'done', settled: true }))));
 
     params.next(convertToParamMap({ id: 'done-one' }));
     fixture.detectChanges();
@@ -103,11 +101,37 @@ describe('RunPage', () => {
     expect(fixture.componentInstance.canCancel()).toBe(false);
   });
 
+  it('shows a stage it has never heard of instead of an empty meter', () => {
+    // A newer pipeline reporting a stage this build does not list used to draw
+    // five grey rows with nothing moving, which is what a stalled run looks
+    // like. Where the stage belongs in the order is not knowable, so it goes
+    // last and claims nothing about the ones before it.
+    const watcher = TestBed.inject(RunWatcher);
+    vi.spyOn(watcher, 'watch').mockReturnValue(of(ready(job({ stage: 'mixing', percent: 12 }))));
+
+    params.next(convertToParamMap({ id: 'newer' }));
+    fixture.detectChanges();
+
+    const page = fixture.componentInstance;
+    expect(page.stages()).toContain('mixing');
+    expect(page.positionOf('mixing')).toBe('current');
+    expect(page.positionOf('queued')).toBe('ahead');
+    expect(page.fill('mixing')).toBe(12);
+  });
+
+  it('claims nothing about an unknown stage once the run has settled', () => {
+    const watcher = TestBed.inject(RunWatcher);
+    vi.spyOn(watcher, 'watch').mockReturnValue(of(ready(job({ stage: 'mixing', settled: true }))));
+
+    params.next(convertToParamMap({ id: 'settled-newer' }));
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.positionOf('mixing')).toBe('ahead');
+  });
+
   it('treats a refusal as a verdict about the song, not a failed run', () => {
     const watcher = TestBed.inject(RunWatcher);
-    vi.spyOn(watcher, 'watch').mockReturnValue(
-      of(ready(job({ stage: 'refused', settled: true }))),
-    );
+    vi.spyOn(watcher, 'watch').mockReturnValue(of(ready(job({ stage: 'refused', settled: true }))));
 
     params.next(convertToParamMap({ id: 'no-vocal' }));
     fixture.detectChanges();

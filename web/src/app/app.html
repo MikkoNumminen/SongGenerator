@@ -43,7 +43,11 @@
   </div>
 </header>
 
-<main id="content" class="page">
+<!-- `tabindex="-1"` is what makes the skip link above actually skip. A jump to
+     a fragment only moves the caret in some browsers; without this, Safari and
+     every screen reader leave focus on the link and the next Tab goes straight
+     back into the bar. -->
+<main id="content" class="page" tabindex="-1">
   @if (!health.configured) {
     <p class="banner banner--bad" role="status">
       This site has not been told where its backend is, so it cannot make anything yet. Nothing is

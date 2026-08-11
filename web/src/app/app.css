@@ -148,9 +148,15 @@
   background: var(--accent-wash);
 }
 
+/* Wrapping rather than one line: signed in, this holds a badge, a toggle, an
+   address and a button, which together are wider than a phone. Without the
+   wrap the group cannot shrink below the sum of its children and the whole
+   page scrolls sideways. */
 .who {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--space-2);
 }
 
@@ -171,6 +177,9 @@
   max-width: var(--page);
   margin: 0 auto;
   padding: var(--space-6) var(--space-5) var(--space-8);
+  /* The bar above is sticky, so jumping here from the skip link would park the
+     first line of the page underneath it. */
+  scroll-margin-top: 4.5rem;
 }
 
 .banner {
@@ -214,6 +223,9 @@
   }
   .who {
     margin-left: auto;
+  }
+  .email {
+    max-width: 9rem;
   }
   .page {
     padding: var(--space-5) var(--space-4) var(--space-7);

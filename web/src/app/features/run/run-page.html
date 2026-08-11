@@ -41,7 +41,7 @@
         </div>
       } @else {
         <div class="meter" aria-hidden="true">
-          @for (stage of stages; track stage) {
+          @for (stage of stages(); track stage) {
             <span class="meter__seg" [class]="positionOf(stage)">
               <span class="meter__fill" [style.width.%]="fill(stage)"></span>
             </span>
@@ -49,7 +49,7 @@
         </div>
 
         <ol class="stages">
-          @for (stage of stages; track stage) {
+          @for (stage of stages(); track stage) {
             <li [class]="positionOf(stage)">
               <span class="stages__node"></span>
               <span class="stages__name">{{ stage }}</span>

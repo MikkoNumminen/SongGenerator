@@ -18,20 +18,41 @@
     <!-- Two values, so the browser chrome matches whichever theme the page
        lands in rather than framing a dark page in a white bar. -->
     <meta name="theme-color" content="#0a0c11" media="(prefers-color-scheme: dark)" />
-    <meta name="theme-color" content="#f4f2ec" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#f0ece3" media="(prefers-color-scheme: light)" />
     <link rel="icon" type="image/svg+xml" href="icon.svg" />
     <link rel="icon" type="image/x-icon" href="favicon.ico" />
+    <!-- A stored choice has to be on the element before the stylesheet is read,
+       or somebody who picked light on a dark machine gets a whole dark page
+       until the bundle boots and `ThemeSwitch` stamps the attribute. Only an
+       explicit choice is read here; `system` writes nothing and is left to
+       `prefers-color-scheme`, which is what makes this safe with JavaScript
+       off. The key must match STORAGE_KEY in app/shared/theme/theme.ts. -->
+    <script>
+      try {
+        var chosen = localStorage.getItem('songgen.theme');
+        if (chosen === 'light' || chosen === 'dark') {
+          document.documentElement.setAttribute('data-theme', chosen);
+        }
+      } catch (e) {
+        // A browser that refuses storage gets the machine's theme. Nothing else
+        // on this page depends on the answer.
+      }
+    </script>
     <!-- The one place a colour is written outside the stylesheet. The bundle is
        a separate request, and until it arrives the page is whatever the
-       browser's default is: a white flash in front of a dark application. -->
+       browser's default is: a white flash in front of a dark application. The
+       three blocks mirror the three in styles.css, for the same reason. -->
     <style>
       html {
         background: #0a0c11;
       }
       @media (prefers-color-scheme: light) {
-        html {
-          background: #f4f2ec;
+        html:not([data-theme='dark']) {
+          background: #f0ece3;
         }
+      }
+      html[data-theme='light'] {
+        background: #f0ece3;
       }
     </style>
   </head>

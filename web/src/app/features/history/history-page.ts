@@ -16,6 +16,7 @@ import { JobReply } from '../../core/contract/dto';
 import { RUN_SOURCE } from '../../core/ports/run-source.port';
 import { AsyncState, empty, idle, loading, ready } from '../../core/state/async-state';
 import { StatePanel } from '../../shared/state-panel/state-panel';
+import { stageTone } from '../../shared/stage-tone';
 
 @Component({
   selector: 'app-history-page',
@@ -59,22 +60,8 @@ export class HistoryPage implements OnInit {
     return state.kind === 'ready' ? state.value : [];
   }
 
-  /**
-   * The badge colour for an outcome.
-   *
-   * Only the two settled endings are worth a colour. Everything else, an
-   * unknown stage from a newer pipeline included, is still in progress as far
-   * as this table is concerned and gets the neutral badge.
-   */
-  toneFor(stage: string): string {
-    if (stage === 'done') {
-      return 'badge--ok';
-    }
-    if (stage === 'failed') {
-      return 'badge--bad';
-    }
-    return stage === 'refused' ? '' : 'badge--busy';
-  }
+  /** The badge colour for an outcome. Shared with the run page. */
+  readonly toneFor = stageTone;
 
   /** Local date and time, or the raw value if it cannot be parsed. */
   when(iso: string): string {

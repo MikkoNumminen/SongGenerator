@@ -21,7 +21,7 @@ import { AsyncState } from '../../core/state/async-state';
   template: `
     @switch (state().kind) {
       @case ('loading') {
-        <p class="panel panel--busy" role="status" aria-live="polite">
+        <p class="panel" role="status" aria-live="polite">
           <!-- Four bars keeping time. It is the mark from the header doing the
                waiting, which is cheaper than a spinner and says the same thing. -->
           <span class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
