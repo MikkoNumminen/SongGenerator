@@ -94,6 +94,18 @@ describe('retrying the hop in front of the edge', () => {
     expect(calls()).toBe(1);
   });
 
+  it('finishes well inside the poll interval the run watcher uses', async () => {
+    // Everything the app reads goes through this, including the poll that
+    // follows a render at POLL_MS. The watcher waits for each answer before
+    // scheduling the next, so a slow retry cannot stack requests, but it
+    // would still stretch the gap between updates if the backoff were long.
+    const started = Date.now();
+    const { result } = run('GET', 99, 502);
+    await expect(result).rejects.toMatchObject({ status: 502 });
+
+    expect(Date.now() - started).toBeLessThan(1_500);
+  });
+
   it('passes a successful read straight through', async () => {
     const { result, calls } = run('GET', 0, 502);
 

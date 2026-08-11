@@ -28,9 +28,9 @@ import { Observable, retry, throwError, timer } from 'rxjs';
  */
 const RETRY_STATUSES = new Set([502, 503, 504]);
 
-/** Two attempts after the first, backing off. Beyond that the hop is not
- * flaky, it is down, and waiting longer only delays saying so. */
-const ATTEMPTS = 2;
+/** Retries, not attempts: two of these means three tries in all. Beyond that
+ * the hop is not flaky, it is down, and waiting longer only delays saying so. */
+const RETRIES = 2;
 const FIRST_DELAY_MS = 300;
 
 export const retryTheHop: HttpInterceptorFn = (request, next) => {
@@ -39,7 +39,7 @@ export const retryTheHop: HttpInterceptorFn = (request, next) => {
   }
   return next(request).pipe(
     retry({
-      count: ATTEMPTS,
+      count: RETRIES,
       delay: (error: unknown, attempt: number): Observable<number> => {
         const failure = error as HttpErrorResponse;
         if (!RETRY_STATUSES.has(failure?.status)) {
