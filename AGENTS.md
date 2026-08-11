@@ -111,16 +111,25 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   reported silence inside words at 37% of a song's words when the true figure
   was 67%, and the wrong number was quoted before anyone caught it. Any
   measurement of what a render sounds like has to compute the sounding length.
-- **A pipeline path filter is a prefix, not a glob.** `azure-pipelines.yml`
-  triggered on `web/*`, which Azure Pipelines looked for literally and matched
-  nothing, so no change to the site ever started a deploy. It went unnoticed
-  for five deploys because every one of them came from a commit that also
-  touched `azure-pipelines.yml` itself, which is the other entry in the filter.
-  A front end was rewritten, reviewed, merged and left unpublished while every
-  check was green. Write the directory, `web`, which means everything beneath
-  it, and after a merge that should change the site, check that it did rather
-  than assuming: `curl -s <site>/ | Select-String theme-color` names something
-  only the new build has.
+- **Check that a deploy happened. Do not infer it from a green build.** A front
+  end was rewritten, reviewed and merged with everything green, and the site
+  went on serving a build six commits old. The trigger's path filter read
+  `web/*`, and what that matches is not something this repository can settle:
+  Microsoft documents `*` as not crossing a directory separator, which would
+  exclude everything under `web/src`, and older servers as treating a trailing
+  `*` as the directory itself, which would include it. It is written `web` now,
+  which means the same thing under every reading. What is established is the
+  correlation: all five deploys this site has ever had came from commits that
+  also touched `azure-pipelines.yml`, the filter's other entry, and none from a
+  change to the site alone. What is **not** established is that the filter was
+  the whole cause, because the merge in question did add `web/DESIGN.md`,
+  directly inside `web`, which every reading of the old filter matches. When a
+  push that should publish does not, only the Azure DevOps run list can say
+  why: a YAML trigger overridden in the pipeline's own Triggers tab, a used-up
+  parallelism grant queueing a run forever, or a step that failed. So ask the
+  site what it is serving rather than assuming:
+  `curl.exe -s <site>/ | Select-String -Pattern 'main-\w+\.js'` names the
+  hashed bundle, and `outputHashing` is `all`, so it changes with every build.
 - **A green front-end suite says nothing about what a visitor sees.** The web
   tests assert component state, and nothing in them renders at a phone's width,
   presses Tab, or looks at a first paint. Three defects passed the suite for

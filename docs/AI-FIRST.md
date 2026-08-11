@@ -142,14 +142,28 @@ The score went down again, for the same reason as last time. Something did not
 work and no dimension asked about it.
 
 A front end was designed, reviewed, tested and merged, and the deployed site
-did not change. The trigger in `azure-pipelines.yml` filtered on `web/*`, and
-those filters are path prefixes rather than globs, so the starred form was
-looked for literally and matched nothing. What hid it for five deploys is that
-every one of them came from a commit that also touched `azure-pipelines.yml`,
-which is the other entry in the same filter. Every deploy the site ever had was
-triggered by the pipeline file, and none by the site. The suite was green, the
-build was clean, the merge was clean, and a visitor was served a build six
-commits old.
+did not change. The suite was green, the build was clean, the merge was clean,
+and a visitor was served a build six commits old. Nothing in the repository
+noticed, because nothing in the repository was looking.
+
+The suspect is the trigger in `azure-pipelines.yml`, which filtered on `web/*`,
+and the correlation is strong: all five deploys the site has ever had came from
+commits that also touched `azure-pipelines.yml`, the filter's other entry, and
+none from a change to the site alone. It is written `web` now, which means
+everything beneath the directory under every reading of the documentation.
+
+It is worth being exact about what that is, because the first two explanations
+written for it were both wrong, and one of them was committed. `web/*` was
+called a literal string matching nothing, which is false, and then a wildcard
+that cannot cross a directory separator, which is defensible but does not fit
+the evidence: the merge in question added `web/DESIGN.md`, sitting directly
+inside `web`, which every reading of the old filter matches, and no build ran.
+So the filter is a plausible cause rather than a proven one, and the honest
+record says so and names the run list as the only place that can settle it.
+
+That mistake is the dimension in miniature. Twice, a confident mechanism was
+written down from a correlation, because the thing that could have checked it
+lives in a web console rather than in the repository.
 
 That is a class of failure none of the eleven dimensions covered. Ten of them
 ask whether the repository is legible; the eleventh asks whether a render
@@ -194,7 +208,7 @@ per-component stylesheet budget stating the same rule as a number.
 
 ---
 
-## Current: 9.3
+## Current: 8.7
 
 | # | Dimension | 0 | now |
 |---|---|---|---|
