@@ -251,8 +251,15 @@ def create_app(
     @app.get("/health")
     def health() -> HealthReply:
         """Open by design. Says nothing about songs or who may use this."""
+        # Asked of the live allowlist rather than of Settings. The environment
+        # variable only seeds the table once, so after a revoke the two
+        # disagree, and this is the field a front end uses to decide whether to
+        # offer sign-in at all. Reported from the sources the sign-in check
+        # actually consults.
+        can_sign_in = bool(users.emails() | settings.admin_emails)
         return HealthReply(status="ok",
-                           auth_configured=settings.auth_configured,
+                           auth_configured=bool(settings.google_client_id)
+                           and can_sign_in,
                            busy=runner.busy)
 
     Caller = Annotated[Principal, Depends(principal)]
@@ -424,28 +431,42 @@ def create_app(
     def track(song: str, bank: str, name: str, _: Caller):
         """One rendering, to play or to save.
 
-        Matched against the listing rather than joined onto a path, for the
-        same reason as the per-job download: joining is how a route like this
-        becomes a way to read any file on the machine.
+        Contained by resolving the path and checking it is still inside the
+        output directory, rather than by searching the listing for a match.
+        The listing is the safer-looking option and is the wrong one here: a
+        browser playing audio issues range requests, so streaming one song
+        would walk every rendering on the machine several times over, and
+        there are already more than a thousand of them.
+
+        resolve() is what makes the check sound. It normalises `..` and
+        follows symlinks first, so the comparison is against where the path
+        really lands rather than how it was spelled.
         """
         from fastapi.responses import FileResponse
 
-        for found_song, found_bank, path in _library_tracks():
-            if found_song == song and found_bank == bank and path.name == name:
-                return FileResponse(path, media_type="audio/mpeg",
-                                    filename=path.name)
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such track")
+        root = (settings.repo_root / "output").resolve()
+        candidate = (root / song / bank / name).resolve()
+        if (not candidate.is_relative_to(root)
+                or candidate.suffix.lower() != ".mp3"
+                or not candidate.is_file()):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "no such track")
+        return FileResponse(candidate, media_type="audio/mpeg",
+                            filename=candidate.name)
 
-    @app.get("/users")
-    def list_users(_: Admin) -> UsersReply:
-        admins = sorted(settings.admin_emails)
+    def _users_reply() -> UsersReply:
+        """The allowlist as the panel wants it, shared by the two routes that
+        answer with it rather than one route calling the other."""
         return UsersReply(
             users=[UserReply(email=u.email, added_at=u.added_at,
                              added_by=u.added_by,
                              is_admin=u.email in settings.admin_emails)
                    for u in users.all()],
-            admins=admins,
+            admins=sorted(settings.admin_emails),
         )
+
+    @app.get("/users")
+    def list_users(_: Admin) -> UsersReply:
+        return _users_reply()
 
     @app.post("/users", status_code=status.HTTP_201_CREATED)
     def grant(body: GrantRequest, who: Admin) -> UserReply:
@@ -469,7 +490,7 @@ def create_app(
         if not users.remove(target):
             raise HTTPException(status.HTTP_404_NOT_FOUND,
                                 "that address was not on the list")
-        return list_users(_)
+        return _users_reply()
 
     @app.post("/jobs/{job_id}/cancel")
     def cancel(job_id: str, _: Caller) -> CancelReply:

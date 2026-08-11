@@ -11,7 +11,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { API_BASE_URL } from '../../core/api/api-config';
-import { stateForFailure } from '../../core/api/http-failure';
+import { detailOf, isUnreachable, stateForFailure } from '../../core/api/http-failure';
 import { UsersReply } from '../../core/contract/dto';
 import { ALLOWLIST } from '../../core/ports/allowlist.port';
 import { AUTH_CONTEXT } from '../../core/ports/auth-context.port';
@@ -129,20 +129,20 @@ export class AdminPage implements OnInit {
   }
 
   /**
-   * The edge's own sentence where it wrote one.
+   * Why one action failed, in the edge's own words where it wrote them.
    *
-   * It explains things this page cannot know: that an address is an
-   * administrator set in the machine's configuration and cannot be revoked
-   * from here, or that the caller is not an administrator at all. Replacing
-   * those with a generic message would throw away the only explanation.
+   * Uses the shared helpers rather than reading `detail` here. `detailOf`
+   * deliberately ignores a plain-string body, because the edge always answers
+   * with JSON and a string came from something in between: a tunnel or a
+   * proxy, whose body is usually a whole HTML page. Reading the field
+   * directly, as this did, would put markup in front of the reader as if the
+   * server had written them a sentence. It also knows that 502, 503 and 504
+   * mean the desktop is off, not that something broke.
    */
   private explain(failure: HttpErrorResponse): string {
-    const detail = failure.error?.detail;
-    if (typeof detail === 'string' && detail) {
-      return detail;
+    if (isUnreachable(failure.status)) {
+      return 'That machine is not answering. It is a desktop, and it is not always on.';
     }
-    return failure.status === 0
-      ? 'That machine is not answering.'
-      : `The request failed (${failure.status}).`;
+    return detailOf(failure) ?? `The server answered ${failure.status}.`;
   }
 }

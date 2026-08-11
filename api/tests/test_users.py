@@ -169,3 +169,84 @@ class TestSeeding:
         users.seed(frozenset({GUEST}), at=AT)
 
         assert GUEST not in users.emails()
+
+
+class TestHealthTellsTheTruth:
+    """`auth_configured` decides whether a front end offers sign-in at all.
+
+    It used to be read off the environment variable, which only seeds the
+    table once. After a revoke the two disagree, and the field would claim
+    somebody could sign in when the live list said otherwise.
+    """
+
+    def test_an_empty_live_list_with_no_admin_reports_unconfigured(self, tmp_path):
+        # Revoked by a real administrator, then read back by an edge that has
+        # none: the list is empty and the variable still names somebody.
+        client, _ = _app(tmp_path, ADMIN, seeded=frozenset({GUEST}))
+        assert client.delete(f"/users/{GUEST}", headers=AUTH).status_code == 200
+
+        # A second app over the same database is the next request arriving.
+        fresh, _ = _app(tmp_path, ADMIN, admins=frozenset(), seeded=frozenset())
+
+        assert fresh.get("/health").json()["auth_configured"] is False
+
+    def test_an_administrator_alone_is_enough(self, tmp_path):
+        client, _ = _app(tmp_path, ADMIN, seeded=frozenset())
+
+        assert client.get("/health").json()["auth_configured"] is True
+
+
+class TestServingATrack:
+    """The library serves audio off disk, so the containment check is the
+    whole security of the route."""
+
+    def _track(self, tmp_path, name="song.conservative.mp3"):
+        out = tmp_path / "output" / "a_song" / "curated"
+        out.mkdir(parents=True, exist_ok=True)
+        (out / name).write_bytes(b"not really an mp3")
+        return out / name
+
+    def test_a_rendering_is_served(self, tmp_path):
+        self._track(tmp_path)
+        client, _ = _app(tmp_path, ADMIN)
+
+        answer = client.get(
+            "/library/a_song/curated/song.conservative.mp3", headers=AUTH)
+
+        assert answer.status_code == 200
+        assert answer.content == b"not really an mp3"
+
+    def test_climbing_out_of_the_output_directory_is_refused(self, tmp_path):
+        """The whole point of resolving before comparing. A name that walks up
+        and back down must not reach a file the route was never meant to
+        serve."""
+        secret = tmp_path / "secret.mp3"
+        secret.write_bytes(b"not for you")
+        self._track(tmp_path)
+        client, _ = _app(tmp_path, ADMIN)
+
+        for attempt in ("..%2f..%2fsecret.mp3", "..%2F..%2Fsecret.mp3"):
+            answer = client.get(
+                f"/library/a_song/curated/{attempt}", headers=AUTH)
+            assert answer.status_code == 404, attempt
+            assert b"not for you" not in answer.content
+
+    def test_only_renderings_are_served(self, tmp_path):
+        """Containment alone would happily hand over anything inside output/."""
+        out = tmp_path / "output" / "a_song" / "curated"
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "notes.txt").write_text("private", encoding="utf-8")
+        client, _ = _app(tmp_path, ADMIN)
+
+        answer = client.get("/library/a_song/curated/notes.txt", headers=AUTH)
+
+        assert answer.status_code == 404
+
+    def test_a_stranger_gets_no_audio(self, tmp_path):
+        self._track(tmp_path)
+        client, _ = _app(tmp_path, STRANGER, seeded=frozenset())
+
+        answer = client.get(
+            "/library/a_song/curated/song.conservative.mp3", headers=AUTH)
+
+        assert answer.status_code == 401

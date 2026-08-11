@@ -901,7 +901,7 @@
     },
     "/library/{song}/{bank}/{name}": {
       "get": {
-        "description": "One rendering, to play or to save.\n\nMatched against the listing rather than joined onto a path, for the\nsame reason as the per-job download: joining is how a route like this\nbecomes a way to read any file on the machine.",
+        "description": "One rendering, to play or to save.\n\nContained by resolving the path and checking it is still inside the\noutput directory, rather than by searching the listing for a match.\nThe listing is the safer-looking option and is the wrong one here: a\nbrowser playing audio issues range requests, so streaming one song\nwould walk every rendering on the machine several times over, and\nthere are already more than a thousand of them.\n\nresolve() is what makes the check sound. It normalises `..` and\nfollows symlinks first, so the comparison is against where the path\nreally lands rather than how it was spelled.",
         "operationId": "track_library__song___bank___name__get",
         "parameters": [
           {
