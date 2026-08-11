@@ -250,6 +250,87 @@ class TestOneGenerationBack:
         assert len(kept) == 1
         assert kept[0].read_bytes() == b"second"
 
+    def test_the_rollback_flag_restores_without_rendering(self, tmp_path, capsys):
+        """End to end through main. The point of the flag is that it needs no
+        stems, no bank and no GPU, so it must return before any of that."""
+        song = tmp_path / "song.mp4"
+        song.write_bytes(b"not actually read")
+        out = tmp_path / "out" / "song.mp3"
+        folder = out.parent / "song" / "curated"
+        folder.mkdir(parents=True)
+        for level in ("wild", "conservative"):
+            take = folder / f"song.{level}.mp3"
+            take.write_bytes(f"good {level}".encode())
+            cli.keep_the_one_it_replaces(take)
+            take.write_bytes(f"bad {level}".encode())
+
+        code = cli.main([str(song), "--bank", "curated", "--output", str(out),
+                         "--rollback"])
+
+        assert code == cli.EXIT_OK
+        assert (folder / "song.wild.mp3").read_bytes() == b"good wild"
+        assert (folder / "song.conservative.mp3").read_bytes() == (
+            b"good conservative")
+
+    def test_the_rollback_flag_reports_when_there_is_nothing_kept(
+            self, tmp_path, capsys):
+        song = tmp_path / "song.mp4"
+        song.write_bytes(b"not actually read")
+
+        code = cli.main([str(song), "--bank", "curated",
+                         "--output", str(tmp_path / "out" / "song.mp3"),
+                         "--rollback"])
+
+        assert code == cli.EXIT_ERROR
+        assert "nothing kept" in capsys.readouterr().err
+
+    def test_rolling_back_puts_the_previous_take_in_place(self, tmp_path):
+        """The other half of keeping one. Without this the backup is a file in
+        a folder and the rollback is done in Explorer."""
+        folder = tmp_path / "song" / "nbank"
+        target = self._take(folder, b"the good one")
+        cli.keep_the_one_it_replaces(target)
+        self._take(folder, b"the bad re-render")
+
+        assert cli.restore_the_previous(target) == target
+        assert target.read_bytes() == b"the good one"
+
+    def test_rolling_back_twice_returns_to_where_it_started(self, tmp_path):
+        """Somebody comparing two takes by ear will press this repeatedly, and
+        neither take may be the one that gets thrown away."""
+        folder = tmp_path / "song" / "nbank"
+        target = self._take(folder, b"first")
+        cli.keep_the_one_it_replaces(target)
+        self._take(folder, b"second")
+
+        cli.restore_the_previous(target)
+        cli.restore_the_previous(target)
+
+        assert target.read_bytes() == b"second"
+        assert (folder / cli.PREVIOUS_DIR / target.name).read_bytes() == b"first"
+        # The swap leaves nothing behind it.
+        assert sorted(p.name for p in (folder / cli.PREVIOUS_DIR).iterdir()) == [
+            target.name
+        ]
+
+    def test_rolling_back_with_nothing_kept_says_so(self, tmp_path):
+        folder = tmp_path / "song" / "nbank"
+        target = self._take(folder, b"the only one")
+
+        assert cli.restore_the_previous(target) is None
+        assert target.read_bytes() == b"the only one"
+
+    def test_rolling_back_a_deleted_take_is_a_plain_restore(self, tmp_path):
+        """The safety guard against deleting by accident: the kept take comes
+        back even when there is nothing left to swap it with."""
+        folder = tmp_path / "song" / "nbank"
+        target = self._take(folder, b"deleted by hand")
+        cli.keep_the_one_it_replaces(target)
+
+        assert cli.restore_the_previous(target) == target
+        assert target.read_bytes() == b"deleted by hand"
+        assert not (folder / cli.PREVIOUS_DIR / target.name).exists()
+
     def test_a_backup_is_kept_per_level_and_per_bank(self, tmp_path):
         """A wild render must not evict the conservative backup, nor one bank
         another's. Those are the slots the naming already separates."""

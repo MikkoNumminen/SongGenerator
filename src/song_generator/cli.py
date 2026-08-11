@@ -70,6 +70,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--work-dir", type=Path, default=Path(config.WORK_DIR),
                    help="where stems and analysis are cached")
     p.add_argument("--force", action="store_true", help="ignore cached stems and separate again")
+    p.add_argument("--rollback", action="store_true",
+                   help="swap the takes for this song and bank with the ones "
+                        "they replaced, and render nothing")
     p.add_argument("--json", action="store_true", help="print the analysis report as JSON")
     p.add_argument("--slim", action="store_true",
                    help="omit the raw F0 contour from analysis.json (stage 4 needs it)")
@@ -167,6 +170,32 @@ def keep_the_one_it_replaces(target: Path) -> Path | None:
     return kept
 
 
+def restore_the_previous(target: Path) -> Path | None:
+    """Swap a rendering with the take it replaced. The rollback itself.
+
+    A swap rather than a move, so the take being rolled back from becomes the
+    new backup. Pressing this twice returns to where it started, which is what
+    somebody comparing two takes by ear will do, and neither one is ever the
+    thing that gets thrown away.
+
+    Returns the restored file, or None when there is nothing kept for it.
+    """
+    kept = target.parent / PREVIOUS_DIR / target.name
+    if not kept.is_file():
+        return None
+    if not target.is_file():
+        # Nothing to swap with: the current take was deleted by hand, so this
+        # is a plain restore.
+        target.parent.mkdir(parents=True, exist_ok=True)
+        kept.replace(target)
+        return target
+    spare = kept.with_suffix(kept.suffix + ".swapping")
+    target.replace(spare)
+    kept.replace(target)
+    spare.replace(kept)
+    return target
+
+
 def output_path(explicit: Path | None, song: Path, bank: str) -> Path:
     """Where a run writes, with every song in a folder of its own and every
     bank in a folder inside that.
@@ -186,8 +215,42 @@ def output_path(explicit: Path | None, song: Path, bank: str) -> Path:
     return base.parent / base.stem / bank / base.name
 
 
+def _rollback(args) -> int:
+    """Put the previous takes back for one song and bank.
+
+    Every level at once, because that is how they were rendered: a run writes
+    conservative and wild together, so a rollback that did one of them would
+    leave a pair from two different runs and no way to tell by looking.
+    """
+    # The same two lines the render itself uses to decide where it writes.
+    # Anything else would roll back a folder the render never touches.
+    bank_name = args.words_dir.name if args.words_dir else args.bank
+    out = output_path(args.output, args.input, bank_name)
+
+    restored = []
+    for candidate in sorted(out.parent.glob("*.mp3")):
+        if restore_the_previous(candidate) is not None:
+            restored.append(candidate)
+
+    if not restored:
+        print(f"error: nothing kept to roll back to in {out.parent}",
+              file=sys.stderr)
+        return EXIT_ERROR
+    for path in restored:
+        print(f"  rolled back {path}")
+    print(f"\n  {len(restored)} restored. Running this again puts them back, "
+          f"because the swap keeps both takes.")
+    return EXIT_OK
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+
+    if args.rollback:
+        # Before anything expensive. Rolling back needs neither stems nor a
+        # bank nor a GPU, and asking for them would make the one command you
+        # reach for when a render went wrong the slowest one there is.
+        return _rollback(args)
 
     if not args.input.is_file():
         print(f"error: input file not found: {args.input}", file=sys.stderr)
