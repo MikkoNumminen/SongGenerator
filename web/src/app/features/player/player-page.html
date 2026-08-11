@@ -47,7 +47,11 @@
           <h2 class="song__title">{{ group.song }}</h2>
           <ul class="takes">
             @for (t of group.tracks; track t.bank + '/' + t.name) {
-              <li class="take" [class.take--current]="isCurrent(t)">
+              <li
+                class="take"
+                [class.take--current]="isCurrent(t)"
+                [attr.aria-current]="isCurrent(t) ? 'true' : null"
+              >
                 <button
                   type="button"
                   class="take__play"

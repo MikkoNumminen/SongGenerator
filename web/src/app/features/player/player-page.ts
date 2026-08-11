@@ -12,8 +12,11 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { API_BASE_URL } from '../../core/api/api-config';
-import { detailOf, isUnreachable } from '../../core/api/http-failure';
-import { stateForFailure } from '../../core/api/http-failure';
+import {
+  detailOf,
+  isUnreachable,
+  stateForFailure,
+} from '../../core/api/http-failure';
 import { TrackReply } from '../../core/contract/dto';
 import { LIBRARY } from '../../core/ports/library.port';
 import {
