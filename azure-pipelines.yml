@@ -1,3 +1,22 @@
+# Retired. Kept as the Azure DevOps version of the deployment, not as a thing
+# that runs.
+#
+# `.github/workflows/deploy.yml` publishes the site now, and does the same
+# work: install, test, build, write the runtime config, upload to the same
+# Static Web App with the same deployment token. The site is still Azure and
+# still created by `infra/main.bicep`; only the thing that presses the button
+# moved.
+#
+# Why it moved, in one line: hosted parallelism is no longer granted
+# automatically, this pipeline stopped producing runs at all, and a front end
+# was merged and left unpublished for two days with every check green. The
+# repository is public, so GitHub Actions is unmetered on standard runners and
+# needs no grant. `docs/AZURE.md` has the longer version.
+#
+# `trigger: none` rather than deletion, so the two can be read side by side.
+# Nothing here is dead weight to an agent: it is the file the runbook, the
+# architecture notes and one iteration of docs/AI-FIRST.md all refer to.
+
 # Build the front end and publish it to Azure Static Web Apps.
 #
 # The site being reachable by anyone is not a hole. It is HTML and JavaScript
@@ -8,30 +27,9 @@
 #
 # Setting this up is in docs/WORKFLOWS.md under "Put the site online".
 
-trigger:
-  branches:
-    include:
-      - main
-  paths:
-    # The audio pipeline is most of this repository and has nothing to do with
-    # the site. Building it on every commit would burn the free minutes on
-    # changes that cannot affect what gets published.
-    #
-    # `web`, not `web/*`. What a trailing `*` matches here is not settled:
-    # Microsoft documents `*` as not crossing a directory separator, which
-    # would exclude everything under `web/src`, and older servers as treating
-    # the starred form as the directory itself, which would include it. The
-    # directory on its own means everything beneath it under every reading,
-    # which is what was intended.
-    #
-    # It is written this way because a front end was rewritten, merged and
-    # never published while the filter read `web/*`, and because every deploy
-    # this site has had came from a commit that also touched this file. That
-    # the filter was the whole cause is not proven; see docs/WORKFLOWS.md
-    # under "Put the site online" for the check and for where to look next.
-    include:
-      - web
-      - azure-pipelines.yml
+# Off. `.github/workflows/deploy.yml` is the trigger now, and two publishers
+# pointed at one site would race each other over which build wins.
+trigger: none
 
 # No validation build on pull requests. The free grant is 1800 minutes a month
 # and the suite already runs here before anything is published, so a second run

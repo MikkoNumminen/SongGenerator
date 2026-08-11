@@ -113,8 +113,9 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   measurement of what a render sounds like has to compute the sounding length.
 - **Check that a deploy happened. Do not infer it from a green build.** A front
   end was rewritten, reviewed and merged with everything green, and the site
-  went on serving a build six commits old. The trigger's path filter read
-  `web/*`, and what that matches is not something this repository can settle:
+  went on serving a build six commits old. It was published by Azure DevOps at
+  the time, and its trigger's path filter read `web/*`, which is not something
+  this repository can settle:
   Microsoft documents `*` as not crossing a directory separator, which would
   exclude everything under `web/src`, and older servers as treating a trailing
   `*` as the directory itself, which would include it. It is written `web` now,
@@ -123,11 +124,13 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   also touched `azure-pipelines.yml`, the filter's other entry, and none from a
   change to the site alone. What is **not** established is that the filter was
   the whole cause, because the merge in question did add `web/DESIGN.md`,
-  directly inside `web`, which every reading of the old filter matches. When a
-  push that should publish does not, only the Azure DevOps run list can say
-  why: a YAML trigger overridden in the pipeline's own Triggers tab, a used-up
-  parallelism grant queueing a run forever, or a step that failed. So ask the
-  site what it is serving rather than assuming:
+  directly inside `web`, which every reading of the old filter matches. The
+  pipeline had stopped producing runs at all, for a reason only its own run
+  list could have shown, so publishing moved to
+  `.github/workflows/deploy.yml`, which is unmetered here and next to the
+  code. That workflow now ends by asking the site what it is serving and fails
+  if the answer is not the build it just made. Ask the same thing by hand
+  whenever you are wondering:
   `curl.exe -s <site>/ | Select-String -Pattern 'main-\w+\.js'` names the
   hashed bundle, and `outputHashing` is `all`, so it changes with every build.
 - **A green front-end suite says nothing about what a visitor sees.** The web

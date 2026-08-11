@@ -165,6 +165,14 @@ That mistake is the dimension in miniature. Twice, a confident mechanism was
 written down from a correlation, because the thing that could have checked it
 lives in a web console rather than in the repository.
 
+The publisher has since moved to `.github/workflows/deploy.yml`, which is the
+same steps in a place this repository can see, and it ends by asking the site
+which build it is serving and failing if the answer is not the one it just
+made. That last step is dimension 12 in its smallest possible form: not a
+rendered check, just a check that the render reached anybody. The Azure version
+is kept with its trigger off, because reading the two side by side is the whole
+lesson.
+
 That is a class of failure none of the eleven dimensions covered. Ten of them
 ask whether the repository is legible; the eleventh asks whether a render
 sounds right. None asks whether what a person receives is what the repository
