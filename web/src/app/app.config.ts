@@ -7,6 +7,7 @@ import { HttpAllowlist } from './core/api/http-allowlist';
 import { HttpBankCatalog } from './core/api/http-bank-catalog';
 import { HttpLibrary } from './core/api/http-library';
 import { HttpRunSource } from './core/api/http-run-source';
+import { retryTheHop } from './core/api/retry-the-hop';
 import { attachBearerToken } from './core/auth/auth-interceptor';
 import { RuntimeConfig } from './core/config/runtime-config';
 import { GOOGLE_CLIENT_ID, GoogleAuth } from './core/auth/google-auth';
@@ -36,7 +37,11 @@ export function appConfigWith(config: RuntimeConfig): ApplicationConfig {
     { provide: GOOGLE_CLIENT_ID, useValue: config.googleClientId },
     provideBrowserGlobalErrorListeners(),
     provideRouter(routes),
-    provideHttpClient(withInterceptors([attachBearerToken])),
+    // Retry first, so it wraps the token attachment rather than sitting
+    // inside it: each attempt then runs attachBearerToken again and asks for
+    // the token as it stands, instead of replaying whatever was attached to
+    // the attempt that failed.
+    provideHttpClient(withInterceptors([retryTheHop, attachBearerToken])),
     { provide: ALLOWLIST, useExisting: HttpAllowlist },
     { provide: BANK_CATALOG, useExisting: HttpBankCatalog },
     { provide: LIBRARY, useExisting: HttpLibrary },
