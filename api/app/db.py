@@ -47,6 +47,38 @@ CREATE TABLE IF NOT EXISTS jobs (
 );
 
 CREATE INDEX IF NOT EXISTS jobs_created_at ON jobs (created_at DESC);
+
+-- Who may use this edge, as a table rather than an environment variable.
+--
+-- It was SONGGEN_ALLOWED_EMAILS, read once at startup, so granting somebody
+-- access meant editing a file on the desktop and restarting the service. That
+-- is fine for a list that never changes and useless for one the owner is meant
+-- to manage from a browser.
+--
+-- The environment variable still seeds this table the first time, so an
+-- existing machine keeps working with no manual step, and it stays the way an
+-- edge with an empty database lets its owner in at all.
+--
+-- Admins are NOT in here. They come from the environment and are always
+-- allowed, because a panel whose whole job is editing this table must not be
+-- able to lock its owner out of itself.
+CREATE TABLE IF NOT EXISTS allowed_emails (
+    email     TEXT PRIMARY KEY,
+    added_at  TEXT NOT NULL,
+    added_by  TEXT NOT NULL
+);
+
+-- Small facts about this database rather than about a job.
+--
+-- It exists for one of them: whether the allowlist has ever been seeded from
+-- the environment. "Seed when the table is empty" is not the same question,
+-- and the difference is a bug: revoke the last remaining address and the table
+-- is empty again, so the next restart seeds it and the revocation undoes
+-- itself. Asking whether it has happened before answers it once and for good.
+CREATE TABLE IF NOT EXISTS meta (
+    key    TEXT PRIMARY KEY,
+    value  TEXT NOT NULL
+);
 """
 
 

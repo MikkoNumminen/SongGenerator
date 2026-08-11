@@ -33,6 +33,23 @@ export interface CancelReply {
   cancelled: boolean;
 }
 
+/**
+ * One finished rendering, as something to download.
+ */
+export interface FileReply {
+  bytes: number;
+  level?: string | null;
+  name: string;
+}
+
+export interface FilesReply {
+  files: Array<FileReply>;
+}
+
+export interface GrantRequest {
+  email: string;
+}
+
 export interface HTTPValidationError {
   detail?: Array<ValidationError>;
 }
@@ -77,6 +94,10 @@ export interface JobReply {
   started_at?: string | null;
 }
 
+export interface LibraryReply {
+  tracks: Array<TrackReply>;
+}
+
 /**
  * A request to make a song.
  *
@@ -91,6 +112,29 @@ export interface SubmitBody {
   level?: string | null;
   mimicry?: number | null;
   source_url: string;
+}
+
+/**
+ * One playable rendering, addressed by where it sits on disk.
+ */
+export interface TrackReply {
+  bank: string;
+  bytes: number;
+  level?: string | null;
+  name: string;
+  song: string;
+}
+
+export interface UserReply {
+  added_at: string;
+  added_by: string;
+  email: string;
+  is_admin: boolean;
+}
+
+export interface UsersReply {
+  admins: Array<string>;
+  users: Array<UserReply>;
 }
 
 export interface ValidationError {

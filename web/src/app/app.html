@@ -21,6 +21,13 @@
         Make a song
       </a>
       <a routerLink="/runs" routerLinkActive="active">Earlier runs</a>
+      <!-- Shown to anyone signed in, not only to administrators. The page
+           reports what the edge says rather than guessing at a role here, and
+           a link hidden by the browser was never the thing keeping anybody
+           out: the edge answers 403 whatever this renders. -->
+      @if (auth.user()) {
+        <a routerLink="/admin" routerLinkActive="active">Who may use this</a>
+      }
     </nav>
 
     <div class="who">

@@ -34,7 +34,7 @@ EnvironmentFile=%h/.config/songgenerator.env
 #
 # Measured rather than guessed: a plain variable arrives as None on the Windows
 # side, and the same variable with WSLENV naming it arrives intact.
-Environment=WSLENV=SONGGEN_GOOGLE_CLIENT_ID:SONGGEN_ALLOWED_EMAILS:SONGGEN_ALLOWED_ORIGINS
+Environment=WSLENV=SONGGEN_GOOGLE_CLIENT_ID:SONGGEN_ALLOWED_EMAILS:SONGGEN_ADMIN_EMAILS:SONGGEN_ALLOWED_ORIGINS
 
 WorkingDirectory=/mnt/d/koodaamista/LuokkaretkiGenerator
 ExecStart=/mnt/d/koodaamista/LuokkaretkiGenerator/.venv/Scripts/python.exe -m uvicorn app.main:build --factory --app-dir api --host 127.0.0.1 --port 8020
