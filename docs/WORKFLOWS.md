@@ -322,6 +322,20 @@ sounding**:
 | `pilluvittu*`, which built `words_hq4` | **+1.5 dB** |
 | a buried vocal that produced nothing usable | **−3.1 dB** |
 
+```powershell
+.\.venv\Scripts\python.exe -c @"
+import pathlib, numpy as np, soundfile as sf
+d = pathlib.Path('work/<slug>')
+v = sf.read(d/'vocal.wav', dtype='float32', always_2d=True)[0].mean(axis=1)
+i = sf.read(d/'instrumental.wav', dtype='float32', always_2d=True)[0].mean(axis=1)
+n = min(len(v), len(i)); v, i = v[:n], i[:n]
+# Only where the voice is sounding, or the silences flatter it.
+on = np.abs(v) > 0.2 * np.percentile(np.abs(v), 99.5)
+db = lambda x: 20 * np.log10(max(float(x), 1e-9))
+print(db(np.sqrt((v[on]**2).mean())) - db(np.sqrt((i[on]**2).mean())))
+"@
+```
+
 Above the band, the separator has something clean to take and the clips need
 no rescuing. Below it, everything downstream degrades together: the stem is
 quiet and full of artefacts, standardising lifts it about 8 dB with the
@@ -337,10 +351,11 @@ bad source.
 
 ### When the words have no silence between them
 
-`mine_words` cuts on silence, so a list recited without gaps defeats it. Four
-threshold settings each returned two clips of twenty-nine seconds; pushing
-harder gave four clips, half of them starting mid-word. Word timestamps from
-the recogniser are the only boundary such audio contains.
+`mine_words` cuts on silence, so a list recited without gaps defeats it.
+Three threshold settings each returned two clips of about twenty-nine seconds;
+a fourth, pushed harder, split them into four clips with half starting
+mid-word. Word timestamps from the recogniser are the only boundary such audio
+contains.
 
 Two traps in doing that:
 
