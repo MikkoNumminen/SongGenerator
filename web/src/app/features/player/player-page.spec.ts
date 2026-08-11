@@ -104,7 +104,9 @@ describe('the player', () => {
     // in CI while this one passed locally, so the invariant is asserted here
     // rather than trusted.
     expect(new URL('https://example.invalid/a').pathname).toBe('/a');
-    expect(typeof URL.createObjectURL).toBe('function');
+    // And that the two helpers really were installed on it, rather than the
+    // assertion above passing because nothing was stubbed at all.
+    expect(URL.createObjectURL).toBe(created);
   });
 
   it('groups the takes under their song', async () => {
