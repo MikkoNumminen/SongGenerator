@@ -186,6 +186,23 @@ describe('the player', () => {
     expect(fixture.componentInstance.source()).toBeNull();
   });
 
+  it('does not restart the shuffle when what ended is not in the queue', async () => {
+    const fixture = await render(library);
+    fixture.componentInstance.shuffle();
+    await fixture.whenStable();
+    const played = library.asked.length;
+    // A selection the queue does not contain. findIndex returns -1, and
+    // queue[at + 1] would be queue[0].
+    fixture.componentInstance.selected.set(
+      track('somewhere else', 'nbank', 'wild'),
+    );
+
+    fixture.componentInstance.next();
+    await fixture.whenStable();
+
+    expect(library.asked.length).toBe(played);
+  });
+
   it('groups the takes under their song', async () => {
     const fixture = await render(library);
 

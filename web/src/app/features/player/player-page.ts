@@ -272,6 +272,14 @@ export class PlayerPage implements OnInit, OnDestroy {
     }
     const now = this.selected();
     const at = now ? this.queue.findIndex((t) => keyOf(t) === keyOf(now)) : -1;
+    if (at < 0) {
+      // Whatever just ended is not the thing this queue is playing through.
+      // `queue[at + 1]` would be queue[0] here, which restarts the shuffle
+      // from the top and sounds like the page ignoring what was asked for.
+      // Nothing reaches this today, because choosing a take clears the queue.
+      this.queue = [];
+      return;
+    }
     const following = this.queue[at + 1];
     if (following) {
       this.play(following);
