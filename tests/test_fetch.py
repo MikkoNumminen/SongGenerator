@@ -243,3 +243,71 @@ def test_an_unknown_recorded_address_is_not_a_collision(offline, tmp_path):
 
     assert result.already_present is True
     assert result.conflicting_url is None
+
+
+# ---------------------------------------------------------------------------
+# Saying which kind of "not available" this is
+# ---------------------------------------------------------------------------
+
+STORYBOARDS = [
+    {"format_id": "sb0", "ext": "mhtml", "protocol": "mhtml",
+     "vcodec": "images", "acodec": "none"},
+    {"format_id": "sb1", "ext": "mhtml", "protocol": "mhtml",
+     "vcodec": "images", "acodec": "none"},
+]
+
+REAL_FORMATS = STORYBOARDS + [
+    {"format_id": "137", "ext": "mp4", "protocol": "https",
+     "vcodec": "avc1.640028", "acodec": "none"},
+    {"format_id": "140", "ext": "m4a", "protocol": "https",
+     "vcodec": "none", "acodec": "mp4a.40.2"},
+]
+
+
+class TestWhyItCouldNotBeRead:
+    """"This video is not available" covers two situations and reads like the
+    first: the page is gone, or the page is fine and the site is withholding
+    every playable stream from anything that is not a browser. Three tries on
+    the second, believing it was the first, is what prompted this.
+    """
+
+    def test_storyboards_alone_are_not_something_to_download(self):
+        assert fetch._has_media({"formats": STORYBOARDS}) is False
+        assert fetch._has_media({"formats": REAL_FORMATS}) is True
+        assert fetch._has_media({}) is False
+
+    def test_a_page_offering_only_thumbnails_is_named_as_such(self, monkeypatch):
+        monkeypatch.setattr(
+            fetch, "_probe_without_format_filter",
+            lambda url: {"formats": STORYBOARDS})
+
+        said = fetch._diagnose(URL, Exception("This video is not available"))
+
+        assert "no audio or video" in said
+        assert "passing that file works" in said
+        assert "This video is not available" not in said
+
+    def test_a_page_that_does_have_media_keeps_the_original_reason(
+            self, monkeypatch):
+        """Media present and the fetch still failed means something else went
+        wrong, and inventing a story about it would be worse than quoting."""
+        monkeypatch.setattr(
+            fetch, "_probe_without_format_filter",
+            lambda url: {"formats": REAL_FORMATS})
+
+        said = fetch._diagnose(URL, Exception("HTTP Error 403"))
+
+        assert "HTTP Error 403" in said
+
+    def test_a_second_failure_falls_back_rather_than_masking_the_first(
+            self, monkeypatch):
+        """The diagnosis is a courtesy on a path that has already failed. If
+        it fails too, the caller still gets the reason it came for."""
+        def boom(url):
+            raise RuntimeError("network gone")
+
+        monkeypatch.setattr(fetch, "_probe_without_format_filter", boom)
+
+        said = fetch._diagnose(URL, Exception("This video is not available"))
+
+        assert "This video is not available" in said

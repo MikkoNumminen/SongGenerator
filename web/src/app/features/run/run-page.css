@@ -1,21 +1,252 @@
-.run { max-width: 42rem; }
-.source { font-family: ui-monospace, monospace; word-break: break-all; opacity: 0.85; }
-.meta { opacity: 0.7; margin-top: -0.5rem; }
-.stages { list-style: none; padding: 0; margin: 1.5rem 0; display: grid; gap: 0.6rem; }
-.stages li { display: flex; align-items: center; gap: 0.6rem; opacity: 0.45; }
-.stages li.done, .stages li.current { opacity: 1; }
-.dot { width: 0.7rem; height: 0.7rem; border-radius: 50%;
-  border: 2px solid currentColor; }
-.done .dot { background: currentColor; }
-.current .dot { background: currentColor; animation: pulse 1.2s ease-in-out infinite; }
-@keyframes pulse { 50% { opacity: 0.35; } }
-@media (prefers-reduced-motion: reduce) { .current .dot { animation: none; } }
-.percent { opacity: 0.7; }
-.verdict { padding: 1rem 1.25rem; border-radius: 8px; margin: 1.25rem 0; }
-.verdict p { margin: 0 0 0.5rem; } .verdict p:last-child { margin-bottom: 0; }
-.refused { background: color-mix(in srgb, currentColor 6%, transparent); }
-.failed { background: color-mix(in srgb, #c0392b 12%, transparent); }
-.done { background: color-mix(in srgb, #27ae60 12%, transparent); }
-.path { font-family: ui-monospace, monospace; word-break: break-all; }
-.note { opacity: 0.75; }
-.cancel { padding: 0.5rem 1rem; font: inherit; border-radius: 6px; cursor: pointer; }
+.run h1 {
+  font-size: var(--text-xl);
+}
+
+.run {
+  display: grid;
+  gap: var(--space-5);
+  max-width: 48rem;
+  margin-inline: auto;
+}
+
+.sheet {
+  display: grid;
+  gap: var(--space-5);
+  padding: var(--space-6);
+}
+
+.sheet__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.sheet__what {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.source {
+  overflow-wrap: anywhere;
+  font-size: var(--text-sm);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: calc(var(--space-4) * -1);
+}
+
+.chip {
+  padding: 0.12rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunk);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 560;
+}
+
+.chip--quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-faint);
+  font-weight: 400;
+}
+
+.chip[data-level='wild'] {
+  border-color: color-mix(in srgb, var(--wild) 40%, transparent);
+  background: var(--wild-wash);
+  color: var(--wild-text);
+}
+
+.chip[data-level='conservative'] {
+  border-color: color-mix(in srgb, var(--ok) 40%, transparent);
+  background: var(--ok-wash);
+  color: var(--ok-text);
+}
+
+/* ---- the meter: one segment per stage, filled as it goes ---- */
+
+.meter {
+  display: flex;
+  gap: 0.25rem;
+  height: 0.5rem;
+}
+
+.meter__seg {
+  position: relative;
+  flex: 1;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+.meter__fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width var(--slow) var(--ease);
+}
+
+.meter__seg.done .meter__fill {
+  background: var(--ok);
+}
+
+/* The stage being worked on is swept whether or not it has a percentage, so a
+   run that reports no number still reads as running rather than as stuck. */
+.meter__seg.current::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--accent) 70%, transparent),
+    transparent
+  );
+  animation: sweep 1.8s var(--ease) infinite;
+}
+
+@keyframes sweep {
+  from {
+    translate: -100% 0;
+  }
+  to {
+    translate: 100% 0;
+  }
+}
+
+/* ---- the stages, spelled out ---- */
+
+.stages {
+  display: grid;
+  gap: 0;
+  margin: calc(var(--space-3) * -1) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stages li {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 0.45rem 0;
+  padding-left: 1.5rem;
+  color: var(--text-faint);
+  transition: color var(--normal) var(--ease);
+}
+
+/* The rail, drawn between the nodes rather than behind them, so it stops at
+   the last stage instead of trailing off the end of the list. */
+.stages li:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  top: calc(50% + 0.55rem);
+  bottom: calc(-50% + 0.55rem);
+  left: 0.34rem;
+  width: 1px;
+  background: var(--line-strong);
+}
+
+.stages__node {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 0.7rem;
+  height: 0.7rem;
+  translate: 0 -50%;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+}
+
+.stages li.done {
+  color: var(--ok-text);
+}
+
+.stages li.done .stages__node {
+  background: currentColor;
+}
+
+.stages li.current {
+  color: var(--text);
+  font-weight: 620;
+}
+
+.stages li.current .stages__node {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-wash);
+}
+
+.stages__name {
+  text-transform: capitalize;
+}
+
+.stages__percent {
+  margin-left: auto;
+  color: var(--accent-text);
+  font-size: var(--text-sm);
+}
+
+/* ---- how it ended ---- */
+
+.verdict {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid var(--text-faint);
+  border-radius: var(--radius);
+  background: var(--surface-sunk);
+}
+
+.verdict p {
+  color: var(--text-muted);
+}
+
+.verdict p:first-child {
+  color: var(--text);
+}
+
+.verdict--done {
+  border-left-color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 8%, var(--surface-sunk));
+}
+
+.verdict--failed {
+  border-left-color: var(--bad);
+  background: color-mix(in srgb, var(--bad) 8%, var(--surface-sunk));
+}
+
+.verdict--refused {
+  border-left-color: var(--accent);
+}
+
+.path {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: var(--text-sm);
+  overflow-wrap: anywhere;
+}
+
+.sheet__foot {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 40rem) {
+  .sheet {
+    padding: var(--space-5) var(--space-4);
+  }
+}

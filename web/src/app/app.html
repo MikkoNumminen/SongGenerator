@@ -1,35 +1,74 @@
-<header>
-  <nav>
-    <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Make a song</a>
-    <a routerLink="/runs" routerLinkActive="active">Earlier runs</a>
-  </nav>
+<a class="skip" href="#content">Skip to the page</a>
 
-  <div class="who">
-    @if (auth.user(); as user) {
-      <span class="email">{{ user.email }}</span>
-      <button type="button" (click)="auth.signOut()">Sign out</button>
-    } @else {
-      <app-google-sign-in />
-    }
+<header class="topbar">
+  <div class="topbar__inner">
+    <a class="brand" routerLink="/" aria-label="SongGenerator, back to the start">
+      <!-- Four bars at four heights: a level meter, which is close enough to
+           what this tool does to work as a mark. It is inline rather than an
+           image so it takes the theme's colours with it. -->
+      <svg class="brand__mark" viewBox="0 0 32 32" aria-hidden="true">
+        <rect x="1" y="13" width="4" height="6" rx="2" />
+        <rect x="8" y="8" width="4" height="16" rx="2" />
+        <rect x="15" y="3" width="4" height="26" rx="2" />
+        <rect x="22" y="10" width="4" height="12" rx="2" class="brand__mark--alt" />
+        <rect x="29" y="14" width="3" height="4" rx="1.5" />
+      </svg>
+      <span class="brand__name">Song<span class="brand__name--light">Generator</span></span>
+    </a>
+
+    <nav class="nav" aria-label="Pages">
+      <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
+        Make a song
+      </a>
+      <a routerLink="/runs" routerLinkActive="active">Earlier runs</a>
+    </nav>
+
+    <div class="who">
+      <span class="badge" [class]="'badge--' + machine().tone" [title]="machine().title">
+        <span class="dot" [class.dot--live]="machine().tone === 'busy'"></span>
+        {{ machine().label }}
+      </span>
+
+      <app-theme-toggle />
+
+      @if (auth.user(); as user) {
+        <span class="email mono" [title]="user.email">{{ user.email }}</span>
+        <button type="button" class="btn btn--quiet btn--sm" (click)="auth.signOut()">
+          Sign out
+        </button>
+      } @else {
+        <app-google-sign-in />
+      }
+    </div>
   </div>
 </header>
 
-@if (!health.configured) {
-  <p class="banner" role="status">
-    This site has not been told where its backend is, so it cannot make
-    anything yet. Nothing is wrong with your machine.
-  </p>
-} @else if (health.status().kind === 'offline') {
-  <p class="banner" role="status">
-    The machine that makes the songs is not answering. It is a desktop, and it
-    is not always on.
-  </p>
-} @else if (health.reachable() && !health.authConfigured()) {
-  <p class="banner" role="status">
-    That machine has no allowlist set, so nobody can sign in to it yet.
-  </p>
-}
+<!-- `tabindex="-1"` is what makes the skip link above actually skip. A jump to
+     a fragment only moves the caret in some browsers; without this, Safari and
+     every screen reader leave focus on the link and the next Tab goes straight
+     back into the bar. -->
+<main id="content" class="page" tabindex="-1">
+  @if (!health.configured) {
+    <p class="banner banner--bad" role="status">
+      This site has not been told where its backend is, so it cannot make anything yet. Nothing is
+      wrong with your machine.
+    </p>
+  } @else if (health.status().kind === 'offline') {
+    <p class="banner" role="status">
+      The machine that makes the songs is not answering. It is a desktop, and it is not always on.
+    </p>
+  } @else if (health.reachable() && !health.authConfigured()) {
+    <p class="banner banner--bad" role="status">
+      That machine has no allowlist set, so nobody can sign in to it yet.
+    </p>
+  }
 
-<main>
   <router-outlet />
 </main>
+
+<footer class="footer">
+  <p>
+    The songs are made on one desktop and stay there. Nothing is uploaded, and nothing is kept by
+    this site.
+  </p>
+</footer>

@@ -1,1 +1,742 @@
-/* You can add global styles to this file, and also import other style files */
+/* =============================================================================
+   The design system. Everything visual that more than one feature needs lives
+   here; a feature's own stylesheet only ever describes its own layout.
+   =============================================================================
+
+   The rule that keeps this file from becoming a dumping ground: a component
+   stylesheet may position things and nothing else. Colour, type, radius,
+   shadow, border and motion all come from tokens declared below, so a change
+   of palette is a change to one block rather than a search across twelve
+   files. The build enforces a 4 kB warning per component stylesheet, which is
+   the same rule stated as a budget.
+
+   Read `web/DESIGN.md` for what the tokens mean and when to reach for which
+   one.
+   ========================================================================== */
+
+/* -----------------------------------------------------------------------------
+   1. Palette primitives
+   -----------------------------------------------------------------------------
+   Raw values, named for what they are rather than what they are used for.
+   Nothing outside section 2 should refer to these directly.
+   -------------------------------------------------------------------------- */
+
+:root {
+  /* Ink: the dark theme's ground, from the page up through raised surfaces. */
+  --ink-1000: #06070a;
+  --ink-950: #0a0c11;
+  --ink-900: #0e1117;
+
+  /* Paper: the light theme's ground, warmed slightly so it is not clinical. */
+  --paper-50: #ffffff;
+  --paper-100: #fbfaf7;
+  --paper-200: #f0ece3;
+  --paper-300: #e9e5db;
+
+  /* Amber is the signal colour: the thing that is happening right now. It is
+     borrowed from a level meter on purpose, since that is what this tool is. */
+  --amber-300: #ffd08a;
+  --amber-400: #ffb648;
+  --amber-700: #a35d00;
+  --amber-900: #2a1a00;
+
+  /* Mint reads as finished, coral as broken, violet as the wilder of the two
+     playfulness levels. Each is given a light and a dark reading. */
+  --mint-300: #7ff0c4;
+  --mint-400: #38d39b;
+  --mint-700: #0a7a55;
+  --coral-300: #ffa5a5;
+  --coral-400: #ff6b6b;
+  --coral-700: #b02121;
+  --violet-300: #c3b8ff;
+  --violet-400: #8b7bff;
+  --violet-700: #4b3ecf;
+
+  --slate-200: #e8eaf0;
+  --slate-400: #a6adbd;
+  --slate-500: #7c8496;
+  --slate-600: #565d6c;
+  --slate-800: #21252e;
+}
+
+/* -----------------------------------------------------------------------------
+   2. Semantic tokens
+   -----------------------------------------------------------------------------
+   Dark is the default because it is the identity of the thing: a tool that
+   runs in a room with a desktop in it. Light is offered for daylight and for
+   anybody who prefers it, and is a real design rather than an inversion.
+
+   The three theme blocks below say the same thing three ways on purpose. CSS
+   has no way to attach one declaration block to both a media query and an
+   attribute selector, and the alternative (resolving the theme in JavaScript
+   before first paint) would flash the wrong colours for anybody with
+   JavaScript off or slow.
+   -------------------------------------------------------------------------- */
+
+:root {
+  color-scheme: dark;
+
+  --bg: var(--ink-950);
+  --bg-deep: var(--ink-1000);
+  --surface: var(--ink-900);
+  --surface-sunk: var(--ink-1000);
+  --line: color-mix(in srgb, var(--slate-200) 10%, transparent);
+  --line-strong: color-mix(in srgb, var(--slate-200) 18%, transparent);
+
+  --text: #e9ebf2;
+  --text-muted: var(--slate-400);
+  --text-faint: var(--slate-500);
+
+  --accent: var(--amber-400);
+  --accent-text: var(--amber-300);
+  --accent-ink: var(--amber-900);
+  --accent-wash: color-mix(in srgb, var(--amber-400) 14%, transparent);
+
+  --ok: var(--mint-400);
+  --ok-text: var(--mint-300);
+  --ok-wash: color-mix(in srgb, var(--mint-400) 14%, transparent);
+  --bad: var(--coral-400);
+  --bad-text: var(--coral-300);
+  --bad-wash: color-mix(in srgb, var(--coral-400) 14%, transparent);
+  --wild: var(--violet-400);
+  --wild-text: var(--violet-300);
+  --wild-wash: color-mix(in srgb, var(--violet-400) 16%, transparent);
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 8px 24px -12px rgb(0 0 0 / 0.7), 0 2px 6px rgb(0 0 0 / 0.3);
+
+  /* A single hairline of light along the top of a raised surface. It is what
+     makes a card look lit from above rather than pasted on. */
+  --sheen: inset 0 1px 0 color-mix(in srgb, #ffffff 7%, transparent);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    color-scheme: light;
+
+    --bg: var(--paper-200);
+    --bg-deep: var(--paper-300);
+    --surface: var(--paper-50);
+    --surface-sunk: var(--paper-100);
+    --line: color-mix(in srgb, var(--slate-800) 12%, transparent);
+    --line-strong: color-mix(in srgb, var(--slate-800) 22%, transparent);
+
+    --text: #14171d;
+    --text-muted: var(--slate-600);
+    --text-faint: #6a7280;
+
+    --accent-text: var(--amber-700);
+    --accent-wash: color-mix(in srgb, var(--amber-400) 26%, transparent);
+    --ok-text: var(--mint-700);
+    --ok-wash: color-mix(in srgb, var(--mint-400) 26%, transparent);
+    --bad-text: var(--coral-700);
+    --bad-wash: color-mix(in srgb, var(--coral-400) 22%, transparent);
+    --wild-text: var(--violet-700);
+    --wild-wash: color-mix(in srgb, var(--violet-400) 22%, transparent);
+
+    --shadow-sm: 0 1px 2px rgb(38 34 24 / 0.08);
+    --shadow-md: 0 10px 24px -14px rgb(38 34 24 / 0.35), 0 1px 3px rgb(38 34 24 / 0.06);
+    --sheen: inset 0 1px 0 color-mix(in srgb, #ffffff 90%, transparent);
+  }
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --bg: var(--paper-200);
+  --bg-deep: var(--paper-300);
+  --surface: var(--paper-50);
+  --surface-sunk: var(--paper-100);
+  --line: color-mix(in srgb, var(--slate-800) 12%, transparent);
+  --line-strong: color-mix(in srgb, var(--slate-800) 22%, transparent);
+
+  --text: #14171d;
+  --text-muted: var(--slate-600);
+  --text-faint: #6a7280;
+
+  --accent-text: var(--amber-700);
+  --accent-wash: color-mix(in srgb, var(--amber-400) 26%, transparent);
+  --ok-text: var(--mint-700);
+  --ok-wash: color-mix(in srgb, var(--mint-400) 26%, transparent);
+  --bad-text: var(--coral-700);
+  --bad-wash: color-mix(in srgb, var(--coral-400) 22%, transparent);
+  --wild-text: var(--violet-700);
+  --wild-wash: color-mix(in srgb, var(--violet-400) 22%, transparent);
+
+  --shadow-sm: 0 1px 2px rgb(38 34 24 / 0.08);
+  --shadow-md: 0 10px 24px -14px rgb(38 34 24 / 0.35), 0 1px 3px rgb(38 34 24 / 0.06);
+  --sheen: inset 0 1px 0 color-mix(in srgb, #ffffff 90%, transparent);
+}
+
+/* -----------------------------------------------------------------------------
+   3. Type, space, shape and motion
+   -------------------------------------------------------------------------- */
+
+:root {
+  /* No web fonts. The page is served to strangers and a font request is a
+     request to somebody else's server; the stacks below look right on every
+     machine this is ever opened on and cost nothing. */
+  --font-sans:
+    'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial,
+    sans-serif;
+  --font-display:
+    'Segoe UI Variable Display', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial,
+    sans-serif;
+  --font-mono:
+    ui-monospace, 'Cascadia Mono', 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+
+  /* A fifth-based scale, fluid where it earns it. Headings shrink on a phone
+     because a display size set for a laptop wraps to four words a line. */
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.9375rem;
+  --text-md: 1.0625rem;
+  --text-lg: 1.25rem;
+  --text-xl: clamp(1.5rem, 1.2rem + 1.2vw, 1.875rem);
+  --text-2xl: clamp(2rem, 1.5rem + 2.4vw, 3rem);
+  --text-3xl: clamp(2.5rem, 1.7rem + 3.6vw, 4rem);
+
+  --tracking-tight: -0.022em;
+  --tracking-wide: 0.08em;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --fast: 120ms;
+  --normal: 220ms;
+  --slow: 420ms;
+
+  --measure: 34rem;
+  --page: 68rem;
+}
+
+/* -----------------------------------------------------------------------------
+   4. Reset and base
+   -------------------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+body {
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  font-synthesis-weight: none;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 650;
+  line-height: 1.1;
+  letter-spacing: var(--tracking-tight);
+  text-wrap: balance;
+}
+
+h1 {
+  font-size: var(--text-2xl);
+}
+h2 {
+  font-size: var(--text-xl);
+}
+h3 {
+  font-size: var(--text-md);
+}
+
+p {
+  text-wrap: pretty;
+}
+
+a {
+  color: inherit;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
+  text-underline-offset: 0.2em;
+  transition: text-decoration-color var(--fast) var(--ease);
+}
+
+a:hover {
+  text-decoration-color: currentColor;
+}
+
+img,
+svg {
+  display: block;
+  max-width: 100%;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--text);
+}
+
+/* One ring, everywhere, and only for keyboards. A mouse user who has just
+   clicked a thing does not need to be told which thing they clicked. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* -----------------------------------------------------------------------------
+   5. Surfaces
+   -------------------------------------------------------------------------- */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md), var(--sheen);
+}
+
+/* A hairline rule that fades at both ends, for separating without ruling. */
+.rule {
+  height: 1px;
+  border: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--line-strong) 15%,
+    var(--line-strong) 85%,
+    transparent
+  );
+}
+
+/* -----------------------------------------------------------------------------
+   6. Buttons
+   -------------------------------------------------------------------------- */
+
+.btn {
+  --btn-bg: transparent;
+  --btn-fg: var(--text);
+  --btn-line: var(--line-strong);
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0.55rem 1.05rem;
+  border: 1px solid var(--btn-line);
+  border-radius: var(--radius-pill);
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  font: inherit;
+  font-weight: 560;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background var(--fast) var(--ease),
+    border-color var(--fast) var(--ease),
+    transform var(--fast) var(--ease),
+    box-shadow var(--fast) var(--ease),
+    opacity var(--fast) var(--ease);
+}
+
+.btn:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--text) 35%, transparent);
+  background: color-mix(in srgb, var(--text) 7%, var(--btn-bg));
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.btn--primary {
+  --btn-bg: var(--accent);
+  --btn-fg: var(--accent-ink);
+  --btn-line: transparent;
+  font-weight: 640;
+  box-shadow: 0 6px 20px -10px color-mix(in srgb, var(--accent) 90%, transparent);
+}
+
+.btn--primary:hover:not(:disabled) {
+  --btn-bg: var(--amber-300);
+  border-color: transparent;
+  background: var(--amber-300);
+  box-shadow: 0 10px 28px -10px color-mix(in srgb, var(--accent) 90%, transparent);
+}
+
+.btn--danger {
+  --btn-fg: var(--bad-text);
+  --btn-line: color-mix(in srgb, var(--bad) 45%, transparent);
+}
+
+.btn--danger:hover:not(:disabled) {
+  background: var(--bad-wash);
+  border-color: var(--bad);
+}
+
+.btn--quiet {
+  --btn-line: transparent;
+  --btn-fg: var(--text-muted);
+  padding: 0.35rem 0.7rem;
+}
+
+.btn--quiet:hover:not(:disabled) {
+  --btn-fg: var(--text);
+}
+
+.btn--sm {
+  padding: 0.3rem 0.75rem;
+  font-size: var(--text-sm);
+}
+
+/* -----------------------------------------------------------------------------
+   7. Form controls
+   -------------------------------------------------------------------------- */
+
+.label {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: 620;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.input,
+input[type='url'] {
+  width: 100%;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-sunk);
+  color: var(--text);
+  font: inherit;
+  transition:
+    border-color var(--fast) var(--ease),
+    box-shadow var(--fast) var(--ease),
+    background var(--fast) var(--ease);
+}
+
+.input::placeholder,
+input::placeholder {
+  color: var(--text-faint);
+}
+
+.input:focus,
+input:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.field-error {
+  margin-top: var(--space-1);
+  color: var(--bad-text);
+  font-size: var(--text-sm);
+}
+
+/* -----------------------------------------------------------------------------
+   7b. Choice controls
+   -----------------------------------------------------------------------------
+   A radio group drawn as cards, and a radio group drawn as one switch with
+   several positions. Both are radios underneath, so they work with the form,
+   the keyboard and a screen reader without any of it being reimplemented.
+   -------------------------------------------------------------------------- */
+
+.picks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: var(--space-3);
+}
+
+/* The radio itself is kept in the layout rather than hidden with
+   `display: none`, which takes it out of the tab order and out of the
+   accessibility tree along with it. */
+.pick {
+  position: relative;
+  display: block;
+}
+
+.pick input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.pick__box {
+  position: relative;
+  display: grid;
+  gap: 0.15rem;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-sunk);
+  cursor: pointer;
+  transition:
+    border-color var(--fast) var(--ease),
+    background var(--fast) var(--ease),
+    transform var(--fast) var(--ease);
+}
+
+.pick__box:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  transform: translateY(-1px);
+}
+
+.pick__name {
+  font-weight: 620;
+  overflow-wrap: anywhere;
+}
+
+.pick__meta {
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+}
+
+.pick__tick {
+  position: absolute;
+  top: 0.7rem;
+  right: 0.7rem;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0;
+  scale: 0.4;
+  transition:
+    opacity var(--fast) var(--ease),
+    scale var(--fast) var(--ease);
+}
+
+.pick input:checked + .pick__box {
+  border-color: var(--accent);
+  background: var(--accent-wash);
+}
+
+.pick input:checked + .pick__box .pick__tick {
+  opacity: 1;
+  scale: 1;
+}
+
+.pick input:focus-visible + .pick__box {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* One control with several positions, for a small closed set of answers. */
+
+.segmented {
+  display: inline-flex;
+  gap: 0.2rem;
+  padding: 0.25rem;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunk);
+}
+
+.seg {
+  position: relative;
+  display: block;
+}
+
+.seg input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.seg span {
+  display: block;
+  padding: 0.35rem 0.95rem;
+  border-radius: var(--radius-pill);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  font-weight: 580;
+  text-transform: capitalize;
+  cursor: pointer;
+  transition:
+    color var(--fast) var(--ease),
+    background var(--fast) var(--ease);
+}
+
+.seg span:hover {
+  color: var(--text);
+}
+
+.seg input:checked + span {
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+  color: var(--text);
+}
+
+.seg input:focus-visible + span {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* -----------------------------------------------------------------------------
+   8. Badges, chips and dots
+   -------------------------------------------------------------------------- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.15rem 0.6rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.badge--ok {
+  background: var(--ok-wash);
+  border-color: color-mix(in srgb, var(--ok) 35%, transparent);
+  color: var(--ok-text);
+}
+
+.badge--bad {
+  background: var(--bad-wash);
+  border-color: color-mix(in srgb, var(--bad) 35%, transparent);
+  color: var(--bad-text);
+}
+
+.badge--busy {
+  background: var(--accent-wash);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  color: var(--accent-text);
+}
+
+.dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: currentColor;
+  flex: none;
+}
+
+/* A dot that breathes, for the one thing on screen that is still happening. */
+.dot--live {
+  animation: dot-pulse 1.6s var(--ease) infinite;
+}
+
+@keyframes dot-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 55%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 0.35rem transparent;
+  }
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  letter-spacing: -0.01em;
+}
+
+/* -----------------------------------------------------------------------------
+   9. Utilities
+   -------------------------------------------------------------------------- */
+
+.lead {
+  max-width: var(--measure);
+  color: var(--text-muted);
+  font-size: var(--text-md);
+  line-height: 1.6;
+}
+
+.note {
+  color: var(--text-faint);
+  font-size: var(--text-sm);
+}
+
+.eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 620;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--accent-text);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* -----------------------------------------------------------------------------
+   10. Motion
+   -----------------------------------------------------------------------------
+   Every animation in this application is decoration over a state that is
+   already legible without it, so switching them all off here costs nothing and
+   is not a degraded experience.
+   -------------------------------------------------------------------------- */
+
+.rise {
+  animation: rise var(--slow) var(--ease) both;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(0.6rem);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

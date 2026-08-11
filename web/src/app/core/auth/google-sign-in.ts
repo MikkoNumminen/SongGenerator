@@ -47,8 +47,19 @@ import { GoogleAuth } from './google-auth';
     }
   `,
   styles: `
-    :host { display: inline-flex; align-items: center; gap: 0.5rem; }
-    .note { opacity: 0.7; }
+    :host {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    /* Google draws its own button and owns how it looks. What is styled here
+       is only the sentence that appears when it does not. */
+    .note {
+      max-width: 16rem;
+      color: var(--text-faint);
+      font-size: var(--text-xs);
+      line-height: 1.35;
+    }
   `,
 })
 export class GoogleSignIn implements AfterViewInit {
