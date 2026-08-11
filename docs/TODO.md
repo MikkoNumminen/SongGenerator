@@ -101,6 +101,23 @@ never see. Resolve it on a real vocal.
 
 ## Open items
 
+- **Make vocals with AudiobookMaker.**
+
+  A bank needs clean, isolated, pitch-trackable words, and every source cut so
+  far has been a recording of somebody singing over a band. The worst of them
+  failed outright: see the traps under "Add words to the bank" in
+  [WORKFLOWS.md](WORKFLOWS.md), all of which come from separating a voice out
+  of a mix rather than starting with one.
+
+  AudiobookMaker already makes speech, on this machine, with no band under it.
+  A voice generated rather than extracted has no bleed to gate away, no
+  ambiguous pitch to cross-check, and no octave spread to normalise, so most
+  of that procedure stops applying. What it costs is the thing the recorded
+  banks are actually liked for: a real person's delivery.
+
+  Worth a small experiment rather than a plan. One generated word set, cut
+  into a bank, rendered next to `words_hq4` on the same song.
+
 - **Done: the site has a name, and the edge is reachable from the tailnet.**
   Kept because the wrong answer was expensive and is easy to reach for again.
 
