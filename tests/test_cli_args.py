@@ -5,9 +5,11 @@ it is where a flag gets renamed and the documentation quietly stops being
 true. These are cheap and they guard the part a person types.
 """
 
+from pathlib import Path
+
 import pytest
 
-from song_generator import config
+from song_generator import cli, config
 from song_generator.cli import build_parser
 
 
@@ -191,3 +193,91 @@ class TestEveryFilenameCarriesTheLevel:
         assert versioned_name(out, "wild").name == "song.wild.mp3"
         assert versioned_name(out, "wild", tag="0p60").name == \
             "song.wild.mim0p60.mp3"
+
+
+# ---------------------------------------------------------------------------
+# Keeping the take a render replaces
+# ---------------------------------------------------------------------------
+
+
+class TestOneGenerationBack:
+    """A render wrote straight over the take that was there, so a run that came
+    out worse than the last one had nothing to go back to.
+
+    One generation, per song, bank and level, which is what the naming already
+    separates. Exactly one: two takes is a rollback, and fifteen is the
+    situation this repository just deleted seven gigabytes of.
+    """
+
+    def _take(self, folder: Path, body: bytes) -> Path:
+        folder.mkdir(parents=True, exist_ok=True)
+        target = folder / "song.wild.mp3"
+        target.write_bytes(body)
+        return target
+
+    def test_the_take_that_was_there_is_kept(self, tmp_path):
+        target = self._take(tmp_path / "song" / "nbank", b"the old one")
+
+        kept = cli.keep_the_one_it_replaces(target)
+
+        assert kept is not None
+        assert kept.read_bytes() == b"the old one"
+        assert kept.parent.name == cli.PREVIOUS_DIR
+        # Moved, not copied: what is left is the slot the new render fills.
+        assert not target.exists()
+
+    def test_nothing_to_keep_is_not_an_error(self, tmp_path):
+        """The first render of a song has no predecessor, which is ordinary."""
+        folder = tmp_path / "song" / "nbank"
+        folder.mkdir(parents=True)
+
+        assert cli.keep_the_one_it_replaces(folder / "song.wild.mp3") is None
+
+    def test_only_one_generation_is_kept(self, tmp_path):
+        """A second re-render replaces the backup rather than adding to it.
+
+        On Windows a plain rename refuses to overwrite an existing file, so
+        this is the case that would raise instead of rotating.
+        """
+        folder = tmp_path / "song" / "nbank"
+        target = self._take(folder, b"first")
+        cli.keep_the_one_it_replaces(target)
+        self._take(folder, b"second")
+
+        cli.keep_the_one_it_replaces(target)
+
+        kept = list((folder / cli.PREVIOUS_DIR).glob("*.mp3"))
+        assert len(kept) == 1
+        assert kept[0].read_bytes() == b"second"
+
+    def test_a_backup_is_kept_per_level_and_per_bank(self, tmp_path):
+        """A wild render must not evict the conservative backup, nor one bank
+        another's. Those are the slots the naming already separates."""
+        song = tmp_path / "song"
+        for bank in ("nbank", "curated"):
+            for level in ("wild", "conservative"):
+                folder = song / bank
+                folder.mkdir(parents=True, exist_ok=True)
+                take = folder / f"song.{level}.mp3"
+                take.write_bytes(f"{bank}/{level}".encode())
+                cli.keep_the_one_it_replaces(take)
+
+        kept = sorted(p.relative_to(song).as_posix()
+                      for p in song.rglob(f"{cli.PREVIOUS_DIR}/*.mp3"))
+        assert kept == [
+            "curated/previous/song.conservative.mp3",
+            "curated/previous/song.wild.mp3",
+            "nbank/previous/song.conservative.mp3",
+            "nbank/previous/song.wild.mp3",
+        ]
+
+    def test_the_kept_take_is_not_listed_as_a_rendering(self, tmp_path):
+        """The songs page walks `<song>/<bank>/*.mp3`. A backup saved beside
+        the take as `song.wild.previous.mp3` would appear there as a second
+        take called "previous"; a directory inside the bank does not."""
+        folder = tmp_path / "song" / "nbank"
+        target = self._take(folder, b"old")
+
+        cli.keep_the_one_it_replaces(target)
+
+        assert list(folder.glob("*.mp3")) == []

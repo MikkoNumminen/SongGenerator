@@ -131,6 +131,42 @@ def versioned_name(output: Path, label: str, tag: str | None = None) -> Path:
     return output.with_name(f"{stem}{output.suffix}")
 
 
+# Where a replaced rendering goes. A folder rather than a suffix on the name,
+# because the songs page lists `<bank>/*.mp3` and a `<song>.wild.previous.mp3`
+# would show up there as a second take called "previous". A directory inside
+# the bank is not walked as a bank and not listed as a rendering.
+PREVIOUS_DIR = "previous"
+
+
+def keep_the_one_it_replaces(target: Path) -> Path | None:
+    """Move an existing rendering aside before it is overwritten.
+
+    A render used to write straight over the take that was there, so a run
+    that came out worse than the last one had nothing to go back to. One
+    generation is kept, per song, bank and level, which is what the naming
+    already separates.
+
+    Exactly one. The previous file is replaced rather than accumulated,
+    because two takes is a rollback and fifteen is the situation this repo
+    just deleted seven gigabytes of.
+
+    Nothing here deletes a rendering: the current take is moved, never
+    removed, and the older backup it lands on is the only thing that goes.
+    A render can therefore never cost more than the take before last, and
+    never silently.
+
+    Returns where it was put, or None when there was nothing to keep.
+    """
+    if not target.is_file():
+        return None
+    kept = target.parent / PREVIOUS_DIR / target.name
+    kept.parent.mkdir(parents=True, exist_ok=True)
+    # replace() rather than rename(): on Windows rename refuses to overwrite,
+    # so the second re-render of a song would raise instead of rotating.
+    target.replace(kept)
+    return kept
+
+
 def output_path(explicit: Path | None, song: Path, bank: str) -> Path:
     """Where a run writes, with every song in a folder of its own and every
     bank in a folder inside that.
@@ -366,6 +402,9 @@ def main(argv: list[str] | None = None) -> int:
 
             word_bus = render(word_plan, stems.instrumental.shape[1], config.SAMPLE_RATE,
                               shift=not args.no_shift, engine=args.engine, cache=cache)
+            # Immediately before the write, so nothing can reach the encoder
+            # without the take that was there being kept first.
+            keep_the_one_it_replaces(path)
             audio_io.encode_mp3(path, mix_buses(word_bus, stems.instrumental,
                                                 config.SAMPLE_RATE,
                                                 word_bus_lufs=bus_lufs))
