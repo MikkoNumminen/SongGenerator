@@ -70,6 +70,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--work-dir", type=Path, default=Path(config.WORK_DIR),
                    help="where stems and analysis are cached")
     p.add_argument("--force", action="store_true", help="ignore cached stems and separate again")
+    p.add_argument("--rollback", action="store_true",
+                   help="swap the takes for this song and bank with the ones "
+                        "they replaced, and render nothing")
     p.add_argument("--json", action="store_true", help="print the analysis report as JSON")
     p.add_argument("--slim", action="store_true",
                    help="omit the raw F0 contour from analysis.json (stage 4 needs it)")
@@ -131,6 +134,68 @@ def versioned_name(output: Path, label: str, tag: str | None = None) -> Path:
     return output.with_name(f"{stem}{output.suffix}")
 
 
+# Where a replaced rendering goes. A folder rather than a suffix on the name,
+# because the songs page lists `<bank>/*.mp3` and a `<song>.wild.previous.mp3`
+# would show up there as a second take called "previous". A directory inside
+# the bank is not walked as a bank and not listed as a rendering.
+PREVIOUS_DIR = "previous"
+
+
+def keep_the_one_it_replaces(target: Path) -> Path | None:
+    """Move an existing rendering aside before it is overwritten.
+
+    A render used to write straight over the take that was there, so a run
+    that came out worse than the last one had nothing to go back to. One
+    generation is kept, per song, bank and level, which is what the naming
+    already separates.
+
+    Exactly one. The previous file is replaced rather than accumulated,
+    because two takes is a rollback and fifteen is the situation this repo
+    just deleted seven gigabytes of.
+
+    Nothing here deletes a rendering: the current take is moved, never
+    removed, and the older backup it lands on is the only thing that goes.
+    A render can therefore never cost more than the take before last, and
+    never silently.
+
+    Returns where it was put, or None when there was nothing to keep.
+    """
+    if not target.is_file():
+        return None
+    kept = target.parent / PREVIOUS_DIR / target.name
+    kept.parent.mkdir(parents=True, exist_ok=True)
+    # replace() rather than rename(): on Windows rename refuses to overwrite,
+    # so the second re-render of a song would raise instead of rotating.
+    target.replace(kept)
+    return kept
+
+
+def restore_the_previous(target: Path) -> Path | None:
+    """Swap a rendering with the take it replaced. The rollback itself.
+
+    A swap rather than a move, so the take being rolled back from becomes the
+    new backup. Pressing this twice returns to where it started, which is what
+    somebody comparing two takes by ear will do, and neither one is ever the
+    thing that gets thrown away.
+
+    Returns the restored file, or None when there is nothing kept for it.
+    """
+    kept = target.parent / PREVIOUS_DIR / target.name
+    if not kept.is_file():
+        return None
+    if not target.is_file():
+        # Nothing to swap with: the current take was deleted by hand, so this
+        # is a plain restore.
+        target.parent.mkdir(parents=True, exist_ok=True)
+        kept.replace(target)
+        return target
+    spare = kept.with_suffix(kept.suffix + ".swapping")
+    target.replace(spare)
+    kept.replace(target)
+    spare.replace(kept)
+    return target
+
+
 def output_path(explicit: Path | None, song: Path, bank: str) -> Path:
     """Where a run writes, with every song in a folder of its own and every
     bank in a folder inside that.
@@ -150,8 +215,42 @@ def output_path(explicit: Path | None, song: Path, bank: str) -> Path:
     return base.parent / base.stem / bank / base.name
 
 
+def _rollback(args) -> int:
+    """Put the previous takes back for one song and bank.
+
+    Every level at once, because that is how they were rendered: a run writes
+    conservative and wild together, so a rollback that did one of them would
+    leave a pair from two different runs and no way to tell by looking.
+    """
+    # The same two lines the render itself uses to decide where it writes.
+    # Anything else would roll back a folder the render never touches.
+    bank_name = args.words_dir.name if args.words_dir else args.bank
+    out = output_path(args.output, args.input, bank_name)
+
+    restored = []
+    for candidate in sorted(out.parent.glob("*.mp3")):
+        if restore_the_previous(candidate) is not None:
+            restored.append(candidate)
+
+    if not restored:
+        print(f"error: nothing kept to roll back to in {out.parent}",
+              file=sys.stderr)
+        return EXIT_ERROR
+    for path in restored:
+        print(f"  rolled back {path}")
+    print(f"\n  {len(restored)} restored. Running this again puts them back, "
+          f"because the swap keeps both takes.")
+    return EXIT_OK
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+
+    if args.rollback:
+        # Before anything expensive. Rolling back needs neither stems nor a
+        # bank nor a GPU, and asking for them would make the one command you
+        # reach for when a render went wrong the slowest one there is.
+        return _rollback(args)
 
     if not args.input.is_file():
         print(f"error: input file not found: {args.input}", file=sys.stderr)
@@ -366,6 +465,9 @@ def main(argv: list[str] | None = None) -> int:
 
             word_bus = render(word_plan, stems.instrumental.shape[1], config.SAMPLE_RATE,
                               shift=not args.no_shift, engine=args.engine, cache=cache)
+            # Immediately before the write, so nothing can reach the encoder
+            # without the take that was there being kept first.
+            keep_the_one_it_replaces(path)
             audio_io.encode_mp3(path, mix_buses(word_bus, stems.instrumental,
                                                 config.SAMPLE_RATE,
                                                 word_bus_lufs=bus_lufs))

@@ -174,6 +174,29 @@ or delete the `[take]` to let the tool choose the recording. A word the bank
 cannot say is refused by name rather than quietly dropped. See
 `docs/DATA-FORMATS.md`.
 
+### Undo the last render
+
+Replaying an arrangement re-renders it, which takes a GPU and several minutes.
+When the previous take is still on disk, there is a faster way back: a render
+moves the file it is about to overwrite into a `previous` folder beside it, and
+`--rollback` puts it back.
+
+```powershell
+.\.venv\Scripts\song-generator.exe input\song.mp4 --bank curated --rollback
+```
+
+It restores every level for that song and bank at once, because a run writes
+conservative and wild together and a pair from two different runs is
+indistinguishable by looking at it. It reads no stems and loads no bank, so it
+returns immediately.
+
+The two takes are swapped rather than moved, so running it again returns to
+where it started. That is deliberate: comparing two takes by ear means going
+back and forth, and neither one is ever the one that gets thrown away.
+
+Only one generation is kept, per song, per bank, per level. A second re-render
+replaces the backup, so this undoes the last render and not the one before it.
+
 ---
 
 ## One word is too common, or too rare
