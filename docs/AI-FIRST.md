@@ -149,8 +149,9 @@ noticed, because nothing in the repository was looking.
 The suspect is the trigger in `azure-pipelines.yml`, which filtered on `web/*`,
 and the correlation is strong: all five deploys the site has ever had came from
 commits that also touched `azure-pipelines.yml`, the filter's other entry, and
-none from a change to the site alone. It is written `web` now, which means
-everything beneath the directory under every reading of the documentation.
+none from a change to the site alone. It was corrected to `web`, which means
+everything beneath the directory under every reading of the documentation, and
+nothing ran.
 
 It is worth being exact about what that is, because the first two explanations
 written for it were both wrong, and one of them was committed. `web/*` was
@@ -165,6 +166,11 @@ That mistake is the dimension in miniature. Twice, a confident mechanism was
 written down from a correlation, because the thing that could have checked it
 lives in a web console rather than in the repository.
 
+A change that never reaches anybody is a class of failure none of the eleven
+dimensions covered. Ten of them ask whether the repository is legible; the
+eleventh asks whether a render sounds right. None asks whether what a person
+receives is what the repository says it is.
+
 The publisher has since moved to `.github/workflows/deploy.yml`, which is the
 same steps in a place this repository can see, and it ends by asking the site
 which build it is serving and failing if the answer is not the one it just
@@ -172,11 +178,6 @@ made. That last step is dimension 12 in its smallest possible form: not a
 rendered check, just a check that the render reached anybody. The Azure version
 is kept with its trigger off, because reading the two side by side is the whole
 lesson.
-
-That is a class of failure none of the eleven dimensions covered. Ten of them
-ask whether the repository is legible; the eleventh asks whether a render
-sounds right. None asks whether what a person receives is what the repository
-says it is.
 
 A review of the same branch then found three defects with one shape between
 them:

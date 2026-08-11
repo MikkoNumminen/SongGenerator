@@ -118,8 +118,9 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   this repository can settle:
   Microsoft documents `*` as not crossing a directory separator, which would
   exclude everything under `web/src`, and older servers as treating a trailing
-  `*` as the directory itself, which would include it. It is written `web` now,
-  which means the same thing under every reading. What is established is the
+  `*` as the directory itself, which would include it. No filter reads that way
+  any more: the Azure trigger is off and the workflow that publishes filters on
+  `web/**`, which GitHub documents unambiguously. What is established is the
   correlation: all five deploys this site has ever had came from commits that
   also touched `azure-pipelines.yml`, the filter's other entry, and none from a
   change to the site alone. What is **not** established is that the filter was

@@ -58,8 +58,9 @@ to learn what it does.
 
 The deployment token is deliberately **not** an output. Outputs are kept in the
 deployment history and readable by anyone with access to the group, and that
-token alone is enough to publish to the site. The pipeline fetches it at run
-time.
+token alone is enough to publish to the site. It is read out of the site with
+`az` and stored as a repository secret, once, by hand; nothing that publishes
+holds an Azure credential of its own.
 
 ### Azure DevOps Pipelines, and why it is not used any more
 

@@ -534,8 +534,10 @@ nothing. Committing it also removes a trap worth knowing about even now:
 written during one, so the value changed and the site did not. Editing the
 workflow triggers the deploy that applies it.
 
-Missing the client id is not a failure. The site falls back to the local
-backend and reports that nothing is answering, which it renders honestly.
+Missing the client id is not a failure. Sign-in is unavailable and the site
+says so, which it renders honestly. Missing the address is not a failure
+either: away from localhost the site assumes no backend rather than probing the
+visitor's own machine, and reports that nothing is answering.
 
 **4. Check that a deploy actually happened.** Not optional, and not the same
 question as whether the build was green:
@@ -569,11 +571,10 @@ and it is not a proof: the merge that should have published the design added
 under every reading, and no build ran. So something else may be involved, and
 the repository cannot see it.
 
-The Azure DevOps run list is where to look, in this order:
+The repository's Actions tab is where to look now, in this order:
 
-1. **Is there a run at all** for the commit, under the repository's Actions
-   tab? If not, the paths filter did not match, and `web/**` is the thing to
-   read.
+1. **Is there a run at all** for the commit? If not, the paths filter did not
+   match, and `web/**` is the thing to read.
 2. **Did the publish step succeed while the check step failed?** Then the
    upload went somewhere other than this site, and the deployment token is the
    thing to check.
@@ -634,13 +635,14 @@ blank screen rather than as an error:
 - There is no file at `/runs/abc`, so `web/public/staticwebapp.config.json`
   rewrites unknown paths to `index.html` and hands them to the router.
 
-### Publishing without the pipeline
+### Publishing without the workflow
 
-The pipeline is the normal way and this is the way out when it is unreachable,
-which has happened: `dev.azure.com` redirects a personal Microsoft account into
-the Azure Portal, and the portal's tenant picker then refuses that account
-outright (`AADSTS16000`). With no access to the pipeline there is no way to
-change a variable and no way to press Run, and a broken site stays broken.
+`.github/workflows/deploy.yml` is the normal way and this is the way out when
+it cannot run, which has happened to the publisher before: `dev.azure.com`
+redirects a personal Microsoft account into the Azure Portal, and the portal's
+tenant picker then refuses that account outright (`AADSTS16000`). With no
+access to the thing that publishes there is no way to change a value and no way
+to press Run, and a broken site stays broken.
 
 `az` on a machine that is signed in can hand over the deploy token, and the
 Static Web Apps CLI takes it directly:
@@ -657,9 +659,9 @@ npx --yes @azure/static-web-apps-cli deploy dist/songgen-web/browser \
 ```
 
 The config file is written by hand here because nothing else is going to write
-it; the pipeline step that normally does is exactly what is being skipped.
+it; the workflow step that normally does is exactly what is being skipped.
 
-**What this costs is the guarantee that the site matches `main`.** A pipeline
+**What this costs is the guarantee that the site matches `main`.** A workflow
 run is reproducible from a commit and this is not, so after using it, land the
 same change in git before the next push does. Any push touching `web` or the
 workflow itself rebuilds from `main` and silently reverts whatever was

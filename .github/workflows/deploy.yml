@@ -50,8 +50,26 @@ jobs:
       run:
         working-directory: web
 
+    env:
+      # The site's own hostname, which Azure generated when the Static Web App
+      # was created. Recreating the site from `infra/main.bicep` produces a
+      # different one, and this is then the thing to change: the upload would
+      # go on succeeding while the check at the end reported the site serving
+      # something else forever.
+      SITE_URL: https://green-bay-0f4fe1d03.7.azurestaticapps.net
+
     steps:
       - uses: actions/checkout@v4
+
+      # A dispatch can name any branch, and this publishes to the live site.
+      # Refusing out loud beats a green run that quietly put a feature branch
+      # in front of visitors, which is the same class of failure as the one
+      # this workflow exists to end.
+      - name: Publish main, or nothing
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Dispatched from $GITHUB_REF. This workflow publishes main."
+          exit 1
 
       - uses: actions/setup-node@v4
         with:
@@ -116,19 +134,31 @@ jobs:
       # The one step the old pipeline never had, and the reason a rewritten
       # front end sat unpublished for two days. It asks the site what it is
       # serving rather than trusting that a green build means a live change.
+      #
+      # An empty answer is a failure and never a match, on either side. A build
+      # whose bundle this cannot name and a site that answers with nothing both
+      # read as an empty string, and comparing those two would pass the step in
+      # precisely the case it exists to catch.
+      #
+      # `-L` because a redirect answers with a body that names no bundle, and a
+      # site behind one is not a site that is failing to serve this build.
       - name: Check the site is serving this build
         run: |
           built=$(grep -o 'main-[A-Za-z0-9]*\.js' dist/songgen-web/browser/index.html | head -1)
+          if [ -z "$built" ]; then
+            echo "::error::No main-*.js in this build's own index.html, so there is nothing to ask the site about."
+            exit 1
+          fi
           echo "this build: $built"
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
-            live=$(curl -sS --max-time 15 "https://green-bay-0f4fe1d03.7.azurestaticapps.net/?ci=$GITHUB_RUN_ID$attempt" \
+            if [ "$attempt" -gt 1 ]; then sleep 15; fi
+            live=$(curl -sSL --max-time 15 "$SITE_URL/?ci=$GITHUB_RUN_ID-$attempt" \
                    | grep -o 'main-[A-Za-z0-9]*\.js' | head -1)
             echo "attempt $attempt, the site says: ${live:-nothing}"
-            if [ "$live" = "$built" ]; then
+            if [ -n "$live" ] && [ "$live" = "$built" ]; then
               echo "the site is serving this build"
               exit 0
             fi
-            sleep 15
           done
           echo "::error::The upload reported success and the site is still serving ${live:-an unreadable page}, not $built."
           exit 1
