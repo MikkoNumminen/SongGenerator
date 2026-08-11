@@ -109,12 +109,89 @@ describe('the player', () => {
     expect(URL.createObjectURL).toBe(created);
   });
 
+  it('choosing a take does not play it', async () => {
+    // The point of the redesign. Somebody looking through a list on a shared
+    // machine must not make the room hear it; playing is a second, deliberate
+    // press.
+    const fixture = await render(library);
+
+    fixture.componentInstance.select(TRACKS[0]!);
+    await fixture.whenStable();
+
+    expect(library.asked).toEqual([]);
+    expect(fixture.componentInstance.source()).toBeNull();
+    expect(fixture.componentInstance.isSelected(TRACKS[0]!)).toBe(true);
+  });
+
+  it('choosing the same take again closes it', async () => {
+    const fixture = await render(library);
+    fixture.componentInstance.select(TRACKS[0]!);
+
+    fixture.componentInstance.select(TRACKS[0]!);
+
+    expect(fixture.componentInstance.isSelected(TRACKS[0]!)).toBe(false);
+  });
+
+  it('shuffles only what the two choices allow', async () => {
+    // The library holds a conservative and a wild reading of nearly
+    // everything, so shuffling all of it would play each song twice in a row.
+    const fixture = await render(library);
+    fixture.componentInstance.bank.set('nbank');
+    fixture.componentInstance.level.set('wild');
+
+    expect(fixture.componentInstance.matching().map((t) => t.name)).toEqual([
+      'musicHyva.wild.mp3',
+    ]);
+
+    fixture.componentInstance.shuffle();
+    await fixture.whenStable();
+
+    expect(library.asked).toEqual(['musicHyva/nbank/musicHyva.wild.mp3']);
+  });
+
+  it('shuffle plays on to the next when one finishes', async () => {
+    const fixture = await render(library);
+    fixture.componentInstance.shuffle();
+    await fixture.whenStable();
+    const first = library.asked.length;
+
+    fixture.componentInstance.next();
+    await fixture.whenStable();
+
+    expect(library.asked.length).toBe(first + 1);
+  });
+
+  it('one chosen take does not run on to the next when it ends', async () => {
+    const fixture = await render(library);
+    fixture.componentInstance.play(TRACKS[0]!);
+    await fixture.whenStable();
+    const played = library.asked.length;
+
+    fixture.componentInstance.next();
+    await fixture.whenStable();
+
+    expect(library.asked.length).toBe(played);
+  });
+
+  it('downloading does not start the music', async () => {
+    // Saving has to fetch the same bytes, because an anchor cannot carry the
+    // Authorization header. It must not look like playing to the room.
+    const fixture = await render(library);
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+
+    fixture.componentInstance.save(TRACKS[0]!);
+    await fixture.whenStable();
+
+    expect(library.asked.length).toBe(1);
+    expect(fixture.componentInstance.source()).toBeNull();
+  });
+
   it('groups the takes under their song', async () => {
     const fixture = await render(library);
 
     const songs = fixture.componentInstance.songs();
     expect(songs.map((s) => s.song)).toEqual(['musicHyva', 'ukkometso']);
-    expect(songs[0]!.tracks.length).toBe(2);
+    expect(songs[0]!.takes.length).toBe(2);
   });
 
   it('fetches the audio rather than pointing an element at the edge', async () => {

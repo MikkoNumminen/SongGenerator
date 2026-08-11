@@ -1,10 +1,7 @@
-<section class="player">
+<section class="library">
   <header class="head">
     <h1>Everything made so far</h1>
-    <p class="lead">
-      Straight off that desktop. Each song has a conservative take and a wild
-      one; which is better is a listening decision.
-    </p>
+    <p class="lead">Straight off that desktop. Pick a song to see its takes.</p>
   </header>
 
   <app-state-panel
@@ -14,59 +11,122 @@
     (retry)="load()"
   />
 
-  @if (current(); as track) {
-    <!-- Sticky so it stays reachable while the list scrolls. A player that
-         scrolls away means hunting for it to stop the music. -->
-    <div class="now card rise">
-      <div class="now__what">
-        <strong class="now__song">{{ track.song }}</strong>
-        <span class="now__where mono">{{ track.bank }} / {{ track.level ?? 'take' }}</span>
-      </div>
-
-      @if (fetching()) {
-        <p class="now__loading" role="status">Fetching the audio...</p>
-      } @else if (source(); as url) {
-        <!-- autoplay is wanted here: pressing a track in the list IS the play
-             action, and a second press on the element would be a surprise. -->
-        <audio class="now__audio" [src]="url" controls autoplay></audio>
-        <a class="btn btn--quiet btn--sm" [href]="url" [download]="track.name">
-          Download
-        </a>
-      }
-    </div>
-  }
-
-  @if (problem(); as message) {
-    <p class="problem" role="alert">{{ message }}</p>
-  }
-
   @if (state().kind === 'ready') {
-    <div class="songs">
-      @for (group of songs(); track group.song) {
-        <article class="card song rise">
-          <h2 class="song__title">{{ group.song }}</h2>
-          <ul class="takes">
-            @for (t of group.tracks; track t.bank + '/' + t.name) {
-              <li
-                class="take"
-                [class.take--current]="isCurrent(t)"
-                [attr.aria-current]="isCurrent(t) ? 'true' : null"
-              >
-                <button
-                  type="button"
-                  class="take__play"
-                  [disabled]="fetching()"
-                  (click)="play(t)"
-                >
-                  <span class="take__level">{{ t.level ?? 'take' }}</span>
-                  <span class="take__bank mono">{{ t.bank }}</span>
-                </button>
-                <span class="take__size mono">{{ size(t.bytes) }}</span>
-              </li>
-            }
-          </ul>
-        </article>
-      }
+    <!-- The one control that starts something on its own, because asking for
+         a shuffle is already the instruction. -->
+    <div class="shuffle">
+      <button
+        type="button"
+        class="shuffle__go"
+        [disabled]="fetching() || !matching().length"
+        (click)="shuffle()"
+      >
+        <span class="glyph" aria-hidden="true">⤮</span>
+        Shuffle
+      </button>
+
+      <label class="pick">
+        <span class="pick__label">Bank</span>
+        <select [value]="bank()" (change)="bank.set($any($event.target).value)">
+          <option [value]="ANY">every bank</option>
+          @for (b of banks(); track b) {
+            <option [value]="b">{{ b }}</option>
+          }
+        </select>
+      </label>
+
+      <label class="pick">
+        <span class="pick__label">Take</span>
+        <select [value]="level()" (change)="level.set($any($event.target).value)">
+          <option [value]="ANY">either</option>
+          @for (l of levels(); track l) {
+            <option [value]="l">{{ l }}</option>
+          }
+        </select>
+      </label>
+
+      <p class="shuffle__count">{{ matching().length }} to play</p>
     </div>
+
+    @if (problem(); as message) {
+      <p class="problem" role="alert">{{ message }}</p>
+    }
+
+    <ul class="songs">
+      @for (group of songs(); track group.song) {
+        @let open = openSong() === group.song;
+        <li class="song" [class.song--open]="open">
+          <button
+            type="button"
+            class="song__row"
+            [attr.aria-expanded]="open"
+            (click)="toggleSong(group.song)"
+          >
+            <span class="song__caret" aria-hidden="true">{{ open ? '⌄' : '›' }}</span>
+            <span class="song__name">{{ group.song }}</span>
+            <span class="song__count">{{ group.takes.length }}</span>
+          </button>
+
+          @if (open) {
+            <ul class="takes">
+              @for (take of group.takes; track take.bank + '/' + take.name) {
+                @let chosen = isSelected(take);
+                <li class="take">
+                  <button
+                    type="button"
+                    class="take__row"
+                    [class.take__row--chosen]="chosen"
+                    [attr.aria-current]="chosen ? 'true' : null"
+                    (click)="select(take)"
+                  >
+                    <span class="take__level">{{ take.level ?? 'take' }}</span>
+                    <span class="take__bank">{{ take.bank }}</span>
+                    <span class="take__size">{{ size(take.bytes) }}</span>
+                  </button>
+
+                  <!-- Only under the chosen row, and only one is ever open. -->
+                  @if (chosen) {
+                    <div class="panel">
+                      @if (fetching()) {
+                        <p class="panel__busy" role="status">Fetching the audio...</p>
+                      } @else if (source(); as url) {
+                        <audio
+                          class="panel__audio"
+                          [src]="url"
+                          controls
+                          autoplay
+                          (ended)="next()"
+                        ></audio>
+                        <button
+                          type="button"
+                          class="panel__save"
+                          [disabled]="saving()"
+                          (click)="save(take)"
+                        >
+                          {{ saving() ? 'Saving...' : 'Download' }}
+                        </button>
+                      } @else {
+                        <button type="button" class="panel__play" (click)="play(take)">
+                          <span class="glyph" aria-hidden="true">▶</span>
+                          Play
+                        </button>
+                        <button
+                          type="button"
+                          class="panel__save"
+                          [disabled]="saving()"
+                          (click)="save(take)"
+                        >
+                          {{ saving() ? 'Saving...' : 'Download' }}
+                        </button>
+                      }
+                    </div>
+                  }
+                </li>
+              }
+            </ul>
+          }
+        </li>
+      }
+    </ul>
   }
 </section>
