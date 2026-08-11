@@ -128,8 +128,11 @@ jobs:
           action: upload
           app_location: web/dist/songgen-web/browser
           output_location: ''
+          # `skip_app_build` only. There is no `skip_api_build` input on this
+          # action, and passing it is a warning in every run: "Unexpected
+          # input(s) 'skip_api_build'". `api_location` is unset, so there is no
+          # API for it to have skipped either way.
           skip_app_build: true
-          skip_api_build: true
 
       # The one step the old pipeline never had, and the reason a rewritten
       # front end sat unpublished for two days. It asks the site what it is
