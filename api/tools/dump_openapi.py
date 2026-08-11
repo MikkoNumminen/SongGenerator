@@ -30,7 +30,7 @@ from app.users import open_users
 # Stand-ins for the pipeline's own lists. The schema does not carry their
 # values, only the shapes of the requests and replies, so plausible names are
 # enough and no import of the pipeline is needed.
-BANKS = {"curated": "words_hq4", "muslimbank": "words_muslim"}
+BANKS = {"ppbank": "words_hq4", "muslimbank": "words_muslim"}
 LEVELS = ("conservative", "wild")
 
 

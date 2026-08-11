@@ -27,8 +27,8 @@ it fills.
 
 **Bank**. The collection of units available to sing with. Built by
 `build_bank.py` from reviewed clips into `words/words.json`. Two are prebuilt:
-`curated` (reviewed clips, the default) and `chaos` (every candidate clip taken
-raw, names ignored).
+`ppbank` (reviewed clips, the default, named after the song they were cut
+from) and `chaos` (every candidate clip taken raw, names ignored).
 
 **Candidate**. A clip cut out of a source video but not yet identified. Lives
 in `words/candidates/` with a prefix until a human renames it.

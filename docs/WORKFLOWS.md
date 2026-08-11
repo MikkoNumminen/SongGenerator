@@ -182,7 +182,7 @@ moves the file it is about to overwrite into a `previous` folder beside it, and
 `--rollback` puts it back.
 
 ```powershell
-.\.venv\Scripts\song-generator.exe input\song.mp4 --bank curated --rollback
+.\.venv\Scripts\song-generator.exe input\song.mp4 --bank ppbank --rollback
 ```
 
 It restores every level for that song and bank at once, because a run writes

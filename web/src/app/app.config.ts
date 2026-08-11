@@ -1,6 +1,6 @@
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/core';
-import { provideRouter } from '@angular/router';
+import { provideRouter, withViewTransitions } from '@angular/router';
 
 import { API_BASE_URL } from './core/api/api-config';
 import { HttpAllowlist } from './core/api/http-allowlist';
@@ -36,7 +36,11 @@ export function appConfigWith(config: RuntimeConfig): ApplicationConfig {
     { provide: API_BASE_URL, useValue: config.apiBaseUrl },
     { provide: GOOGLE_CLIENT_ID, useValue: config.googleClientId },
     provideBrowserGlobalErrorListeners(),
-    provideRouter(routes),
+    // View transitions are the browser's own: the router hands the route
+    // change to startViewTransition, and Chrome cross-fades the old page into
+    // the new one instead of swapping it in a frame. Where the API is missing
+    // the router calls through unchanged, so this costs nothing in Firefox.
+    provideRouter(routes, withViewTransitions()),
     // Retry first, so it wraps the token attachment rather than sitting
     // inside it: each attempt then runs attachBearerToken again and asks for
     // the token as it stands, instead of replaying whatever was attached to

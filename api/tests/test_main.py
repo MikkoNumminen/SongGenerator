@@ -21,7 +21,7 @@ from fastapi.testclient import TestClient
 CLIENT_ID = "1234.apps.googleusercontent.com"
 OWNER = "owner@example.invalid"
 
-BANKS = {"curated": "words_hq", "muslimbank": "words_muslim"}
+BANKS = {"ppbank": "words_hq", "muslimbank": "words_muslim"}
 LEVELS = ("conservative", "wild")
 
 
@@ -171,8 +171,8 @@ def test_banks_are_listed_with_whether_they_can_actually_sing(tmp_path):
     body = client.get("/banks", headers=_auth()).json()
 
     by_name = {b["name"]: b for b in body["banks"]}
-    assert by_name["curated"]["usable"] is True
-    assert by_name["curated"]["units"] == 25
+    assert by_name["ppbank"]["usable"] is True
+    assert by_name["ppbank"]["units"] == 25
     assert by_name["muslimbank"]["usable"] is False, "never built on this machine"
     assert body["any_usable"] is True
 
@@ -197,7 +197,7 @@ def test_a_run_can_be_submitted_and_is_remembered(tmp_path):
     client, store, runner = _app(tmp_path)
 
     response = client.post("/jobs", headers=_auth(), json={
-        "source_url": "https://example.invalid/watch?v=abc", "bank": "curated"})
+        "source_url": "https://example.invalid/watch?v=abc", "bank": "ppbank"})
 
     assert response.status_code == 202
     job_id = response.json()["id"]
@@ -210,7 +210,7 @@ def test_something_that_is_not_a_link_is_refused(tmp_path):
     client, _, _ = _app(tmp_path)
 
     response = client.post("/jobs", headers=_auth(),
-                           json={"source_url": "not a link", "bank": "curated"})
+                           json={"source_url": "not a link", "bank": "ppbank"})
 
     assert response.status_code == 422
 
@@ -231,7 +231,7 @@ def test_a_bank_with_no_clips_is_refused_before_anything_starts(tmp_path):
     client, _, _ = _app(tmp_path)
 
     response = client.post("/jobs", headers=_auth(), json={
-        "source_url": "https://example.invalid/x", "bank": "curated"})
+        "source_url": "https://example.invalid/x", "bank": "ppbank"})
 
     assert response.status_code == 409
     assert "built" in response.json()["detail"]
@@ -242,7 +242,7 @@ def test_an_unknown_level_is_refused(tmp_path):
     client, _, _ = _app(tmp_path)
 
     response = client.post("/jobs", headers=_auth(), json={
-        "source_url": "https://example.invalid/x", "bank": "curated",
+        "source_url": "https://example.invalid/x", "bank": "ppbank",
         "level": "sideways"})
 
     assert response.status_code == 400
@@ -253,7 +253,7 @@ def test_an_unknown_engine_is_refused(tmp_path):
     client, _, _ = _app(tmp_path)
 
     response = client.post("/jobs", headers=_auth(), json={
-        "source_url": "https://example.invalid/x", "bank": "curated",
+        "source_url": "https://example.invalid/x", "bank": "ppbank",
         "engine": "kazoo"})
 
     assert response.status_code == 422
@@ -264,7 +264,7 @@ def test_a_mimicry_outside_the_dial_is_refused(tmp_path):
     client, _, _ = _app(tmp_path)
 
     response = client.post("/jobs", headers=_auth(), json={
-        "source_url": "https://example.invalid/x", "bank": "curated",
+        "source_url": "https://example.invalid/x", "bank": "ppbank",
         "mimicry": 1.5})
 
     assert response.status_code == 422
@@ -283,7 +283,7 @@ def test_a_second_run_is_refused_while_one_is_going(tmp_path):
     client, _, _ = _app(tmp_path, runner=Busy(on_update=lambda job: None))
 
     response = client.post("/jobs", headers=_auth(), json={
-        "source_url": "https://example.invalid/x", "bank": "curated"})
+        "source_url": "https://example.invalid/x", "bank": "ppbank"})
 
     assert response.status_code == 409
     assert "one at a time" in response.json()["detail"]
@@ -308,7 +308,7 @@ def test_history_starts_empty(tmp_path):
 def test_a_stored_run_comes_back_with_its_stage(tmp_path):
     client, store, _ = _app(tmp_path)
     store.save(Job(id="abc", created_at="2026-08-08T00:00:00+00:00",
-                   requested_by=OWNER, source_url="u", bank="curated",
+                   requested_by=OWNER, source_url="u", bank="ppbank",
                    stage=Stage.REFUSED))
 
     body = client.get("/jobs/abc", headers=_auth()).json()
@@ -322,7 +322,7 @@ def test_the_pasted_arrangement_is_not_shipped_on_every_poll(tmp_path):
     for re-running."""
     client, store, _ = _app(tmp_path)
     store.save(Job(id="abc", created_at="2026-08-08T00:00:00+00:00",
-                   requested_by=OWNER, source_url="u", bank="curated",
+                   requested_by=OWNER, source_url="u", bank="ppbank",
                    arrangement="# seed 42\n" + "phrase 0\n" * 500))
 
     body = client.get("/jobs/abc", headers=_auth()).json()

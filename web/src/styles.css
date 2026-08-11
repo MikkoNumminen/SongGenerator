@@ -22,6 +22,11 @@
    -------------------------------------------------------------------------- */
 
 :root {
+  /* Lets a height animate to `auto`. Has to live in the global sheet: a
+     `:root` rule inside a component stylesheet is given that component's
+     scoping attribute and matches nothing. */
+  interpolate-size: allow-keywords;
+
   /* Ink: the dark theme's ground, from the page up through raised surfaces. */
   --ink-1000: #06070a;
   --ink-950: #0a0c11;
@@ -744,4 +749,111 @@ input:focus {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* -----------------------------------------------------------------------------
+   Chips, dots and segmented controls
+
+   Generic the way .btn and .card are. A chip labels a take's level, a dot is
+   the same fact shrunk to something readable at a glance in a list, and a
+   segmented control is the choice a select would hide behind a closed box.
+   -------------------------------------------------------------------------- */
+
+/* Segmented rather than a select: four banks and two levels are few enough to
+   show, and a closed dropdown hides what the choice even is. */
+.seg {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--surface-sunk);
+}
+
+.seg__opt {
+  padding: 0.25rem 0.7rem;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.seg__opt:hover {
+  color: var(--text);
+}
+
+.seg__opt--on {
+  background: var(--line-strong);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.seg__opt--on.seg__opt--wild {
+  background: var(--wild-wash);
+  color: var(--wild-text);
+}
+
+.seg__opt--on.seg__opt--cons {
+  background: var(--ok-wash);
+  color: var(--ok-text);
+}
+
+.chip {
+  padding: 0.1rem 0.5rem;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  background: var(--line-strong);
+  color: var(--text-muted);
+}
+
+.chip--conservative {
+  background: var(--ok-wash);
+  color: var(--ok-text);
+}
+
+.chip--wild {
+  background: var(--wild-wash);
+  color: var(--wild-text);
+}
+
+/* One dot per take, coloured by level: the shape of what exists, readable
+   without opening the song. */
+.song__dots {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  opacity: 0.85;
+}
+
+.dot--conservative { background: var(--ok); }
+
+.dot--wild { background: var(--wild); }
+
+/* An inline failure, next to the thing that failed rather than at the top of
+   the page. Shared, because more than one page has to say one. */
+.problem {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--bad-wash);
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+/* A leading icon inside a button: sized to the label, never squeezed by it. */
+.glyph {
+  font-size: 0.9em;
+  line-height: 1;
+  flex: none;
 }

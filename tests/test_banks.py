@@ -994,11 +994,11 @@ class TestOutputPerBank:
     def test_two_banks_for_one_song_write_to_different_folders(self):
         from song_generator.cli import output_path
 
-        a = output_path(None, Path("input/song.mp4"), "curated")
+        a = output_path(None, Path("input/song.mp4"), "ppbank")
         b = output_path(None, Path("input/song.mp4"), "muslimbank")
         assert a != b
         assert a.name == b.name == "song.mp3"
-        assert a.parent.name == "curated"
+        assert a.parent.name == "ppbank"
         assert b.parent.name == "muslimbank"
         # Same song folder, so the levels of one song stay side by side.
         assert a.parent.parent == b.parent.parent

@@ -1,7 +1,15 @@
 <section class="library">
   <header class="head">
-    <h1>Everything made so far</h1>
-    <p class="lead">Straight off that desktop. Pick a song to see its takes.</p>
+    <div class="head__text">
+      <h1>Everything made so far</h1>
+      <p class="lead">Straight off that desktop. Pick a song to see its takes.</p>
+    </div>
+    @if (all().length) {
+      <p class="head__tally">
+        <strong>{{ all().length }}</strong>
+        <span>takes</span>
+      </p>
+    }
   </header>
 
   <app-state-panel
@@ -17,33 +25,77 @@
     <div class="shuffle">
       <button
         type="button"
-        class="shuffle__go"
+        class="btn btn--primary shuffle__go"
         [disabled]="fetching() || !matching().length"
         (click)="shuffle()"
       >
-        <span class="glyph" aria-hidden="true">⤮</span>
+        <!-- Drawn rather than typed: the shuffle character (U+2942) is missing
+             from the stack this page uses and renders as a box. -->
+        <svg class="glyph" viewBox="0 0 16 16" width="14" height="14"
+             fill="none" stroke="currentColor" stroke-width="1.6"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M1 4h3l7 8h4M1 12h3l7-8h4" />
+          <path d="M12.5 1.5 15 4l-2.5 2.5M12.5 9.5 15 12l-2.5 2.5" />
+        </svg>
         Shuffle
       </button>
 
-      <label class="pick">
-        <span class="pick__label">Bank</span>
-        <select [value]="bank()" (change)="bank.set($any($event.target).value)">
-          <option [value]="ANY">every bank</option>
-          @for (b of banks(); track b) {
-            <option [value]="b">{{ b }}</option>
-          }
-        </select>
-      </label>
+      <div class="picks">
+        <!-- Segmented rather than a dropdown: there are four banks and two
+             levels, and a closed select hides what the choice even is. -->
+        <div class="pick">
+          <span class="pick__label" id="pick-bank">Bank</span>
+          <div class="seg" role="group" aria-labelledby="pick-bank">
+            <button
+              type="button"
+              class="seg__opt"
+              [class.seg__opt--on]="bank() === ANY"
+              [attr.aria-pressed]="bank() === ANY"
+              (click)="chooseBank(ANY)"
+            >
+              all
+            </button>
+            @for (b of banks(); track b) {
+              <button
+                type="button"
+                class="seg__opt"
+                [class.seg__opt--on]="bank() === b"
+                [attr.aria-pressed]="bank() === b"
+                (click)="chooseBank(b)"
+              >
+                {{ b }}
+              </button>
+            }
+          </div>
+        </div>
 
-      <label class="pick">
-        <span class="pick__label">Take</span>
-        <select [value]="level()" (change)="level.set($any($event.target).value)">
-          <option [value]="ANY">either</option>
-          @for (l of levels(); track l) {
-            <option [value]="l">{{ l }}</option>
-          }
-        </select>
-      </label>
+        <div class="pick">
+          <span class="pick__label" id="pick-take">Take</span>
+          <div class="seg" role="group" aria-labelledby="pick-take">
+            <button
+              type="button"
+              class="seg__opt"
+              [class.seg__opt--on]="level() === ANY"
+              [attr.aria-pressed]="level() === ANY"
+              (click)="chooseLevel(ANY)"
+            >
+              either
+            </button>
+            @for (l of levels(); track l) {
+              <button
+                type="button"
+                class="seg__opt"
+                [class]="'seg__opt seg__opt--' + l"
+                [class.seg__opt--on]="level() === l"
+                [attr.aria-pressed]="level() === l"
+                (click)="chooseLevel(l)"
+              >
+                {{ l }}
+              </button>
+            }
+          </div>
+        </div>
+      </div>
 
       <p class="shuffle__count">{{ matching().length }} to play</p>
     </div>
@@ -62,13 +114,23 @@
             [attr.aria-expanded]="open"
             (click)="toggleSong(group.song)"
           >
-            <span class="song__caret" aria-hidden="true">{{ open ? '⌄' : '›' }}</span>
-            <span class="song__name">{{ group.song }}</span>
+            <span class="song__caret" aria-hidden="true">&#8250;</span>
+            <span class="song__text">
+              <span class="song__name">{{ group.title }}</span>
+              <!-- The folder that desktop actually uses. Shown for the open
+                   song only; thirty of them at once is a second list. -->
+              <span class="song__slug">{{ group.song }}</span>
+            </span>
+            <span class="song__dots" aria-hidden="true">
+              @for (take of group.takes; track take.bank + '/' + take.name) {
+                <i class="dot" [class]="'dot dot--' + (take.level ?? 'take')"></i>
+              }
+            </span>
             <span class="song__count">{{ group.takes.length }}</span>
           </button>
 
           @if (open) {
-            <ul class="takes">
+            <ul class="takes" animate.enter="takes-in" animate.leave="takes-out">
               @for (take of group.takes; track take.bank + '/' + take.name) {
                 @let chosen = isSelected(take);
                 <li class="take">
@@ -79,14 +141,17 @@
                     [attr.aria-current]="chosen ? 'true' : null"
                     (click)="select(take)"
                   >
-                    <span class="take__level">{{ take.level ?? 'take' }}</span>
+                    <span
+                      class="chip"
+                      [class]="'chip chip--' + (take.level ?? 'take')"
+                    >{{ take.level ?? 'take' }}</span>
                     <span class="take__bank">{{ take.bank }}</span>
                     <span class="take__size">{{ size(take.bytes) }}</span>
                   </button>
 
                   <!-- Only under the chosen row, and only one is ever open. -->
                   @if (chosen) {
-                    <div class="panel">
+                    <div class="panel" animate.enter="panel-in">
                       @if (fetching()) {
                         <p class="panel__busy" role="status">Fetching the audio...</p>
                       } @else if (source(); as url) {
@@ -99,20 +164,20 @@
                         ></audio>
                         <button
                           type="button"
-                          class="panel__save"
+                          class="btn btn--quiet btn--sm"
                           [disabled]="saving()"
                           (click)="save(take)"
                         >
                           {{ saving() ? 'Saving...' : 'Download' }}
                         </button>
                       } @else {
-                        <button type="button" class="panel__play" (click)="play(take)">
-                          <span class="glyph" aria-hidden="true">▶</span>
+                        <button type="button" class="btn btn--primary btn--sm" (click)="play(take)">
+                          <span class="glyph" aria-hidden="true">&#9654;</span>
                           Play
                         </button>
                         <button
                           type="button"
-                          class="panel__save"
+                          class="btn btn--quiet btn--sm"
                           [disabled]="saving()"
                           (click)="save(take)"
                         >

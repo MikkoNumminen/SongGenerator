@@ -20,7 +20,7 @@ from app.stages import Stage
 
 REQUEST = JobRequest(
     source_url="https://example.invalid/watch?v=abc",
-    bank="curated",
+    bank="ppbank",
     requested_by="someone@example.invalid",
 )
 
@@ -61,7 +61,7 @@ def test_only_the_flags_that_were_asked_for_are_passed():
     assert "--play" not in cmd
     assert "--mimicry" not in cmd
     assert "--engine" not in cmd
-    assert cmd[-2:] == ["--bank", "curated"]
+    assert cmd[-2:] == ["--bank", "ppbank"]
 
 
 def test_the_settings_that_were_asked_for_do_reach_the_command():
@@ -83,7 +83,7 @@ def test_a_run_walks_the_stages_and_ends_done(tmp_path):
     script = (
         "import time\n"
         "for line in ['  separator roformer', '  stems 1s -> w',"
-        " '  bank curated (x, standardised)', '  play conservative, seed 1',"
+        " '  bank ppbank (x, standardised)', '  play conservative, seed 1',"
         " '  wrote 7 versions to out']:\n"
         "    print(line, flush=True); time.sleep(0.02)\n"
     )

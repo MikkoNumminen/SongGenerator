@@ -8,7 +8,7 @@ import { BanksReply } from '../contract/dto';
  *
  * The names are data, never a union type. Banks live in a gitignored local
  * override, so which ones exist differs per machine and is not knowable when
- * this is built: a `'curated' | 'muslimbank'` type would be wrong on a fresh
+ * this is built: a `'ppbank' | 'muslimbank'` type would be wrong on a fresh
  * clone and would need editing every time somebody records a new one.
  *
  * The reply carries whether each bank is usable and why not, so a picker can
