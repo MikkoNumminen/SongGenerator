@@ -187,3 +187,74 @@ describe('GoogleAuth', () => {
     expect(fake.calls.initialize).toBe(0);
   });
 });
+
+
+describe('a session that survives a page load', () => {
+  // The bug this fixes: the token lived in a field, so every full load signed
+  // somebody out. A refresh, a new tab, or following the redirect from the
+  // domain that links here. It reads as "it signs me out all the time" and is
+  // not about how long a session lasts.
+  const KEY = 'songgen.session';
+  const WHO = 'owner@example.invalid';
+  const live = () => token({ email: WHO, exp: Math.floor(Date.now() / 1000) + 3600 });
+
+  function auth(stored?: string) {
+    TestBed.resetTestingModule();
+    sessionStorage.clear();
+    if (stored) {
+      sessionStorage.setItem(KEY, stored);
+    }
+    const fake = fakeGoogle();
+    (globalThis as Record<string, unknown>)['google'] = fake.google;
+    TestBed.configureTestingModule({
+      providers: [{ provide: GOOGLE_CLIENT_ID, useValue: CLIENT }],
+    });
+    return { service: TestBed.inject(GoogleAuth), fake };
+  }
+
+  afterEach(() => {
+    sessionStorage.clear();
+    delete (globalThis as Record<string, unknown>)['google'];
+  });
+
+  it('is still signed in after the page is loaded again', () => {
+    const { service } = auth(live());
+
+    expect(service.user()?.email).toBe(WHO);
+    expect(service.token()).not.toBeNull();
+  });
+
+  it('remembers a credential Google hands back', async () => {
+    const { service, fake } = auth();
+    await service.mountButton(document.createElement('div'));
+
+    fake.credential(live());
+
+    expect(sessionStorage.getItem(KEY)).not.toBeNull();
+  });
+
+  it('does not restore one that has expired', () => {
+    // Restored through the same door a fresh credential comes in by, so a
+    // stored token is checked rather than trusted.
+    const { service } = auth(
+      token({ email: WHO, exp: Math.floor(Date.now() / 1000) - 60 }),
+    );
+
+    expect(service.user()).toBeNull();
+    expect(sessionStorage.getItem(KEY)).toBeNull();
+  });
+
+  it('does not restore one that cannot be read', () => {
+    expect(auth('not-a-jwt').service.user()).toBeNull();
+  });
+
+  it('is forgotten on sign out', async () => {
+    const { service, fake } = auth();
+    await service.mountButton(document.createElement('div'));
+    fake.credential(live());
+
+    service.signOut();
+
+    expect(sessionStorage.getItem(KEY)).toBeNull();
+  });
+});
