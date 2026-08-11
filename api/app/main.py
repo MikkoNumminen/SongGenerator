@@ -39,6 +39,7 @@ from .config import Settings, load_settings
 from .jobs import Job, JobRequest, JobRunner
 from .songs import SongError, prepare
 from .store import JobStore, open_store
+from .users import UserStore, open_users
 
 # Levels the pipeline offers. Read from its config at wiring time rather than
 # hardcoded, so a level added there does not need editing here too.
@@ -138,6 +139,61 @@ class CancelReply(BaseModel):
     cancelled: bool
 
 
+class FileReply(BaseModel):
+    """One finished rendering, as something to download."""
+
+    name: str
+    level: str | None = None
+    bytes: int
+
+
+class FilesReply(BaseModel):
+    files: list[FileReply]
+
+
+class TrackReply(BaseModel):
+    """One playable rendering, addressed by where it sits on disk."""
+
+    song: str
+    bank: str
+    level: str | None = None
+    name: str
+    bytes: int
+
+
+class LibraryReply(BaseModel):
+    tracks: list[TrackReply]
+
+
+class UserReply(BaseModel):
+    email: str
+    added_at: str
+    added_by: str
+    is_admin: bool
+
+
+class UsersReply(BaseModel):
+    users: list[UserReply]
+    # So the panel can say "you" and can refuse to offer a revoke button for
+    # an address it knows the server will not revoke.
+    admins: list[str]
+
+
+class GrantRequest(BaseModel):
+    email: str
+
+    @field_validator("email")
+    @classmethod
+    def _an_address_at_all(cls, value: str) -> str:
+        email = value.strip().lower()
+        # Deliberately shallow. The real check is Google's: a token has to
+        # carry this address, verified, before it opens anything. Validating
+        # harder here would reject legitimate addresses to no benefit.
+        if "@" not in email or email.startswith("@") or email.endswith("@"):
+            raise ValueError("that does not look like an email address")
+        return email
+
+
 def _job_payload(job: Job) -> JobReply:
     data = asdict(job)
     data["stage"] = job.stage.value
@@ -152,6 +208,7 @@ def create_app(
     settings: Settings,
     runner: JobRunner,
     store: JobStore,
+    users: UserStore,
     banks: dict[str, str],
     standardised_suffix: str,
     levels: tuple[str, ...],
@@ -173,16 +230,21 @@ def create_app(
             CORSMiddleware,
             allow_origins=list(settings.allowed_origins),
             allow_credentials=True,
-            allow_methods=["GET", "POST"],
+            allow_methods=["GET", "POST", "DELETE"],
             allow_headers=["Authorization", "Content-Type"],
         )
 
     def principal(request: Request) -> Principal:
         header = request.headers.get("Authorization", "")
         token = header[7:].strip() if header.lower().startswith("bearer ") else ""
+        # Read per request, not captured at startup. The owner grants and
+        # revokes from a browser, and a revocation that only took effect at the
+        # next restart of a desktop service would be a revocation in name.
+        # Admins are added rather than stored, so emptying the table cannot
+        # lock the owner out of the panel that empties it.
+        allowed = users.emails() | settings.admin_emails
         try:
-            return verify(token, settings.allowed_emails,
-                          settings.google_client_id, verifier)
+            return verify(token, allowed, settings.google_client_id, verifier)
         except AuthError as exc:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(exc)) from exc
 
@@ -194,6 +256,20 @@ def create_app(
                            busy=runner.busy)
 
     Caller = Annotated[Principal, Depends(principal)]
+
+    def administrator(who: Caller) -> Principal:
+        """An allowed caller who may also change who else is allowed.
+
+        403 rather than 401: they proved who they are and it is not enough,
+        which is a different answer from not proving it, and the front end
+        shows a different thing for each.
+        """
+        if who.email not in settings.admin_emails:
+            raise HTTPException(status.HTTP_403_FORBIDDEN,
+                                "only an administrator may change the allowlist")
+        return who
+
+    Admin = Annotated[Principal, Depends(administrator)]
 
     @app.get("/banks")
     def list_banks(_: Caller) -> BanksReply:
@@ -262,6 +338,139 @@ def create_app(
             raise HTTPException(status.HTTP_404_NOT_FOUND, "no such run")
         return _job_payload(job)
 
+    def _finished_files(job: Job) -> list[Path]:
+        """The renderings a job produced, or nothing if it produced none."""
+        if not job.output_dir:
+            return []
+        folder = Path(job.output_dir)
+        if not folder.is_dir():
+            return []
+        return sorted(p for p in folder.glob("*.mp3") if p.is_file())
+
+    @app.get("/jobs/{job_id}/files")
+    def files(job_id: str, _: Caller) -> FilesReply:
+        job = store.get(job_id)
+        if job is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "no such run")
+        return FilesReply(files=[
+            FileReply(name=p.name, level=_level_of(p), bytes=p.stat().st_size)
+            for p in _finished_files(job)
+        ])
+
+    @app.get("/jobs/{job_id}/files/{name}")
+    def one_file(job_id: str, name: str, _: Caller):
+        """Hand back one rendering.
+
+        The name is matched against the files the job actually produced rather
+        than joined onto a directory. Joining is how this kind of route becomes
+        a way to read any file on the machine: `..%2f..%2f` and a path outside
+        the output folder. Comparing against a listing cannot leave the folder,
+        whatever the caller sends, so the guard is the shape of the code rather
+        than a check that can be forgotten.
+        """
+        from fastapi.responses import FileResponse
+
+        job = store.get(job_id)
+        if job is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "no such run")
+        for path in _finished_files(job):
+            if path.name == name:
+                return FileResponse(path, media_type="audio/mpeg",
+                                    filename=path.name)
+        raise HTTPException(status.HTTP_404_NOT_FOUND,
+                            "that run produced no such file")
+
+    def _library_tracks() -> list[tuple[str, str, Path]]:
+        """Every rendering on this machine, as (song, bank, path).
+
+        Read off the disk rather than out of the job table on purpose. Most of
+        what is in `output/` was rendered from the command line, long before
+        the edge existed, and a playlist that only knew about jobs would show a
+        fraction of the library and look broken. The directory is the truth;
+        deleting a file is how the owner takes something out of the playlist.
+        """
+        root = settings.repo_root / "output"
+        if not root.is_dir():
+            return []
+        found = []
+        for song_dir in sorted(p for p in root.iterdir() if p.is_dir()):
+            for bank_dir in sorted(p for p in song_dir.iterdir() if p.is_dir()):
+                for path in sorted(bank_dir.glob("*.mp3")):
+                    if path.is_file():
+                        found.append((song_dir.name, bank_dir.name, path))
+        return found
+
+    def _level_of(path: Path) -> str | None:
+        """`<song>.<level>.mp3`, or `<song>.<level>.mimN.mp3` from the runs
+        that wrote the whole ladder. None rather than a guess otherwise: a
+        wrong label on a track is worse than an unlabelled one."""
+        parts = path.stem.split(".")
+        if len(parts) < 2:
+            return None
+        level = parts[-1]
+        if level.startswith("mim") and len(parts) >= 3:
+            level = parts[-2]
+        return level
+
+    @app.get("/library")
+    def library(_: Caller) -> LibraryReply:
+        return LibraryReply(tracks=[
+            TrackReply(song=song, bank=bank, level=_level_of(path),
+                       name=path.name, bytes=path.stat().st_size)
+            for song, bank, path in _library_tracks()
+        ])
+
+    @app.get("/library/{song}/{bank}/{name}")
+    def track(song: str, bank: str, name: str, _: Caller):
+        """One rendering, to play or to save.
+
+        Matched against the listing rather than joined onto a path, for the
+        same reason as the per-job download: joining is how a route like this
+        becomes a way to read any file on the machine.
+        """
+        from fastapi.responses import FileResponse
+
+        for found_song, found_bank, path in _library_tracks():
+            if found_song == song and found_bank == bank and path.name == name:
+                return FileResponse(path, media_type="audio/mpeg",
+                                    filename=path.name)
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such track")
+
+    @app.get("/users")
+    def list_users(_: Admin) -> UsersReply:
+        admins = sorted(settings.admin_emails)
+        return UsersReply(
+            users=[UserReply(email=u.email, added_at=u.added_at,
+                             added_by=u.added_by,
+                             is_admin=u.email in settings.admin_emails)
+                   for u in users.all()],
+            admins=admins,
+        )
+
+    @app.post("/users", status_code=status.HTTP_201_CREATED)
+    def grant(body: GrantRequest, who: Admin) -> UserReply:
+        from datetime import datetime
+
+        now = datetime.now(UTC).isoformat(timespec="seconds")
+        users.add(body.email, added_by=who.email, at=now)
+        return UserReply(email=body.email, added_at=now, added_by=who.email,
+                         is_admin=body.email in settings.admin_emails)
+
+    @app.delete("/users/{email}")
+    def revoke(email: str, _: Admin) -> UsersReply:
+        target = email.strip().lower()
+        # An admin's access does not come from this table, so removing the row
+        # would report success and change nothing. Refusing says why.
+        if target in settings.admin_emails:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "that address is an administrator, set in this machine's own"
+                " configuration; it cannot be revoked from here")
+        if not users.remove(target):
+            raise HTTPException(status.HTTP_404_NOT_FOUND,
+                                "that address was not on the list")
+        return list_users(_)
+
     @app.post("/jobs/{job_id}/cancel")
     def cancel(job_id: str, _: Caller) -> CancelReply:
         live = runner.current
@@ -296,7 +505,15 @@ def build() -> FastAPI:
 
     store = open_store(settings.database_path)
     from datetime import datetime
-    store.reconcile(datetime.now(UTC).isoformat(timespec="seconds"))
+    now = datetime.now(UTC).isoformat(timespec="seconds")
+    store.reconcile(now)
+
+    # Same database, same schema, one connection. The allowlist moved out of
+    # the environment so it can be edited while the service runs; the variable
+    # still seeds it the first time, so a machine that had one keeps working
+    # without anybody being told to do something.
+    users = open_users(store.connection)
+    users.seed(settings.allowed_emails, at=now)
 
     runner = JobRunner(on_update=store.save)
 
@@ -308,6 +525,7 @@ def build() -> FastAPI:
         settings=settings,
         runner=runner,
         store=store,
+        users=users,
         banks=dict(pipeline_config.BANKS),
         standardised_suffix=pipeline_config.STD_SUFFIX,
         levels=tuple(pipeline_config.PLAY_LEVELS),

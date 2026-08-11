@@ -25,5 +25,11 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/history/history-page').then((m) => m.HistoryPage),
   },
+  {
+    path: 'admin',
+    title: 'Who may use this',
+    loadComponent: () =>
+      import('./features/admin/admin-page').then((m) => m.AdminPage),
+  },
   { path: '**', redirectTo: '' },
 ];

@@ -101,6 +101,65 @@
         "title": "CancelReply",
         "type": "object"
       },
+      "FileReply": {
+        "description": "One finished rendering, as something to download.",
+        "properties": {
+          "bytes": {
+            "title": "Bytes",
+            "type": "integer"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "bytes"
+        ],
+        "title": "FileReply",
+        "type": "object"
+      },
+      "FilesReply": {
+        "properties": {
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/FileReply"
+            },
+            "title": "Files",
+            "type": "array"
+          }
+        },
+        "required": [
+          "files"
+        ],
+        "title": "FilesReply",
+        "type": "object"
+      },
+      "GrantRequest": {
+        "properties": {
+          "email": {
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "title": "GrantRequest",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -319,6 +378,22 @@
         "title": "JobReply",
         "type": "object"
       },
+      "LibraryReply": {
+        "properties": {
+          "tracks": {
+            "items": {
+              "$ref": "#/components/schemas/TrackReply"
+            },
+            "title": "Tracks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "tracks"
+        ],
+        "title": "LibraryReply",
+        "type": "object"
+      },
       "SubmitBody": {
         "description": "A request to make a song.\n\nValidated here as well as in the browser. The browser's validation is for\nthe person typing; this one is because the browser is not the only thing\nthat can post to this.",
         "properties": {
@@ -387,6 +462,98 @@
           "bank"
         ],
         "title": "SubmitBody",
+        "type": "object"
+      },
+      "TrackReply": {
+        "description": "One playable rendering, addressed by where it sits on disk.",
+        "properties": {
+          "bank": {
+            "title": "Bank",
+            "type": "string"
+          },
+          "bytes": {
+            "title": "Bytes",
+            "type": "integer"
+          },
+          "level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Level"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "song": {
+            "title": "Song",
+            "type": "string"
+          }
+        },
+        "required": [
+          "song",
+          "bank",
+          "name",
+          "bytes"
+        ],
+        "title": "TrackReply",
+        "type": "object"
+      },
+      "UserReply": {
+        "properties": {
+          "added_at": {
+            "title": "Added At",
+            "type": "string"
+          },
+          "added_by": {
+            "title": "Added By",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "is_admin": {
+            "title": "Is Admin",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "email",
+          "added_at",
+          "added_by",
+          "is_admin"
+        ],
+        "title": "UserReply",
+        "type": "object"
+      },
+      "UsersReply": {
+        "properties": {
+          "admins": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Admins",
+            "type": "array"
+          },
+          "users": {
+            "items": {
+              "$ref": "#/components/schemas/UserReply"
+            },
+            "title": "Users",
+            "type": "array"
+          }
+        },
+        "required": [
+          "users",
+          "admins"
+        ],
+        "title": "UsersReply",
         "type": "object"
       },
       "ValidationError": {
@@ -626,6 +793,259 @@
           }
         },
         "summary": "Cancel"
+      }
+    },
+    "/jobs/{job_id}/files": {
+      "get": {
+        "operationId": "files_jobs__job_id__files_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FilesReply"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Files"
+      }
+    },
+    "/jobs/{job_id}/files/{name}": {
+      "get": {
+        "description": "Hand back one rendering.\n\nThe name is matched against the files the job actually produced rather\nthan joined onto a directory. Joining is how this kind of route becomes\na way to read any file on the machine: `..%2f..%2f` and a path outside\nthe output folder. Comparing against a listing cannot leave the folder,\nwhatever the caller sends, so the guard is the shape of the code rather\nthan a check that can be forgotten.",
+        "operationId": "one_file_jobs__job_id__files__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "One File"
+      }
+    },
+    "/library": {
+      "get": {
+        "operationId": "library_library_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LibraryReply"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Library"
+      }
+    },
+    "/library/{song}/{bank}/{name}": {
+      "get": {
+        "description": "One rendering, to play or to save.\n\nMatched against the listing rather than joined onto a path, for the\nsame reason as the per-job download: joining is how a route like this\nbecomes a way to read any file on the machine.",
+        "operationId": "track_library__song___bank___name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "song",
+            "required": true,
+            "schema": {
+              "title": "Song",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "bank",
+            "required": true,
+            "schema": {
+              "title": "Bank",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Track"
+      }
+    },
+    "/users": {
+      "get": {
+        "operationId": "list_users_users_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsersReply"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Users"
+      },
+      "post": {
+        "operationId": "grant_users_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrantRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserReply"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Grant"
+      }
+    },
+    "/users/{email}": {
+      "delete": {
+        "operationId": "revoke_users__email__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "email",
+            "required": true,
+            "schema": {
+              "title": "Email",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsersReply"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke"
       }
     }
   }

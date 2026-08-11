@@ -1,0 +1,141 @@
+.admin {
+  display: grid;
+  gap: var(--space-5);
+  max-width: 56rem;
+  margin-inline: auto;
+}
+
+.head {
+  display: grid;
+  gap: var(--space-2);
+}
+
+/* Same reasoning as the history page: the front page owns the one display-sized
+   heading, and a second would compete with it. */
+.head h1 {
+  font-size: var(--text-xl);
+}
+
+.grant {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.grant label {
+  font-weight: 600;
+}
+
+.row {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.row input {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+.hint {
+  margin: 0;
+  opacity: 0.7;
+  font-size: var(--text-sm);
+}
+
+/* A refusal from the edge, not a field validation message. It sits apart from
+   the list's own state panel because the list is fine; one action was not. */
+.problem {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-2);
+  background: color-mix(in oklab, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+
+.table-card {
+  overflow: auto hidden;
+  padding: 0;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  text-align: left;
+  padding: var(--space-3);
+  border-bottom: 1px solid var(--line);
+}
+
+tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.who {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.tag {
+  font-size: var(--text-sm);
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--ink) 8%, transparent);
+  opacity: 0.8;
+}
+
+.tag--admin {
+  background: color-mix(in oklab, var(--accent) 18%, transparent);
+  opacity: 1;
+}
+
+.actions {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.none {
+  opacity: 0.7;
+}
+
+.admins {
+  margin: 0;
+  opacity: 0.75;
+  font-size: var(--text-sm);
+}
+
+/* One column on a phone. The table becomes stacked rows with their own
+   labels, which is what the data-label attributes in the template are for. */
+@media (max-width: 34rem) {
+  thead {
+    display: none;
+  }
+
+  tr {
+    display: grid;
+    gap: var(--space-1);
+    padding: var(--space-3);
+    border-bottom: 1px solid var(--line);
+  }
+
+  td {
+    border: none;
+    padding: 0;
+    display: grid;
+    grid-template-columns: 6rem 1fr;
+    gap: var(--space-2);
+  }
+
+  td::before {
+    content: attr(data-label);
+    opacity: 0.6;
+  }
+
+  .actions {
+    text-align: left;
+  }
+}

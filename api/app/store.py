@@ -52,6 +52,17 @@ class JobStore:
     def __init__(self, conn: sqlite3.Connection) -> None:
         self._conn = conn
 
+    @property
+    def connection(self) -> sqlite3.Connection:
+        """The open database, for the other tables in the same file.
+
+        Exposed rather than opened twice: SQLite allows one writer, and a
+        second connection to the same file would be a second writer waiting on
+        the first for no reason. The schema for every table is applied
+        together in db.apply_schema.
+        """
+        return self._conn
+
     def save(self, job: Job) -> None:
         row = _to_row(job)
         columns = ", ".join(_COLUMNS)

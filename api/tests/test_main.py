@@ -15,6 +15,7 @@ from app.jobs import Job, JobRunner
 from app.main import create_app
 from app.stages import Stage
 from app.store import open_store
+from app.users import open_users
 from fastapi.testclient import TestClient
 
 CLIENT_ID = "1234.apps.googleusercontent.com"
@@ -58,14 +59,20 @@ def _build_bank(tmp_path: Path, name: str, clips: int = 3) -> None:
         encoding="utf-8")
 
 
-def _app(tmp_path: Path, runner: JobRunner | None = None, **over: object):
+def _app(tmp_path: Path, runner: JobRunner | None = None,
+         verifier=None, **over: object):
     settings = _settings(tmp_path, **over)
     store = open_store(settings.database_path)
+    # The allowlist lives in the database now. Seeding it from the settings is
+    # what production does at startup, so the tests get the same world.
+    users = open_users(store.connection)
+    users.seed(settings.allowed_emails, at="2026-01-01T00:00:00+00:00")
     runner = runner or JobRunner(on_update=store.save)
     app = create_app(
-        settings=settings, runner=runner, store=store, banks=BANKS,
+        settings=settings, runner=runner, store=store, users=users, banks=BANKS,
         standardised_suffix=".std", levels=LEVELS,
-        verifier=_verifier(), prepare_song=lambda url: tmp_path / "song.mp4",
+        verifier=verifier or _verifier(),
+        prepare_song=lambda url: tmp_path / "song.mp4",
     )
     return TestClient(app), store, runner
 
@@ -131,8 +138,11 @@ def test_a_signed_in_stranger_is_still_refused(tmp_path):
     account at all."""
     settings = _settings(tmp_path)
     store = open_store(settings.database_path)
+    users = open_users(store.connection)
+    users.seed(settings.allowed_emails, at="2026-01-01T00:00:00+00:00")
     app = create_app(settings=settings, runner=JobRunner(on_update=store.save),
-                     store=store, banks=BANKS, standardised_suffix=".std",
+                     store=store, users=users, banks=BANKS,
+                     standardised_suffix=".std",
                      levels=LEVELS, verifier=_verifier("stranger@example.invalid"),
                      prepare_song=lambda url: tmp_path / "s.mp4")
 

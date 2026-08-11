@@ -25,12 +25,24 @@ class Settings:
 
     repo_root: Path
     database_path: Path
+    # The list this edge started with. It seeds the database's own list the
+    # first time and is not consulted again, because the owner can change the
+    # database from a browser and cannot change this without a restart.
     allowed_emails: frozenset[str]
     google_client_id: str
     # Where the front end is served from. The browser preflights every call
     # because it is a different origin, and "*" plus credentials is the pairing
     # browsers refuse anyway, so these are named rather than wildcarded.
     allowed_origins: tuple[str, ...] = ()
+    # Always allowed, and the only accounts that may edit the allowlist. Kept
+    # out of the database on purpose: the panel exists to edit that table, so
+    # an admin stored there could be removed through the panel, and the one
+    # account able to undo it would be the account that just lost access.
+    #
+    # Defaults to nobody. An edge that names no administrator has none, which
+    # leaves the allowlist exactly as unchangeable as it was before this
+    # existed, rather than quietly promoting whoever asks first.
+    admin_emails: frozenset[str] = frozenset()
 
     @property
     def auth_configured(self) -> bool:
@@ -40,7 +52,8 @@ class Settings:
         attempt: an edge started without an allowlist is misconfigured, not
         unauthorised, and the two need different messages.
         """
-        return bool(self.google_client_id) and bool(self.allowed_emails)
+        return bool(self.google_client_id) and bool(
+            self.allowed_emails or self.admin_emails)
 
 
 def load_settings(env: dict[str, str] | None = None) -> Settings:
@@ -53,11 +66,13 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
     # a job history would carry song titles and local paths.
     default_db = root / "work" / "jobs.sqlite3"
 
-    emails = {
-        e.strip().lower()
-        for e in src.get("SONGGEN_ALLOWED_EMAILS", "").split(",")
-        if e.strip()
-    }
+    def addresses(name: str) -> frozenset[str]:
+        return frozenset(
+            e.strip().lower() for e in src.get(name, "").split(",") if e.strip()
+        )
+
+    emails = addresses("SONGGEN_ALLOWED_EMAILS")
+    admins = addresses("SONGGEN_ADMIN_EMAILS")
     origins = tuple(
         o.strip() for o in src.get("SONGGEN_ALLOWED_ORIGINS", "").split(",")
         if o.strip()
@@ -66,6 +81,7 @@ def load_settings(env: dict[str, str] | None = None) -> Settings:
         repo_root=root,
         allowed_origins=origins,
         database_path=Path(src.get("SONGGEN_DATABASE_PATH", str(default_db))),
-        allowed_emails=frozenset(emails),
+        allowed_emails=emails,
+        admin_emails=admins,
         google_client_id=src.get("SONGGEN_GOOGLE_CLIENT_ID", "").strip(),
     )
