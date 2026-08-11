@@ -118,3 +118,7 @@ web/public/config.json
 # than tidied away, because the way it got committed was a `git add -A` over
 # ops/, which will happen again.
 ops/cloudflare/
+
+# Angular build cache. Created by any local build, and swept into a commit
+# by a stray `git add -A` if it is not named here.
+.angular/

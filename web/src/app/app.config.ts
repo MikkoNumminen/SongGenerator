@@ -5,6 +5,7 @@ import { provideRouter } from '@angular/router';
 import { API_BASE_URL } from './core/api/api-config';
 import { HttpAllowlist } from './core/api/http-allowlist';
 import { HttpBankCatalog } from './core/api/http-bank-catalog';
+import { HttpLibrary } from './core/api/http-library';
 import { HttpRunSource } from './core/api/http-run-source';
 import { attachBearerToken } from './core/auth/auth-interceptor';
 import { RuntimeConfig } from './core/config/runtime-config';
@@ -12,6 +13,7 @@ import { GOOGLE_CLIENT_ID, GoogleAuth } from './core/auth/google-auth';
 import { AUTH_CONTEXT } from './core/ports/auth-context.port';
 import { ALLOWLIST } from './core/ports/allowlist.port';
 import { BANK_CATALOG } from './core/ports/bank-catalog.port';
+import { LIBRARY } from './core/ports/library.port';
 import { RUN_SOURCE } from './core/ports/run-source.port';
 import { routes } from './app.routes';
 
@@ -37,6 +39,7 @@ export function appConfigWith(config: RuntimeConfig): ApplicationConfig {
     provideHttpClient(withInterceptors([attachBearerToken])),
     { provide: ALLOWLIST, useExisting: HttpAllowlist },
     { provide: BANK_CATALOG, useExisting: HttpBankCatalog },
+    { provide: LIBRARY, useExisting: HttpLibrary },
     { provide: RUN_SOURCE, useExisting: HttpRunSource },
     { provide: AUTH_CONTEXT, useExisting: GoogleAuth },
   ],
