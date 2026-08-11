@@ -310,6 +310,78 @@ can be spelled however it sounded: `aah`, `aaah`, `ahh`, `aaahh`.
 **Removing the prefix is what confirms a clip.** Anything still tagged is
 ignored by the bank, so leaving a clip alone is always safe.
 
+### Judging a source before cutting it
+
+One measurement predicts whether a source can make a bank at all, and taking
+it first would have saved an evening. Separate the source, then compare the
+vocal against the instrumental **over the moments the vocal is actually
+sounding**:
+
+| source | voice against the band under it |
+|---|---|
+| `pilluvittu*`, which built `words_hq4` | **+1.5 dB** |
+| a buried vocal that produced nothing usable | **−3.1 dB** |
+
+Above the band, the separator has something clean to take and the clips need
+no rescuing. Below it, everything downstream degrades together: the stem is
+quiet and full of artefacts, standardising lifts it about 8 dB with the
+artefacts included, and pitch tracking stops being reliable. No cutting,
+gating or level change repairs that, and four rounds of trying produced
+nothing worth keeping. Measure first and say early that a source is a poor
+candidate.
+
+Roformer is the separator to use, and it was measured rather than assumed:
+against the same buried source it left 0.103 correlation with the
+instrumental where Demucs left 0.146. It is better and still not enough on a
+bad source.
+
+### When the words have no silence between them
+
+`mine_words` cuts on silence, so a list recited without gaps defeats it. Four
+threshold settings each returned two clips of twenty-nine seconds; pushing
+harder gave four clips, half of them starting mid-word. Word timestamps from
+the recogniser are the only boundary such audio contains.
+
+Two traps in doing that:
+
+- **Never pass `initial_prompt`.** Telling Whisper the vocabulary to expect
+  raised recall from 25 words to 349 and destroyed precision: the merged set
+  had a median duration of 0.00 s and only 18% sat on audible vocal. It
+  invents words to match the prompt.
+- **One pass is not evidence.** The same seventy-three seconds gave 25 words
+  on one run and 8 on the next. Merge several passes, longest detection per
+  word winning.
+
+Then keep only what survives two gates, both against the stems rather than
+the clip alone: the vocal has to be **loud** where the word was heard, and
+**uncorrelated** with the instrumental there. Loudness alone passes pure
+backing, because the band is loud too.
+
+### Check every clip's pitch against a second detector
+
+The most expensive lesson. Everything downstream trusts the pitch stored for
+a clip, and on a processed voice that number can simply be wrong: **9 of 15
+clips disagreed with an independent `pyin` estimate by 7 to 19 semitones**. A
+clip believed to be at 73 that is really at 54 gets shifted confidently in
+the wrong direction, and the result screams. A wrong pitch is worse than a
+missing clip.
+
+Cross-check, discard disagreements, then look at the spread of what is left.
+Six survivors still spanned **30 semitones** against melodies sitting around
+62, so most were octave-folded and landed an octave from the tune. Transpose
+them into one register **by whole octaves only**: an octave keeps the voice,
+anything else makes it a different singer.
+
+### The bank's own level
+
+`words_hq4` declares no `bank.json`, so it uses `config.WORD_BUS_LUFS`,
+**−14.0**. Copying `−11.0` from a spoken bank without measuring made every
+render sound wrong in a way that was not simply loudness: the hotter word bus
+tripped the −1 dB ceiling in `mapping.mix`, which scales the whole mix down,
+so the band was dragged about 2 dB below reference while the words rode
++2.99 above it against +1.58 on a good render. Match the reference bank
+unless there is a measured reason not to.
+
 **Pitch spread matters more than quantity.** Takes at *new* pitches raise the
 mimicry ceiling directly, by reducing how much has to be octave-folded. Ten more
 takes at the same pitch as everything else change nothing.
@@ -440,7 +512,51 @@ would win silently over the committed one.
 Missing the client id is not a failure. The site falls back to the local
 backend and reports that nothing is answering, which it renders honestly.
 
-**4. Reach the backend from the internet.** It runs on a desktop behind a home
+**4. Check that a deploy actually happened.** Not optional, and not the same
+question as whether the build was green:
+
+```powershell
+curl.exe -s https://<the site hostname>/ | Select-String -Pattern 'main-\w+\.js'
+```
+
+The build hashes every bundle name, so that filename changes whenever the
+sources do. Run `npx ng build` in `web` and compare it against what came back:
+the same hash means the deploy landed, an older one means the site is still
+serving a previous build.
+
+This step exists because a front end was rewritten, reviewed, merged with
+everything green, and never published: the site went on serving a build six
+commits old while nothing anywhere said so.
+
+The filter read `web/*` at the time, and it is now `web`, which under every
+reading of the documentation means everything beneath the directory. The
+starred form is genuinely ambiguous: Azure Pipelines supports wildcards in path
+filters and `**` is the form that crosses directories, which would leave a
+single `*` matching only the files sitting directly in `web`, while for older
+servers the documentation says a trailing `*` does nothing different from
+naming the directory. Writing the directory sidesteps the question.
+
+**What is established, and what is not.** All five deploys this site has had
+came from commits that also touched `azure-pipelines.yml`, the filter's other
+entry, and none from a change to the site alone. That is a strong correlation
+and it is not a proof: the merge that should have published the design added
+`web/DESIGN.md`, which sits directly inside `web` and matches the old filter
+under every reading, and no build ran. So something else may be involved, and
+the repository cannot see it.
+
+The Azure DevOps run list is where to look, in this order:
+
+1. **Is there a run at all** for the commit? If not, the trigger did not fire.
+   Check the pipeline's own Triggers tab for "Override the YAML trigger from
+   here", which silently replaces what this file says.
+2. **Is a run queued and not starting?** That is usually the free parallelism
+   grant being used up. It queues forever rather than failing, which looks
+   exactly like no trigger at all.
+3. **Did a run fail?** Then the step that failed says why, and the site keeps
+   serving the previous build, which is the intended behaviour rather than a
+   second fault.
+
+**5. Reach the backend from the internet.** It runs on a desktop behind a home
 connection, so it needs a tunnel. Tailscale Funnel is the free one:
 
 ```powershell
@@ -458,7 +574,7 @@ reports the backend as unreachable for the one person most likely to be testing
 it, while working for everyone else. Vercel's edge is not on the tailnet, so
 routing through it makes the address behave the same for everybody.
 
-**5. Let the browser call it.** A page on `azurestaticapps.net` calling the edge
+**6. Let the browser call it.** A page on `azurestaticapps.net` calling the edge
 is cross-origin, so the edge has to allow it. On the machine running the edge:
 
 ```powershell
@@ -515,7 +631,7 @@ it; the pipeline step that normally does is exactly what is being skipped.
 
 **What this costs is the guarantee that the site matches `main`.** A pipeline
 run is reproducible from a commit and this is not, so after using it, land the
-same change in git before the next push does. Any push touching `web/*` or
+same change in git before the next push does. Any push touching `web` or
 `azure-pipelines.yml` triggers the pipeline, which rebuilds from `main` and
 silently reverts whatever was deployed by hand.
 

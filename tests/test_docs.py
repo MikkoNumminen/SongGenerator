@@ -81,7 +81,7 @@ def test_constants_named_in_docs_actually_exist(doc):
     # Words that look like constants but are prose or JSON keys.
     allowed = {
         "AGENTS", "README", "GLOSSARY", "ARCHITECTURE", "WORKFLOWS", "CLAUDE",
-        "AZURE",
+        "AZURE", "DESIGN",
         "DEMUCS", "WORLD", "PATH", "JSON", "LUFS", "PYTHONPATH", "GPU",
         "NVIDIA", "TSV", "BOM", "DENSITY", "CLIMAXES", "STAGE", "LISTEN",
         "FIRST", "FORMATS", "BRAVO", "OTHER", "PLAYFULNESS", "SOURCES",

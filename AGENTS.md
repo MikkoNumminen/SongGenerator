@@ -111,6 +111,33 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   reported silence inside words at 37% of a song's words when the true figure
   was 67%, and the wrong number was quoted before anyone caught it. Any
   measurement of what a render sounds like has to compute the sounding length.
+- **Check that a deploy happened. Do not infer it from a green build.** A front
+  end was rewritten, reviewed and merged with everything green, and the site
+  went on serving a build six commits old. The trigger's path filter read
+  `web/*`, and what that matches is not something this repository can settle:
+  Microsoft documents `*` as not crossing a directory separator, which would
+  exclude everything under `web/src`, and older servers as treating a trailing
+  `*` as the directory itself, which would include it. It is written `web` now,
+  which means the same thing under every reading. What is established is the
+  correlation: all five deploys this site has ever had came from commits that
+  also touched `azure-pipelines.yml`, the filter's other entry, and none from a
+  change to the site alone. What is **not** established is that the filter was
+  the whole cause, because the merge in question did add `web/DESIGN.md`,
+  directly inside `web`, which every reading of the old filter matches. When a
+  push that should publish does not, only the Azure DevOps run list can say
+  why: a YAML trigger overridden in the pipeline's own Triggers tab, a used-up
+  parallelism grant queueing a run forever, or a step that failed. So ask the
+  site what it is serving rather than assuming:
+  `curl.exe -s <site>/ | Select-String -Pattern 'main-\w+\.js'` names the
+  hashed bundle, and `outputHashing` is `all`, so it changes with every build.
+- **A green front-end suite says nothing about what a visitor sees.** The web
+  tests assert component state, and nothing in them renders at a phone's width,
+  presses Tab, or looks at a first paint. Three defects passed the suite for
+  exactly that reason: a top bar that scrolled the page sideways on a phone, a
+  skip link that never moved focus because its target could not hold it, and a
+  stored light theme that flashed dark on every load. Check a front-end change
+  in a browser, at a narrow width, with the keyboard, in both themes. See
+  `docs/AI-FIRST.md`, dimension 12.
 - **A float WAV is not a pure function of its samples.** libsndfile writes a
   PEAK chunk holding the wall-clock time of the write, at byte 60. Two runs
   producing bit-identical audio therefore produce files that differ by that one

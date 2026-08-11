@@ -1,7 +1,7 @@
 # AI-first score
 
 How legible this repo is to an agent picking it up cold, with no memory of how
-it was built. Eleven dimensions, each scored 0-10; the score is the mean.
+it was built. Twelve dimensions, each scored 0-10; the score is the mean.
 
 "AI-first" is not a standard metric, so the rubric is written down rather than
 assumed. Each dimension states what a 10 looks like, so a score can be argued
@@ -22,6 +22,7 @@ with instead of taken on faith.
 | 9 | **Domain glossary** | Terms of art defined once. An agent should never have to infer what "slot" means. |
 | 10 | **Runbooks** | The common jobs written as steps, so a task does not need reconstructing from history. |
 | 11 | **Audible verification** | A command that measures the properties a listener complains about, so "it sounds wrong" becomes a number an agent can check without ears. |
+| 12 | **Rendered verification** | A command that renders the front end and checks what a visitor actually gets: at a phone's width, from the keyboard, in both themes, and on the deployed address rather than a local one. |
 
 ## Iteration log
 
@@ -135,7 +136,79 @@ been quoted.
 
 ---
 
-## Current: 9.3
+### Iteration 5, the part nobody could see: 8.7
+
+The score went down again, for the same reason as last time. Something did not
+work and no dimension asked about it.
+
+A front end was designed, reviewed, tested and merged, and the deployed site
+did not change. The suite was green, the build was clean, the merge was clean,
+and a visitor was served a build six commits old. Nothing in the repository
+noticed, because nothing in the repository was looking.
+
+The suspect is the trigger in `azure-pipelines.yml`, which filtered on `web/*`,
+and the correlation is strong: all five deploys the site has ever had came from
+commits that also touched `azure-pipelines.yml`, the filter's other entry, and
+none from a change to the site alone. It is written `web` now, which means
+everything beneath the directory under every reading of the documentation.
+
+It is worth being exact about what that is, because the first two explanations
+written for it were both wrong, and one of them was committed. `web/*` was
+called a literal string matching nothing, which is false, and then a wildcard
+that cannot cross a directory separator, which is defensible but does not fit
+the evidence: the merge in question added `web/DESIGN.md`, sitting directly
+inside `web`, which every reading of the old filter matches, and no build ran.
+So the filter is a plausible cause rather than a proven one, and the honest
+record says so and names the run list as the only place that can settle it.
+
+That mistake is the dimension in miniature. Twice, a confident mechanism was
+written down from a correlation, because the thing that could have checked it
+lives in a web console rather than in the repository.
+
+That is a class of failure none of the eleven dimensions covered. Ten of them
+ask whether the repository is legible; the eleventh asks whether a render
+sounds right. None asks whether what a person receives is what the repository
+says it is.
+
+A review of the same branch then found three defects with one shape between
+them:
+
+| defect | why nothing caught it |
+|---|---|
+| the top bar scrolled the whole page sideways on a phone | nothing in the suite renders at a width |
+| "Skip to the page" never moved focus | nothing in the suite presses a key |
+| a stored light theme flashed a dark page on every load | nothing in the suite looks at a first paint |
+
+Each was found by opening the thing in a browser and using it, which is the
+same instrument as the ear in iteration 4 and the same lesson: green answers a
+question about the code, not about what somebody receives.
+
+A fourth from that review was a test's job and is now pinned by two: a stage
+the front end has never heard of drew five grey rows and a motionless meter,
+which is indistinguishable from a stalled run.
+
+So dimension 12 is added rather than pretending 11 covered it. It scores 2. Two
+and not zero because the browser checks were actually done this time and the
+findings written down, and not higher because none of it is a command anybody
+can run: the next agent gets the same green suite and the same silence about
+what the page looks like. A 10 is a committed command that loads the built
+site, checks it at a phone's width, tabs through it, and says which build is
+being served.
+
+The deploy trap and the render gap are both in `AGENTS.md` now, and the
+"Put the site online" runbook gained the step that would have caught it: after
+a merge that should change the site, ask the site what it is serving instead of
+assuming.
+
+The same work closed a smaller gap. The front end had no design and, worse, no
+rule for one, so every component invented its own colours. `web/DESIGN.md` and
+the tokens in `web/src/styles.css` are dimension 4 for the front end: every
+visual value in one place with the reasoning next to it, and the build's
+per-component stylesheet budget stating the same rule as a number.
+
+---
+
+## Current: 8.7
 
 | # | Dimension | 0 | now |
 |---|---|---|---|
@@ -150,21 +223,30 @@ been quoted.
 | 9 | Domain glossary | 1 | 10 |
 | 10 | Runbooks | 3 | 10 |
 | 11 | Audible verification | 0 | 6 |
+| 12 | Rendered verification | 0 | 2 |
 
-**Mean: 9.3**, against **4.5** at baseline scored the same way.
+**Mean: 8.7**, against **4.2** at baseline scored the same way.
 
-Both of those numbers are over eleven dimensions. The baseline was published as
-5.0 and every iteration score above it was a mean over ten, so comparing today
-against 5.0 would be comparing different rubrics. Dimension 11 scores 0 at
-baseline rather than being left blank, because the repo genuinely had nothing
-that measured what a render sounds like; the dimension is new, the gap is not.
+Both of those numbers are over twelve dimensions, and every earlier score in
+this log is a mean over however many dimensions existed when it was written, so
+they are not comparable to each other. Only the two numbers in this paragraph
+are. Dimensions 11 and 12 score 0 at baseline rather than being left blank: the
+repo had nothing that measured what a render sounds like, and nothing that
+looked at what a visitor is served. Dimension 12 is a little unfair to the
+baseline, which had no site to serve, and it is scored anyway, because a 0 for
+"there was nothing" and a 0 for "there is something and nobody checks it" are
+the same number to whoever is reading the table.
 
 The suite was 159 tests at baseline; what it is now lives in the README, which
 is checked against it.
 
-Audible verification (6) is the largest single gap and the one most worth
-closing next, because it is the only dimension where a green suite says nothing
-about whether the tool did its job.
+Rendered verification (2) and audible verification (6) are the two largest
+gaps, and they are the same gap twice: the only dimensions where a green suite
+says nothing about whether the thing did its job. One is answered by listening
+and the other by opening a browser, and neither is answered by a command yet.
+Rendered verification is worth closing first, because its failure mode is the
+cheapest to hit and the most embarrassing: a change that never reaches
+anybody.
 
 The four remaining 9s are honest rather than modest:
 
