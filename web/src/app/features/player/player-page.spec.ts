@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Observable, of, throwError } from 'rxjs';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { API_BASE_URL } from '../../core/api/api-config';
 import { LibraryReply, TrackReply } from '../../core/contract/dto';
@@ -63,16 +63,48 @@ async function render(
 
 describe('the player', () => {
   let library: FakeLibrary;
+  let created: ReturnType<typeof vi.fn>;
+  let revoked: ReturnType<typeof vi.fn>;
+  let original: {
+    create: typeof URL.createObjectURL;
+    revoke: typeof URL.revokeObjectURL;
+  };
 
   beforeEach(() => {
     library = new FakeLibrary();
-    // jsdom has no object URL implementation.
+    // jsdom implements neither of these, so they are added to the real URL
+    // rather than replacing it.
+    //
+    // Replacing it is what the first version did, with vi.stubGlobal and a
+    // spread of the class. Spreading a constructor copies none of its call
+    // behaviour, so `new URL(...)` stopped working everywhere, and because a
+    // stubbed global outlives the file that set it, seven unrelated suites
+    // failed with "URL is not a constructor". Every one of them passed here
+    // and failed in CI, which is the shape of bug worth a comment.
     let n = 0;
-    vi.stubGlobal('URL', {
-      ...URL,
-      createObjectURL: vi.fn(() => `blob:fake/${++n}`),
-      revokeObjectURL: vi.fn(),
-    });
+    created = vi.fn(() => `blob:fake/${++n}`);
+    revoked = vi.fn();
+    original = {
+      create: URL.createObjectURL,
+      revoke: URL.revokeObjectURL,
+    };
+    URL.createObjectURL = created as unknown as typeof URL.createObjectURL;
+    URL.revokeObjectURL = revoked as unknown as typeof URL.revokeObjectURL;
+  });
+
+  afterEach(() => {
+    URL.createObjectURL = original.create;
+    URL.revokeObjectURL = original.revoke;
+  });
+
+  it('leaves the URL constructor alone', () => {
+    // The guard for the bug this file caused. Replacing the global with a
+    // spread of the class took `new URL(...)` away from every other suite,
+    // and a stubbed global outlives the file that set it. Seven suites failed
+    // in CI while this one passed locally, so the invariant is asserted here
+    // rather than trusted.
+    expect(new URL('https://example.invalid/a').pathname).toBe('/a');
+    expect(typeof URL.createObjectURL).toBe('function');
   });
 
   it('groups the takes under their song', async () => {
@@ -105,7 +137,7 @@ describe('the player', () => {
     fixture.componentInstance.play(TRACKS[1]!);
     await fixture.whenStable();
 
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:fake/1');
+    expect(revoked).toHaveBeenCalledWith('blob:fake/1');
     expect(fixture.componentInstance.source()).toBe('blob:fake/2');
   });
 
@@ -116,7 +148,7 @@ describe('the player', () => {
 
     fixture.destroy();
 
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:fake/1');
+    expect(revoked).toHaveBeenCalledWith('blob:fake/1');
   });
 
   it('reports a switched-off desktop as offline, not as an error', async () => {
