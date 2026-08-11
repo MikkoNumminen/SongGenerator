@@ -27,6 +27,17 @@ on:
     paths:
       - 'web/**'
       - '.github/workflows/deploy.yml'
+  # Build and test a pull request, without publishing it.
+  #
+  # Added after a merge turned main red: a spec replaced a global and seven
+  # unrelated suites failed, and because this workflow only ran after the
+  # merge, main was broken before anybody could know. The suite had passed on
+  # the machine it was written on, which is exactly the case a pull request
+  # run catches and a local run cannot.
+  pull_request:
+    paths:
+      - 'web/**'
+      - '.github/workflows/deploy.yml'
   # So the site can be republished without an empty commit, which is what
   # anybody wants the first time a deployment does not go out.
   workflow_dispatch:
@@ -40,7 +51,9 @@ permissions:
 # Two pushes in a minute must not race each other onto the same site. The
 # later one wins, which is what "publish main" means.
 concurrency:
-  group: publish-the-site
+  # Per ref, so a pull request run cannot cancel the publish of main, which a
+  # single shared group would have done the moment both were in flight.
+  group: publish-the-site-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -66,7 +79,7 @@ jobs:
       # in front of visitors, which is the same class of failure as the one
       # this workflow exists to end.
       - name: Publish main, or nothing
-        if: github.ref != 'refs/heads/main'
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
         run: |
           echo "::error::Dispatched from $GITHUB_REF. This workflow publishes main."
           exit 1
@@ -103,7 +116,10 @@ jobs:
       #
       # Absent, the site falls back to reporting that nothing is answering,
       # which is a state it renders properly.
+      # From here down the live site is touched, so a pull request stops at the
+      # build above: it proves the tests and the bundle, and publishes nothing.
       - name: Write the runtime config
+        if: github.event_name != 'pull_request'
         env:
           API_BASE_URL: https://mikkonumminen.dev/api/songgen
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
@@ -122,6 +138,7 @@ jobs:
       # `app_location` is relative to the repository root rather than to the
       # working directory the other steps use.
       - name: Publish
+        if: github.event_name != 'pull_request'
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
@@ -146,6 +163,9 @@ jobs:
       # `-L` because a redirect answers with a body that names no bundle, and a
       # site behind one is not a site that is failing to serve this build.
       - name: Check the site is serving this build
+        # Nothing was published on a pull request, so this would poll the live
+        # site for a bundle that is not there and fail after ten attempts.
+        if: github.event_name != 'pull_request'
         run: |
           built=$(grep -o 'main-[A-Za-z0-9]*\.js' dist/songgen-web/browser/index.html | head -1)
           if [ -z "$built" ]; then
