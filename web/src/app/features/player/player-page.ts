@@ -4,7 +4,6 @@ import {
   Component,
   DestroyRef,
   OnDestroy,
-  OnInit,
   computed,
   inject,
   signal,
@@ -19,6 +18,7 @@ import {
 } from '../../core/api/http-failure';
 import { TrackReply } from '../../core/contract/dto';
 import { LIBRARY } from '../../core/ports/library.port';
+import { loadWhenSignedIn } from '../../core/auth/load-when-signed-in';
 import {
   AsyncState,
   empty,
@@ -71,7 +71,13 @@ function keyOf(track: TrackReply): string {
   templateUrl: './player-page.html',
   styleUrl: './player-page.css',
 })
-export class PlayerPage implements OnInit, OnDestroy {
+export class PlayerPage implements OnDestroy {
+
+  constructor() {
+    // Not ngOnInit: the identity arrives after the page does, and asking
+    // before it has is the 401 that used to leave a "Try again" button.
+    loadWhenSignedIn(() => this.load());
+  }
   private readonly library = inject(LIBRARY);
   private readonly destroyRef = inject(DestroyRef);
   private readonly configured = inject(API_BASE_URL) !== '';
@@ -145,10 +151,6 @@ export class PlayerPage implements OnInit, OnDestroy {
   /** Narrow the shuffle to one level, or widen it back to either. */
   chooseLevel(level: string): void {
     this.level.set(level);
-  }
-
-  ngOnInit(): void {
-    this.load();
   }
 
   ngOnDestroy(): void {
