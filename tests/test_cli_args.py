@@ -232,7 +232,7 @@ class TestEveryFilenameCarriesTheLevel:
         from song_generator.cli import versioned_name
 
         out = Path("output/song/ppbank/song.mp3")
-        got = versioned_name(out, "wild", tag="0p60")
+        got = versioned_name(out, "wild", tag="mim0p60")
         assert got.name == "song.wild.mim0p60.mp3"
 
     def test_an_output_already_naming_the_level_is_not_doubled(self):
@@ -242,8 +242,60 @@ class TestEveryFilenameCarriesTheLevel:
 
         out = Path("output/song/ppbank/song.wild.mp3")
         assert versioned_name(out, "wild").name == "song.wild.mp3"
-        assert versioned_name(out, "wild", tag="0p60").name == \
+        assert versioned_name(out, "wild", tag="mim0p60").name == \
             "song.wild.mim0p60.mp3"
+
+
+class TestOnlyThePlainTakeGetsThePlainName:
+    """A one-off render must not land on the filename of the kept take.
+
+    This used to hold for free: the default walked the ladder and every file
+    it wrote carried a rung, while a one-off carried none. Once the default
+    became two files with no rung in the name, every one-off started writing
+    the default's own names, so `--no-shift` on a song replaced the take
+    somebody had decided to keep.
+    """
+
+    def test_a_plain_run_is_not_tagged(self):
+        assert cli.variant_tag(parse()) is None
+
+    def test_full_mimicry_asked_for_by_name_is_still_the_plain_take(self):
+        """It is the same audio, and the site renders by asking for it."""
+        assert cli.variant_tag(parse("--mimicry", "1")) is None
+
+    def test_a_lesser_rung_says_so(self):
+        assert cli.variant_tag(parse("--mimicry", "0.6")) == "mim0p60"
+        assert cli.variant_tag(parse("--mimicry", "0")) == "mim0p00"
+
+    def test_the_other_two_ways_of_naming_a_shift_say_so_too(self):
+        assert cli.variant_tag(parse("--no-shift")) == "noshift"
+        assert cli.variant_tag(parse("--mix", "0.5")) == "mix0p50"
+
+    def test_no_one_off_shares_a_name_with_the_plain_take(self):
+        from pathlib import Path
+
+        from song_generator.cli import versioned_name
+
+        out = Path("output/song/ppbank/song.mp3")
+        plain = versioned_name(out, "wild", tag=cli.variant_tag(parse()))
+        others = [
+            versioned_name(out, "wild", tag=cli.variant_tag(parse(*argv)))
+            for argv in (("--mimicry", "0.6"), ("--no-shift",), ("--mix", "0.5"))
+        ]
+        assert plain.name == "song.wild.mp3"
+        assert plain not in others
+        assert len(set(others)) == len(others)
+
+    def test_every_rung_of_a_ladder_is_told_apart(self):
+        from pathlib import Path
+
+        from song_generator.cli import rung_word, versioned_name
+
+        out = Path("output/song/ppbank/song.mp3")
+        names = {versioned_name(out, "wild", tag=rung_word(t)).name
+                 for t in config.MIMICRY_VARIANTS}
+        assert len(names) == len(config.MIMICRY_VARIANTS)
+        assert "song.wild.mim1p00.mp3" in names, "the name the ladder has always used"
 
 
 # ---------------------------------------------------------------------------

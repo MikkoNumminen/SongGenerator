@@ -46,8 +46,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("songs", nargs="+", help="files or globs, e.g. 'input/*.mp4'")
     p.add_argument("-o", "--out", type=Path, default=Path("output"))
     p.add_argument("--mimicry", type=float, default=None,
-                   help="one file per song at this setting, instead of the "
-                        "two a run writes")
+                   help="render at this setting rather than full mimicry. "
+                        "Still both levels, so still two files per song "
+                        "unless --play narrows it")
     p.add_argument("--ladder", action="store_true",
                    help="every rung of the mimicry ladder per song. Twenty "
                         "songs at both levels is 280 files")

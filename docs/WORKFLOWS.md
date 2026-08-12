@@ -19,8 +19,11 @@ output/song/<bank>/song.conservative.mp3
 output/song/<bank>/song.wild.mp3
 ```
 
-No rung in the name, because there is only one. `--ladder` and `--mimicry 0.6`
-add `.mim0p60` to tell their files apart; renders made before this was the
+No rung in the name, because there is only one. The plain name belongs to the
+take a plain run writes, and anything asked for specially says so in the
+filename instead of landing on top of it: `--mimicry 0.6` writes
+`.mim0p60`, `--no-shift` writes `.noshift`, `--mix 0.5` writes `.mix0p50`, and
+`--ladder` names every rung it renders. Renders made before this was the
 default are still named `.mim1p00`.
 
 Each song gets its own folder, one per bank inside it. The song name stays in
@@ -52,7 +55,7 @@ costs is the files.
 
 | Flag | Effect |
 |---|---|
-| `--mimicry 0.45` | One file at one setting instead of the two |
+| `--mimicry 0.45` | Both levels at that one setting, named `.mim0p45` |
 | `--ladder` | Every mimicry rung, fourteen files instead of two |
 | `--play wild` | One level instead of both |
 | `--arrangement <path>` | Replay a saved arrangement exactly, or an edited one |

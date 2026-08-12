@@ -60,9 +60,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("input", type=Path, help="input song (mp3, or anything ffmpeg reads)")
     p.add_argument("-o", "--output", type=Path, default=None,
-                   help="base name for the output. The level and the mimicry "
-                        "setting are added to it, so one run writes "
-                        "<name>.<level>.mim<N>.mp3 "
+                   help="base name for the output. The level is added to it, "
+                        "so a run writes <name>.<level>.mp3, and anything "
+                        "asked for specially is named too: --mimicry 0.6 "
+                        "writes <name>.<level>.mim0p60.mp3 "
                         "[default: output/<input stem>.song_generator.mp3]")
     p.add_argument("--separator", choices=["demucs", "roformer"], default=config.SEPARATOR,
                    help="source separation backend")
@@ -162,8 +163,36 @@ def single_mimicry(args: argparse.Namespace) -> float | None:
     return args.mimicry if args.mimicry is not None else config.FULL_MIMICRY
 
 
+def rung_word(value: float) -> str:
+    """A mimicry rung as it is spelled in a filename. 0.6 becomes mim0p60."""
+    return f"mim{value:.2f}".replace(".", "p")
+
+
+def variant_tag(args: argparse.Namespace) -> str | None:
+    """What this render is called, when it is not the one a plain run makes.
+
+    The plain name belongs to the take a plain run writes. Anything asked for
+    specially says in the filename what was special about it, so an experiment
+    cannot quietly replace the take somebody kept and decided to keep.
+
+    This used to fall out for free: the default walked the mimicry ladder and
+    every one of its files carried a rung, while the one-off renders carried
+    none. Once the default became two files with no rung in the name, every
+    one-off started writing the default's own filenames instead.
+
+    None means this IS the plain take. Full mimicry counts as plain, because
+    it is what a plain run renders and what the site asks for by name.
+    """
+    if args.no_shift:
+        return "noshift"
+    if args.mix is not None:
+        return f"mix{args.mix:.2f}".replace(".", "p")
+    rung = single_mimicry(args)
+    return None if rung == config.FULL_MIMICRY else rung_word(rung)
+
+
 def versioned_name(output: Path, label: str, tag: str | None = None) -> Path:
-    """The filename for one rendered version: level, then mimicry rung.
+    """The filename for one rendered version: the level, then what it is.
 
     Every path a render writes goes through here, which is the point: the
     level went into the name at one of two sites and not the other, so two
@@ -172,13 +201,15 @@ def versioned_name(output: Path, label: str, tag: str | None = None) -> Path:
 
     The level always goes in. The guard against doubling it checks the name
     rather than counting anything, so an --output that already names a level
-    is left alone.
+    is left alone. The tag is the whole word, `mim0p60` or `noshift`, rather
+    than digits with a prefix added here, because not every variant of a
+    render is a mimicry rung.
     """
     stem = output.stem
     if label and not stem.endswith(f".{label}"):
         stem = f"{stem}.{label}"
     if tag is not None:
-        stem = f"{stem}.mim{tag}"
+        stem = f"{stem}.{tag}"
     return output.with_name(f"{stem}{output.suffix}")
 
 
@@ -504,12 +535,14 @@ def main(argv: list[str] | None = None) -> int:
                 decide_shifts(word_plan, mix=0.0 if args.no_shift else args.mix,
                               mode=args.mix_mode, seed=args.seed,
                               target_mimicry=single_mimicry(args))
-                path = versioned_name(output, label)
+                path = versioned_name(output, label, tag=variant_tag(args))
             else:
                 decide_shifts(word_plan, mode=args.mix_mode, seed=args.seed,
                               target_mimicry=target)
-                path = versioned_name(output, label,
-                                      tag=f"{target:.2f}".replace(".", "p"))
+                # Every rung of a ladder is tagged, including the top one:
+                # seven files have to be told apart from each other, and
+                # mim1p00 is what the ladder has always called that file.
+                path = versioned_name(output, label, tag=rung_word(target))
 
             word_bus = render(word_plan, stems.instrumental.shape[1], config.SAMPLE_RATE,
                               shift=not args.no_shift, engine=args.engine, cache=cache)

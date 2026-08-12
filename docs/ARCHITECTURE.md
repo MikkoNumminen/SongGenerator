@@ -53,7 +53,7 @@ song.mp4
 
 | Module | Does | Key exports |
 |---|---|---|
-| `cli.py` | Wires everything; one run writes both levels across the mimicry sweep | `main` |
+| `cli.py` | Wires everything; one run writes both levels at full mimicry | `main` |
 | `audio_io.py` | The only place sample rate and array shape are established | `decode`, `encode_mp3`, `read_wav` |
 | `separate.py` | Demucs or Mel-Band Roformer behind one interface, cached | `separate`, `Stems` |
 | `detect.py` | Mode A vs Mode B, with the numbers behind the verdict | `detect_vocal`, `VocalReport` |
