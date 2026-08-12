@@ -35,6 +35,17 @@ class AuthError(Exception):
     """Refused. The message is safe to show a caller."""
 
 
+class NotAllowed(AuthError):
+    """A real account, verified by Google, that this edge has not admitted.
+
+    Separate from AuthError because the two need different answers. A bad or
+    missing token means "sign in"; this means "you are signed in, and you are
+    not on the list", which is a thing somebody can ask to change. Answering
+    both with 401 left a person staring at a refusal with nothing to do about
+    it, and told the browser to go and get credentials it already had.
+    """
+
+
 @dataclass(frozen=True)
 class Principal:
     """The person behind a request, once their token has been believed."""
@@ -90,7 +101,7 @@ def decide(claims: dict[str, object], allowed: frozenset[str],
         raise AuthError("this edge has an empty allowlist, so nobody can sign in")
     who = identify(claims, client_id)
     if who.email not in allowed:
-        raise AuthError("that account is not on this edge's allowlist")
+        raise NotAllowed("that account has not been given access to this machine")
     return who
 
 

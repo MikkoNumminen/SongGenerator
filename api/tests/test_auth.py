@@ -8,7 +8,7 @@ from the signature check, because these are the rules worth reading.
 from __future__ import annotations
 
 import pytest
-from app.auth import AuthError, Principal, decide, verify
+from app.auth import AuthError, NotAllowed, Principal, decide, verify
 
 CLIENT = "1234.apps.googleusercontent.com"
 ALLOWED = frozenset({"owner@example.invalid"})
@@ -34,7 +34,7 @@ def test_an_allowlisted_account_gets_in():
 def test_an_account_not_on_the_list_is_refused():
     """The whole point. Any Google account must not be enough, because the
     pipeline takes arbitrary links and runs them on somebody's desktop."""
-    with pytest.raises(AuthError, match="allowlist"):
+    with pytest.raises(NotAllowed, match="not been given access"):
         decide(claims(email="stranger@example.invalid"), ALLOWED, CLIENT)
 
 
@@ -118,7 +118,7 @@ def test_the_policy_still_applies_after_a_good_signature():
     def verifier(token: str, client_id: str) -> dict[str, object]:
         return claims(email="stranger@example.invalid")
 
-    with pytest.raises(AuthError, match="allowlist"):
+    with pytest.raises(NotAllowed, match="not been given access"):
         verify("valid-token", ALLOWED, CLIENT, verifier)
 
 

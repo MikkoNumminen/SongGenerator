@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { API_BASE_URL } from '../api/api-config';
 import { AUTH_CONTEXT, AuthContext } from '../ports/auth-context.port';
+import { Membership } from './membership';
 import { attachBearerToken } from './auth-interceptor';
 
 const BASE = 'https://desktop.example.invalid';
@@ -78,5 +79,52 @@ describe('when there is no token', () => {
 
     const sent = controller.expectOne(`${BASE}/jobs`);
     expect(sent.request.headers.has('Authorization')).toBe(false);
+  });
+});
+
+describe('learning whether this account was let in', () => {
+  it('takes a refusal as a verdict', () => {
+    const { http, controller } = setup('a-token');
+    const member = TestBed.inject(Membership);
+
+    http.get(`${BASE}/library`).subscribe({ error: () => undefined });
+    controller
+      .expectOne(`${BASE}/library`)
+      .flush(null, { status: 403, statusText: 'Forbidden' });
+
+    expect(member.refused()).toBe(true);
+    controller.verify();
+  });
+
+  it('does not read asking for access as being let in', () => {
+    // It answers 202 to somebody who is not admitted, on purpose. Counting
+    // that as a success marked them admitted the instant they asked, which
+    // took away the very screen they were standing on.
+    const { http, controller } = setup('a-token');
+    const member = TestBed.inject(Membership);
+    http.get(`${BASE}/library`).subscribe({ error: () => undefined });
+    controller
+      .expectOne(`${BASE}/library`)
+      .flush(null, { status: 403, statusText: 'Forbidden' });
+
+    http.post(`${BASE}/access-requests`, {}).subscribe();
+    controller
+      .expectOne(`${BASE}/access-requests`)
+      .flush({ waiting: true }, { status: 202, statusText: 'Accepted' });
+
+    expect(member.refused()).toBe(true);
+    controller.verify();
+  });
+
+  it('does not read the open health route as being let in', () => {
+    // It answers everybody, so it says nothing about this account.
+    const { http, controller } = setup('a-token');
+    const member = TestBed.inject(Membership);
+
+    http.get(`${BASE}/health`).subscribe();
+    controller.expectOne(`${BASE}/health`).flush({ status: 'ok' });
+
+    expect(member.standing()).toBe('unknown');
+    controller.verify();
   });
 });

@@ -13,6 +13,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { API_BASE_URL } from '../../core/api/api-config';
 import { detailOf, isUnreachable, stateForFailure } from '../../core/api/http-failure';
 import {
+  AccessRequestReply,
   InvitationReply,
   UserReply,
   UsersReply,
@@ -21,6 +22,7 @@ import {
  * so the panel can tick the right box before anything has been fetched. */
 const DEMO = 'demo';
 
+import { ACCESS_REQUESTS } from '../../core/ports/access-requests.port';
 import { ALLOWLIST } from '../../core/ports/allowlist.port';
 import { AUTH_CONTEXT } from '../../core/ports/auth-context.port';
 import { loadWhenSignedIn } from '../../core/auth/load-when-signed-in';
@@ -59,12 +61,14 @@ export class AdminPage {
     loadWhenSignedIn(() => {
       this.load();
       this.readInvitations();
+      this.readWaiting();
     });
   }
   private readonly allowlist = inject(ALLOWLIST);
   private readonly auth = inject(AUTH_CONTEXT, { optional: true });
   private readonly destroyRef = inject(DestroyRef);
   private readonly where = inject(LocationStrategy);
+  private readonly access = inject(ACCESS_REQUESTS);
   private readonly configured = inject(API_BASE_URL) !== '';
 
   readonly state = signal<AsyncState<UsersReply>>(idle());
@@ -94,6 +98,61 @@ export class AdminPage {
     this.wanted.set(now.includes(name)
       ? now.filter((b) => b !== name)
       : [...now, name]);
+  }
+
+  /** People who signed in, were refused, and asked. */
+  readonly waiting = signal<readonly AccessRequestReply[]>([]);
+
+  readWaiting(): void {
+    this.access
+      .waiting()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (reply) => this.waiting.set(reply.requests),
+        error: () => this.waiting.set([]),
+      });
+  }
+
+  approve(email: string): void {
+    if (this.working()) {
+      return;
+    }
+    this.problem.set(null);
+    this.working.set(true);
+    this.access
+      .approve(email)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (reply) => {
+          this.working.set(false);
+          this.state.set(ready(reply));
+          this.readWaiting();
+        },
+        error: (failure: HttpErrorResponse) => {
+          this.working.set(false);
+          this.problem.set(this.explain(failure));
+        },
+      });
+  }
+
+  dismiss(email: string): void {
+    if (this.working()) {
+      return;
+    }
+    this.working.set(true);
+    this.access
+      .dismiss(email)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (reply) => {
+          this.working.set(false);
+          this.waiting.set(reply.requests);
+        },
+        error: (failure: HttpErrorResponse) => {
+          this.working.set(false);
+          this.problem.set(this.explain(failure));
+        },
+      });
   }
 
   /** Outstanding invitations, and the one just made. */

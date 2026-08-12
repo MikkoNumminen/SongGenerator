@@ -17,16 +17,18 @@
     </a>
 
     <nav class="nav" aria-label="Pages">
-      <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
-        Make a song
-      </a>
-      <a routerLink="/runs" routerLinkActive="active">Earlier runs</a>
-      <a routerLink="/songs" routerLinkActive="active">Songs</a>
-      <!-- Shown to anyone signed in, not only to administrators. The page
-           reports what the edge says rather than guessing at a role here, and
-           a link hidden by the browser was never the thing keeping anybody
-           out: the edge answers 403 whatever this renders. -->
-      @if (auth.user()) {
+      <!-- Nothing until the edge has admitted this account. Signing in with
+           Google says who somebody is and nothing about whether this machine
+           takes them, so a full navigation drawn on that is four things that
+           all refuse. This is not what keeps anybody out; the edge does that
+           whatever is rendered here. It is what stops the page promising
+           something it cannot give. -->
+      @if (member.admitted()) {
+        <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">
+          Make a song
+        </a>
+        <a routerLink="/runs" routerLinkActive="active">Earlier runs</a>
+        <a routerLink="/songs" routerLinkActive="active">Songs</a>
         <a routerLink="/admin" routerLinkActive="active">Admin Panel</a>
       }
     </nav>
@@ -71,7 +73,42 @@
     </p>
   }
 
-  <router-outlet />
+  <!-- Signed in and not admitted. The routed pages would each refuse in their
+       own words, so this stands in front of all of them and says the one true
+       thing once, with the only action there is. -->
+  @if (locked()) {
+    <section class="locked">
+      <h1>This machine does not know you yet</h1>
+      <p>
+        You are signed in as <span class="mono">{{ auth.user()?.email }}</span>,
+        and that account has not been given access. Nothing is broken, and
+        there is nothing wrong with the account.
+      </p>
+      @if (asked()) {
+        <p class="locked__done" role="status">
+          Asked. Whoever runs this machine will see it; there is nothing else
+          to do here.
+        </p>
+      } @else {
+        <button
+          type="button"
+          class="btn btn--primary"
+          [disabled]="asking()"
+          (click)="askForAccess()"
+        >
+          {{ asking() ? 'Asking...' : 'Ask for access' }}
+        </button>
+      }
+      <p class="locked__out">
+        Signed in as somebody else by mistake?
+        <button type="button" class="btn btn--quiet btn--sm" (click)="auth.signOut()">
+          Sign out
+        </button>
+      </p>
+    </section>
+  } @else {
+    <router-outlet />
+  }
 </main>
 
 <footer class="footer">

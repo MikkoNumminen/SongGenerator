@@ -231,3 +231,42 @@
     padding: var(--space-5) var(--space-4) var(--space-7);
   }
 }
+
+/* ---- signed in, not admitted ---- */
+
+.locked {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+  max-width: 34rem;
+  margin-inline: auto;
+  padding: var(--space-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm), var(--sheen);
+}
+
+.locked h1 {
+  margin: 0;
+  font-size: var(--text-lg);
+}
+
+.locked p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.locked__done {
+  color: var(--ok-text) !important;
+  font-weight: 600;
+}
+
+.locked__out {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin-top: var(--space-2) !important;
+  font-size: var(--text-sm);
+}

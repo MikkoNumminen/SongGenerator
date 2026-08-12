@@ -13,6 +13,7 @@ import {
 import { ALLOWLIST, Allowlist } from '../../core/ports/allowlist.port';
 import { AUTH_CONTEXT } from '../../core/ports/auth-context.port';
 import { fakeAuth } from '../../core/auth/fake-auth';
+import { ACCESS_REQUESTS } from '../../core/ports/access-requests.port';
 import { AdminPage } from './admin-page';
 
 const OWNER = 'owner@example.invalid';
@@ -128,6 +129,12 @@ async function render(
   TestBed.configureTestingModule({
     imports: [AdminPage],
     providers: [
+      {
+        // The panel reads the queue on arrival; these tests are about the
+        // allowlist, so it answers empty and is never asked for more.
+        provide: ACCESS_REQUESTS,
+        useValue: { waiting: () => of({ requests: [] }) },
+      },
       fakeAuth().provider,
       { provide: ALLOWLIST, useValue: allowlist },
       { provide: API_BASE_URL, useValue: baseUrl },

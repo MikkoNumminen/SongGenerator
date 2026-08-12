@@ -15,7 +15,7 @@ from app.jobs import Job, JobRunner
 from app.main import create_app
 from app.stages import Stage
 from app.store import open_store
-from app.users import open_invitations, open_users
+from app.users import open_invitations, open_requests, open_users
 from fastapi.testclient import TestClient
 
 CLIENT_ID = "1234.apps.googleusercontent.com"
@@ -67,10 +67,11 @@ def _app(tmp_path: Path, runner: JobRunner | None = None,
     # what production does at startup, so the tests get the same world.
     users = open_users(store.connection)
     invitations = open_invitations(store.connection)
+    requests = open_requests(store.connection)
     users.seed(settings.allowed_emails, at="2026-01-01T00:00:00+00:00")
     runner = runner or JobRunner(on_update=store.save)
     app = create_app(
-        settings=settings, runner=runner, store=store, users=users, invitations=invitations, banks=BANKS,
+        settings=settings, runner=runner, store=store, users=users, invitations=invitations, requests=requests, banks=BANKS,
         standardised_suffix=".std", levels=LEVELS,
         verifier=verifier or _verifier(),
         prepare_song=lambda url: tmp_path / "song.mp4",
@@ -141,17 +142,18 @@ def test_a_signed_in_stranger_is_still_refused(tmp_path):
     store = open_store(settings.database_path)
     users = open_users(store.connection)
     invitations = open_invitations(store.connection)
+    requests = open_requests(store.connection)
     users.seed(settings.allowed_emails, at="2026-01-01T00:00:00+00:00")
     app = create_app(settings=settings, runner=JobRunner(on_update=store.save),
-                     store=store, users=users, invitations=invitations, banks=BANKS,
+                     store=store, users=users, invitations=invitations, requests=requests, banks=BANKS,
                      standardised_suffix=".std",
                      levels=LEVELS, verifier=_verifier("stranger@example.invalid"),
                      prepare_song=lambda url: tmp_path / "s.mp4")
 
     response = TestClient(app).get("/banks", headers=_auth())
 
-    assert response.status_code == 401
-    assert "allowlist" in response.json()["detail"]
+    assert response.status_code == 403
+    assert "not been given access" in response.json()["detail"]
 
 
 def test_a_bad_signature_is_refused_not_a_crash(tmp_path):

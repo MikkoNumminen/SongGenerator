@@ -255,6 +255,59 @@ class InvitationStore:
         return cur.rowcount > 0
 
 
+@dataclass(frozen=True)
+class AccessRequest:
+    """Somebody who signed in, was refused, and asked."""
+
+    email: str
+    name: str | None
+    asked_at: str
+
+
+class RequestStore:
+    """People asking to be let in.
+
+    Keyed on the address, so asking twice is still one request and a refused
+    person cannot fill the panel by clicking. Nothing here grants anything;
+    it is a queue the owner reads.
+    """
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self._conn = conn
+
+    def ask(self, email: str, *, name: str | None, at: str) -> None:
+        self._conn.execute(
+            "INSERT INTO access_requests (email, name, asked_at)"
+            " VALUES (?, ?, ?)"
+            " ON CONFLICT(email) DO UPDATE SET name = excluded.name",
+            (email.strip().lower(), name, at),
+        )
+
+    def all(self) -> list[AccessRequest]:
+        rows = self._conn.execute(
+            "SELECT email, name, asked_at FROM access_requests"
+            " ORDER BY asked_at, email"
+        ).fetchall()
+        return [AccessRequest(email=str(r["email"]), name=r["name"],
+                              asked_at=str(r["asked_at"])) for r in rows]
+
+    def waiting(self, email: str) -> bool:
+        return self._conn.execute(
+            "SELECT 1 FROM access_requests WHERE email = ?",
+            (email.strip().lower(),)).fetchone() is not None
+
+    def drop(self, email: str) -> bool:
+        cur = self._conn.execute(
+            "DELETE FROM access_requests WHERE email = ?",
+            (email.strip().lower(),))
+        return cur.rowcount > 0
+
+
+def open_requests(conn: sqlite3.Connection) -> RequestStore:
+    """A request store on an already-open connection."""
+    return RequestStore(conn)
+
+
 def open_invitations(conn: sqlite3.Connection) -> InvitationStore:
     """An invitation store on an already-open connection."""
     return InvitationStore(conn)

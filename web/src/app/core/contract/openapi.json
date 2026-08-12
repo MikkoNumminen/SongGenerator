@@ -22,6 +22,64 @@
         "title": "AcceptedReply",
         "type": "object"
       },
+      "AccessRequestReply": {
+        "properties": {
+          "asked_at": {
+            "title": "Asked At",
+            "type": "string"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "required": [
+          "email",
+          "asked_at"
+        ],
+        "title": "AccessRequestReply",
+        "type": "object"
+      },
+      "AccessRequestsReply": {
+        "properties": {
+          "requests": {
+            "items": {
+              "$ref": "#/components/schemas/AccessRequestReply"
+            },
+            "title": "Requests",
+            "type": "array"
+          }
+        },
+        "required": [
+          "requests"
+        ],
+        "title": "AccessRequestsReply",
+        "type": "object"
+      },
+      "AskedReply": {
+        "properties": {
+          "waiting": {
+            "title": "Waiting",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "waiting"
+        ],
+        "title": "AskedReply",
+        "type": "object"
+      },
       "BankReply": {
         "description": "One bank, as `banks.BankInfo` reports it plus the derived verdict.",
         "properties": {
@@ -755,6 +813,120 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/access-requests": {
+      "get": {
+        "operationId": "list_requests_access_requests_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRequestsReply"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Requests"
+      },
+      "post": {
+        "description": "Signed in, refused, and asking.\n\nOpen to any account Google will vouch for, because the people who need\nit are by definition not on the list. It grants nothing: it puts a name\nin a queue the owner reads, and asking twice is still one request.",
+        "operationId": "ask_for_access_access_requests_post",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AskedReply"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ask For Access"
+      }
+    },
+    "/access-requests/{email}": {
+      "delete": {
+        "operationId": "dismiss_access_requests__email__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "email",
+            "required": true,
+            "schema": {
+              "title": "Email",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccessRequestsReply"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dismiss"
+      }
+    },
+    "/access-requests/{email}/approve": {
+      "post": {
+        "description": "Let somebody in, with the demo library, and clear their request.\n\nOne route rather than a grant followed by a delete, so a half-finished\napproval cannot leave somebody admitted and still queued, or queued and\nalready admitted.",
+        "operationId": "approve_access_requests__email__approve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "email",
+            "required": true,
+            "schema": {
+              "title": "Email",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsersReply"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Approve"
+      }
+    },
     "/banks": {
       "get": {
         "operationId": "list_banks_banks_get",

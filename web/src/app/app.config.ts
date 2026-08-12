@@ -3,6 +3,7 @@ import { ApplicationConfig, provideBrowserGlobalErrorListeners } from '@angular/
 import { provideRouter, withViewTransitions } from '@angular/router';
 
 import { API_BASE_URL } from './core/api/api-config';
+import { HttpAccessRequests } from './core/api/http-access-requests';
 import { HttpAllowlist } from './core/api/http-allowlist';
 import { HttpBankCatalog } from './core/api/http-bank-catalog';
 import { HttpInvitations } from './core/api/http-invitations';
@@ -13,6 +14,7 @@ import { attachBearerToken } from './core/auth/auth-interceptor';
 import { RuntimeConfig } from './core/config/runtime-config';
 import { GOOGLE_CLIENT_ID, GoogleAuth } from './core/auth/google-auth';
 import { AUTH_CONTEXT } from './core/ports/auth-context.port';
+import { ACCESS_REQUESTS } from './core/ports/access-requests.port';
 import { ALLOWLIST } from './core/ports/allowlist.port';
 import { BANK_CATALOG } from './core/ports/bank-catalog.port';
 import { INVITATIONS } from './core/ports/invitations.port';
@@ -49,6 +51,7 @@ export function appConfigWith(config: RuntimeConfig): ApplicationConfig {
     // the attempt that failed.
     provideHttpClient(withInterceptors([retryTheHop, attachBearerToken])),
     { provide: ALLOWLIST, useExisting: HttpAllowlist },
+    { provide: ACCESS_REQUESTS, useExisting: HttpAccessRequests },
     { provide: BANK_CATALOG, useExisting: HttpBankCatalog },
     { provide: LIBRARY, useExisting: HttpLibrary },
     { provide: INVITATIONS, useExisting: HttpInvitations },
