@@ -344,6 +344,60 @@ every clip on disk.
 
 ---
 
+## `roots.json` (read, not written)
+
+The one format this project reads but does not produce. A speech engine needs
+a dependency stack this repo deliberately does not carry, so synthesized takes
+are rendered elsewhere and arrive as a directory of wavs plus this index.
+`tts_bank` reads it; nothing else in the pipeline knows it exists.
+
+```jsonc
+{
+  "format": "audiobookmaker-word-bank/1",
+  "sample_rate": 24000,
+  "roots": [
+    {
+      "file": "fi/roots/nolla_basic.wav",
+      "language": "fi",
+      "word": "nolla",
+      "expression": "basic",
+      "text": "Nolla.",
+      "take": 0,
+      "takes_rolled": 4,
+      "duration_s": 0.76,
+      "peak_dbfs": -15.7,
+      "lufs": -34.7,
+      "transcript": "nolla.",
+      "verified": true,
+      "params": {"exaggeration": 0.5, "cfg_weight": 0.3,
+                 "temperature": 0.5, "repetition_penalty": 1.5}
+    }
+  ]
+}
+```
+
+`format` is checked and an unknown value is refused rather than guessed at.
+
+`word` must already be in `WORD_SYLLABLES`, or the clip names built from it
+will not parse and the bank comes out empty. `expression` becomes part of a
+filename, so it may only hold plain unaccented letters and digits.
+
+`sample_rate` is informational. The wavs are read through `audio_io.read_wav`,
+which resamples anything that disagrees with `SAMPLE_RATE`, so a 24 kHz source
+needs no special handling. It does not gain bandwidth by being resampled: a
+clip synthesized at 24 kHz holds nothing above 12 kHz whatever container it
+later sits in.
+
+`params` records what produced the take and is kept for reading, not for
+replaying. The engine has no seed, so the same parameters do not reproduce the
+same audio, and the wav is the only artifact that matters.
+
+`verified` is whether a transcript check confirmed the clip says its own word.
+`transcript` is what was heard. A take that failed the check is not listed at
+all, so every entry is a keeper.
+
+---
+
 ## `input/SOURCES.md`
 
 Where each song came from. Appended to by `fetch.py` on every successful

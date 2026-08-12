@@ -79,6 +79,7 @@ These do not run during a song. They turn source videos into reviewed clips.
 | `successors.py` | Re-cut what follows a shout, since cutting severs `aah calculator` |
 | `set_aside.py` | Take syllable clips out of the bank without deleting them |
 | `build_bank.py` | Reviewed clips → `words/words.json`; filename parsing lives here |
+| `tts_bank.py` | Synthesized takes → a chromatic ladder of pre-named clips, ready for `build_bank` |
 
 ### Operating it
 

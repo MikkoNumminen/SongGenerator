@@ -397,6 +397,41 @@ MATCH_PREFIX_MIN_LEN = 4
 
 
 # ---------------------------------------------------------------------------
+# SYNTHESIZED WORD BANKS -- building a bank from generated clips
+# ---------------------------------------------------------------------------
+# Used by `python -m song_generator.tts_bank`, not by the main pipeline.
+#
+# A speech engine hands back one take at whatever pitch it chose, and offers no
+# way to ask for another. A bank built from those takes would hold one pitch per
+# word, which is the case PREFER_NEAREST_SOURCE_PITCH exists to avoid: every
+# note the melody asks for would be a shift away, and anything past
+# SHIFT_CAP_SEMITONES would be octave-folded and scored at FOLDED_FIT.
+#
+# So each take is transposed across a ladder instead. This is cheap in a way a
+# recording session is not: asking a singer for the same word at 25 pitches is
+# an afternoon, and doing it offline is seconds per clip.
+
+# How far the ladder reaches either side of a root take, in semitones. Matched
+# to SHIFT_CAP_SEMITONES on purpose: a ladder reaching exactly as far as the
+# renderer will shift means every target inside the cap has a take within half
+# a step, and the fold penalty never has to be paid.
+TTS_LADDER_SEMITONES = 12
+
+# Spacing between rungs. 1 is chromatic, which leaves at most half a semitone
+# for the render-time shift to make up. Widening it to 2 halves the disk for a
+# residual shift still small enough to be inaudible; the cost is only storage,
+# since the ladder is built once.
+TTS_LADDER_STEP = 1
+
+# WORLD is the render-time default because it is exact on the small shifts a
+# well-covered bank needs. A ladder is the opposite case by construction: its
+# outermost rungs are a full octave, which is where SHIFT_ENGINE's own note
+# says WORLD "starts to sound vocoded". Rubber Band holds up better there, and
+# the ladder is built once offline where its extra cost does not matter.
+TTS_BANK_SHIFT_ENGINE = "rubberband"
+
+
+# ---------------------------------------------------------------------------
 # BANK STANDARDISATION -- assembling clips that sit together
 # ---------------------------------------------------------------------------
 # A one-time pass over a finished bank, producing a DERIVATIVE tier beside it.

@@ -426,6 +426,70 @@ takes at the same pitch as everything else change nothing.
 
 ---
 
+## Add a bank of synthesized words
+
+The ordinary way to get a word into a bank is to find somebody saying it and
+cut the clip out. A speech engine is the other way, and it changes the economics
+of the point directly above: pitch spread stops being something you hunt for and
+becomes something you generate.
+
+The engine itself lives in another project, because it needs a model stack this
+one deliberately does not depend on. That side renders one take per word per
+expression and writes a `roots.json` beside the wavs (see
+[DATA-FORMATS.md](DATA-FORMATS.md)). This side takes it from there.
+
+```powershell
+.\.venv\Scripts\python.exe -m song_generator.tts_bank `
+    --roots ..\AudiobookMaker\.local\word_bank --out words_tts
+
+.\.venv\Scripts\python.exe -m song_generator.build_bank `
+    --candidates words_tts_fi\candidates --out words_tts_fi
+```
+
+`tts_bank` appends the language to `--out`, so one run writes `words_tts_fi`
+and `words_tts_en` from one manifest. Each root becomes
+`TTS_LADDER_SEMITONES` worth of chromatic rungs either side of its own measured
+pitch, named `<word>_<midi><expression>.wav`. Then `build_bank` indexes them
+exactly as it indexes hand-named clips: it has no idea they were generated, and
+measures every clip's pitch, duration and syllable bounds off the audio.
+
+Two things to set up first, both in `vocabulary_local.py`:
+
+- Every synthesized word needs a `WORD_SYLLABLES` entry. Without one
+  `parse_phrase` cannot read the filename, the clip is ignored, and the bank
+  comes out empty with no error. Run `config.validate_vocabulary()` afterwards:
+  the vocabulary is one flat namespace shared by every bank, so a new word can
+  change how an existing clip's name parses.
+- Add the banks to `BANKS` to select them with `--bank`, or point `--words-dir`
+  at the directory and skip the table.
+
+`tts_bank` refuses to write into a directory that already holds clips, and into
+anything named in `BANKS`. A generated clip and a hand-named one are
+indistinguishable once they are in a folder, and only one of them can be made
+again.
+
+### What a synthesized bank cannot do
+
+**It has less bandwidth than a recording.** The engine used here runs at
+24 kHz, so nothing in a clip lives above 12 kHz whatever rate it is resampled
+to. Against clips cut from a 44.1 kHz recording it sounds duller, and
+transposing up makes that more obvious rather than less.
+
+**The expression labels are weaker evidence than they look.** They record what
+the engine was asked for, not what it did. Measured over 22 takes of two Finnish
+words across 12 requested expressions, the loudness spread within one word was
+17.0 dB for one and 5.1 dB for the other, and in neither case did it order by
+the intensity requested. Treat an expression name as a variant label that
+happened to be produced under certain settings; if you need a bank that is
+genuinely loud and genuinely quiet, measure the clips and pick, rather than
+trusting the name.
+
+**Nothing about a take is reproducible.** The engine has no seed, so the same
+request twice gives different audio. The wavs are the artifact; the settings
+that made them are a note, not a recipe.
+
+---
+
 ## Re-cut the bank from cleaner stems
 
 The clips were cut from Demucs stems, so whatever instrumental residue Demucs
