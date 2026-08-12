@@ -30,6 +30,13 @@ export class HttpAllowlist implements Allowlist {
     );
   }
 
+  setSeesAllRuns(email: string, seeAll: boolean): Observable<UsersReply> {
+    return this.http.put<UsersReply>(
+      `${this.baseUrl}/users/${encodeURIComponent(email)}/runs`,
+      { see_all_runs: seeAll },
+    );
+  }
+
   revoke(email: string): Observable<UsersReply> {
     // Encoded because an address is a path segment here and contains an @,
     // and because a '+' in a Gmail address is a space to a URL parser.

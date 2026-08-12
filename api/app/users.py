@@ -58,6 +58,8 @@ class AllowedUser:
     added_at: str
     added_by: str
     banks: frozenset[str]
+    #: Whether this address sees every run or only the ones it asked for.
+    see_all_runs: bool
 
 
 class UserStore:
@@ -74,13 +76,14 @@ class UserStore:
     def all(self) -> list[AllowedUser]:
         """Every grant, oldest first, for the panel."""
         rows = self._conn.execute(
-            "SELECT email, added_at, added_by, banks FROM allowed_emails"
-            " ORDER BY added_at, email"
+            "SELECT email, added_at, added_by, banks, see_all_runs"
+            " FROM allowed_emails ORDER BY added_at, email"
         ).fetchall()
         return [
             AllowedUser(email=str(r["email"]), added_at=str(r["added_at"]),
                         added_by=str(r["added_by"]),
-                        banks=parse_banks(str(r["banks"])))
+                        banks=parse_banks(str(r["banks"])),
+                        see_all_runs=bool(r["see_all_runs"]))
             for r in rows
         ]
 
@@ -92,6 +95,23 @@ class UserStore:
             (email.strip().lower(),)
         ).fetchone()
         return parse_banks(str(row["banks"])) if row is not None else frozenset({DEMO})
+
+    def sees_all_runs(self, email: str) -> bool:
+        """Whether this address was granted every run. False for anybody not
+        on the list, which is nobody: the caller is checked before this."""
+        row = self._conn.execute(
+            "SELECT see_all_runs FROM allowed_emails WHERE email = ?",
+            (email.strip().lower(),)
+        ).fetchone()
+        return bool(row["see_all_runs"]) if row is not None else False
+
+    def set_sees_all_runs(self, email: str, allowed: bool) -> bool:
+        """Grant or withdraw it. False when the address is not on the list."""
+        cur = self._conn.execute(
+            "UPDATE allowed_emails SET see_all_runs = ? WHERE email = ?",
+            (1 if allowed else 0, email.strip().lower()),
+        )
+        return cur.rowcount > 0
 
     def set_banks(self, email: str, banks: frozenset[str] | set[str] | list[str]) -> bool:
         """Change what an address may see. False when it is not on the list."""

@@ -177,10 +177,16 @@ class UserReply(BaseModel):
     #: Which libraries this address may see. An administrator's is every one
     #: there is, which is why it is reported rather than stored.
     banks: list[str]
+    #: Whether this address sees every run or only the ones it asked for.
+    see_all_runs: bool
 
 
 class BanksGrantRequest(BaseModel):
     banks: list[str]
+
+
+class RunsVisibilityRequest(BaseModel):
+    see_all_runs: bool
 
 
 class UsersReply(BaseModel):
@@ -381,6 +387,16 @@ def create_app(
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
         return _job_payload(job)
 
+    def _sees_every_run(who: Principal) -> bool:
+        """An administrator always. Anybody else only if granted it.
+
+        Off by default and granted deliberately, because a run names a song
+        somebody chose to make, which is a more personal thing than the list
+        of what exists.
+        """
+        return (who.email in settings.admin_emails
+                or users.sees_all_runs(who.email))
+
     def _own(job: Job | None, who: Principal) -> bool:
         """Whether this caller may look at this run.
 
@@ -391,14 +407,26 @@ def create_app(
         produced, which is the same audio the library refuses it.
         """
         return job is not None and (
-            who.email in settings.admin_emails
+            _sees_every_run(who)
             or job.requested_by.strip().lower() == who.email.strip().lower())
 
     @app.get("/jobs")
-    def history(who: Caller, limit: int = 50) -> HistoryReply:
+    def history(who: Caller, limit: int = 50,
+                requested_by: str | None = None) -> HistoryReply:
+        """Runs this caller may see, optionally narrowed to one person.
+
+        The filter is a convenience for somebody who can already see all of
+        them, not a way to see more: it is applied on top of the same check,
+        so naming an address you could not otherwise see returns nothing
+        rather than that person's runs.
+        """
         capped = max(1, min(limit, 200))
-        return HistoryReply(jobs=[_job_payload(j) for j in store.recent(capped)
-                                  if _own(j, who)])
+        wanted = requested_by.strip().lower() if requested_by else None
+        return HistoryReply(jobs=[
+            _job_payload(j) for j in store.recent(capped)
+            if _own(j, who)
+            and (wanted is None
+                 or j.requested_by.strip().lower() == wanted)])
 
     @app.get("/jobs/{job_id}")
     def one(job_id: str, who: Caller) -> JobReply:
@@ -553,7 +581,11 @@ def create_app(
                 # is told that rather than the row, which would show an admin
                 # holding the demo library alone.
                 banks=every if u.email in settings.admin_emails
-                else sorted(u.banks))
+                else sorted(u.banks),
+                # An administrator sees every run by being one, so the panel
+                # is told that rather than the row.
+                see_all_runs=(u.email in settings.admin_emails
+                              or u.see_all_runs))
                 for u in users.all()],
             admins=sorted(settings.admin_emails),
             grantable=every,
@@ -572,7 +604,8 @@ def create_app(
         users.add(body.email, added_by=who.email, at=now, banks=asked)
         return UserReply(email=body.email, added_at=now, added_by=who.email,
                          is_admin=body.email in settings.admin_emails,
-                         banks=sorted(users.banks_for(body.email)))
+                         banks=sorted(users.banks_for(body.email)),
+                         see_all_runs=users.sees_all_runs(body.email))
 
     def _known(asked: list[str]) -> frozenset[str]:
         """Only names this machine can actually offer.
@@ -584,6 +617,19 @@ def create_app(
         every = set(grantable_names())
         kept = {b.strip() for b in asked if b.strip() in every}
         return frozenset(kept) or frozenset({DEMO})
+
+    @app.put("/users/{email}/runs")
+    def set_runs_visibility(email: str, body: RunsVisibilityRequest,
+                            _: Admin) -> UsersReply:
+        target = email.strip().lower()
+        if target in settings.admin_emails:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "that address is an administrator and already sees every run")
+        if not users.set_sees_all_runs(target, body.see_all_runs):
+            raise HTTPException(status.HTTP_404_NOT_FOUND,
+                                "that address was not on the list")
+        return _users_reply()
 
     @app.put("/users/{email}/banks")
     def set_banks(email: str, body: BanksGrantRequest, _: Admin) -> UsersReply:

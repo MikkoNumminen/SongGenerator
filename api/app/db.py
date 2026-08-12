@@ -68,7 +68,10 @@ CREATE TABLE IF NOT EXISTS allowed_emails (
     added_by  TEXT NOT NULL,
     -- Which libraries this address may see, comma separated. 'demo' is the
     -- one everybody starts with; the rest are bank names off this machine.
-    banks     TEXT NOT NULL DEFAULT 'demo'
+    banks     TEXT NOT NULL DEFAULT 'demo',
+    -- Whether this address sees every run or only its own. Off by default:
+    -- a run names a song somebody chose to make.
+    see_all_runs INTEGER NOT NULL DEFAULT 0
 );
 
 -- Small facts about this database rather than about a job.
@@ -111,6 +114,10 @@ def apply_schema(conn: sqlite3.Connection) -> None:
 # on the owner's machine and nowhere else.
 _LATER_COLUMNS = (
     ("allowed_emails", "banks", "TEXT NOT NULL DEFAULT 'demo'", "*"),
+    # No backfill: runs became somebody's own business at the same time this
+    # column arrived, so there is no earlier state to preserve. Off is what
+    # everybody had a moment ago.
+    ("allowed_emails", "see_all_runs", "INTEGER NOT NULL DEFAULT 0", None),
 )
 
 

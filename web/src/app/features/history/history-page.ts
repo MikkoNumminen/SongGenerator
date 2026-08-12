@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  computed,
   inject,
   signal,
 } from '@angular/core';
@@ -14,9 +15,19 @@ import { stateForFailure } from '../../core/api/http-failure';
 import { JobReply } from '../../core/contract/dto';
 import { RUN_SOURCE } from '../../core/ports/run-source.port';
 import { loadWhenSignedIn } from '../../core/auth/load-when-signed-in';
-import { AsyncState, empty, idle, loading, ready } from '../../core/state/async-state';
+import {
+  AsyncState,
+  empty,
+  idle,
+  loading,
+  ready,
+  valueOf,
+} from '../../core/state/async-state';
 import { StatePanel } from '../../shared/state-panel/state-panel';
 import { stageTone } from '../../shared/stage-tone';
+
+/** The sentinel for "not narrowed to anybody". */
+const EVERYONE = '__everyone__';
 
 @Component({
   selector: 'app-history-page',
@@ -38,6 +49,23 @@ export class HistoryPage {
 
   readonly state = signal<AsyncState<readonly JobReply[]>>(idle());
 
+  /** Everybody, or one address. Only offered to somebody who sees all runs. */
+  readonly showing = signal<string>(EVERYONE);
+
+  /** The addresses worth offering: whoever actually asked for a run. */
+  readonly askers = computed(() => {
+    const jobs: readonly JobReply[] = valueOf(this.state()) ?? [];
+    return [...new Set(jobs.map((j) => j.requested_by))].sort();
+  });
+
+  readonly EVERYONE = EVERYONE;
+
+  /** Narrow to one person's runs, or widen back to everybody's. */
+  show(who: string): void {
+    this.showing.set(who);
+    this.load();
+  }
+
   load(): void {
     // Nothing to read from. An empty address would request `/jobs` on this
     // site, which a static host answers with index.html.
@@ -46,8 +74,9 @@ export class HistoryPage {
       return;
     }
     this.state.set(loading());
+    const only = this.showing();
     this.runs
-      .history()
+      .history(undefined, only === EVERYONE ? undefined : only)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         // An empty history is a real answer with its own wording, not a table

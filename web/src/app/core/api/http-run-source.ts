@@ -33,11 +33,18 @@ export class HttpRunSource implements RunSource {
     );
   }
 
-  history(limit?: number): Observable<HistoryReply> {
+  history(limit?: number, requestedBy?: string): Observable<HistoryReply> {
     // The edge caps this itself, so nothing here needs to guess a maximum.
-    const params =
-      limit === undefined ? undefined : new HttpParams().set('limit', limit);
-    return this.http.get<HistoryReply>(`${this.baseUrl}/jobs`, { params });
+    let params = new HttpParams();
+    if (limit !== undefined) {
+      params = params.set('limit', limit);
+    }
+    if (requestedBy) {
+      params = params.set('requested_by', requestedBy);
+    }
+    return this.http.get<HistoryReply>(`${this.baseUrl}/jobs`, {
+      params: params.keys().length ? params : undefined,
+    });
   }
 
   cancel(id: string): Observable<void> {

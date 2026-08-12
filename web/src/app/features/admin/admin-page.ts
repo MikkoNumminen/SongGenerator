@@ -87,6 +87,28 @@ export class AdminPage {
       : [...now, name]);
   }
 
+  /** Grant or withdraw seeing everybody's runs. */
+  toggleRuns(user: UserReply): void {
+    if (this.working()) {
+      return;
+    }
+    this.problem.set(null);
+    this.working.set(true);
+    this.allowlist
+      .setSeesAllRuns(user.email, !user.see_all_runs)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (reply) => {
+          this.working.set(false);
+          this.state.set(ready(reply));
+        },
+        error: (failure: HttpErrorResponse) => {
+          this.working.set(false);
+          this.problem.set(this.explain(failure));
+        },
+      });
+  }
+
   /** Change one box on an address that already has access. */
   toggleFor(user: UserReply, name: string): void {
     if (this.working()) {

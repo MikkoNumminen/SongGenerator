@@ -21,6 +21,7 @@ function reply(users: string[] = [GUEST]): UsersReply {
       added_by: OWNER,
       is_admin: email === OWNER,
       banks: email === OWNER ? ['demo', 'ppbank'] : ['demo'],
+      see_all_runs: email === OWNER,
     })),
     admins: [OWNER],
     grantable: ['demo', 'ppbank'],
@@ -33,6 +34,7 @@ class FakeAllowlist implements Allowlist {
   granted: string[] = [];
   grantedBanks: string[][] = [];
   setFor: [string, string[]][] = [];
+  runsSetFor: [string, boolean][] = [];
   revoked: string[] = [];
   failListWith: HttpErrorResponse | null = null;
   failWriteWith: HttpErrorResponse | null = null;
@@ -55,7 +57,16 @@ class FakeAllowlist implements Allowlist {
       added_by: OWNER,
       is_admin: false,
       banks: [...(banks ?? ['demo'])],
+      see_all_runs: false,
     });
+  }
+
+  setSeesAllRuns(email: string, seeAll: boolean): Observable<UsersReply> {
+    if (this.failWriteWith) {
+      return throwError(() => this.failWriteWith);
+    }
+    this.runsSetFor.push([email, seeAll]);
+    return of(reply([]));
   }
 
   setBanks(email: string, banks: readonly string[]): Observable<UsersReply> {
@@ -160,6 +171,19 @@ describe('the allowlist page', () => {
     await fixture.whenStable();
 
     expect(allowlist.setFor).toEqual([[GUEST, ['demo', 'ppbank']]]);
+  });
+
+  it('grants seeing every run, and withdraws it', async () => {
+    // Off unless granted: a run names a song somebody chose to make.
+    const allowlist = new FakeAllowlist();
+    const fixture = await render(allowlist);
+    const guest = allowlist.listed.users.find((u) => u.email === GUEST)!;
+
+    expect(guest.see_all_runs).toBe(false);
+    fixture.componentInstance.toggleRuns(guest);
+    await fixture.whenStable();
+
+    expect(allowlist.runsSetFor).toEqual([[GUEST, true]]);
   });
 
   it('lowercases an address before granting it', async () => {

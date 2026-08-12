@@ -424,6 +424,19 @@
         "title": "LibraryReply",
         "type": "object"
       },
+      "RunsVisibilityRequest": {
+        "properties": {
+          "see_all_runs": {
+            "title": "See All Runs",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "see_all_runs"
+        ],
+        "title": "RunsVisibilityRequest",
+        "type": "object"
+      },
       "SubmitBody": {
         "description": "A request to make a song.\n\nValidated here as well as in the browser. The browser's validation is for\nthe person typing; this one is because the browser is not the only thing\nthat can post to this.",
         "properties": {
@@ -558,6 +571,10 @@
           "is_admin": {
             "title": "Is Admin",
             "type": "boolean"
+          },
+          "see_all_runs": {
+            "title": "See All Runs",
+            "type": "boolean"
           }
         },
         "required": [
@@ -565,7 +582,8 @@
           "added_at",
           "added_by",
           "is_admin",
-          "banks"
+          "banks",
+          "see_all_runs"
         ],
         "title": "UserReply",
         "type": "object"
@@ -689,6 +707,7 @@
     },
     "/jobs": {
       "get": {
+        "description": "Runs this caller may see, optionally narrowed to one person.\n\nThe filter is a convenience for somebody who can already see all of\nthem, not a way to see more: it is applied on top of the same check,\nso naming an address you could not otherwise see returns nothing\nrather than that person's runs.",
         "operationId": "history_jobs_get",
         "parameters": [
           {
@@ -699,6 +718,22 @@
               "default": 50,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "requested_by",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Requested By"
             }
           }
         ],
@@ -1141,6 +1176,55 @@
           }
         },
         "summary": "Set Banks"
+      }
+    },
+    "/users/{email}/runs": {
+      "put": {
+        "operationId": "set_runs_visibility_users__email__runs_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "email",
+            "required": true,
+            "schema": {
+              "title": "Email",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunsVisibilityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsersReply"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Runs Visibility"
       }
     }
   }

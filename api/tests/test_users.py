@@ -499,3 +499,93 @@ class TestWhoseRunIsWhose:
         seen = admin.get("/jobs", headers=AUTH).json()["jobs"]
 
         assert [j["song"] for j in seen] == ["mine"]
+
+
+class TestSeeingEverybodysRuns:
+    """Off by default and granted deliberately. A run names a song somebody
+    chose to make, which is more personal than the list of what exists."""
+
+    def _runs(self, tmp_path):
+        from app.jobs import Job, Stage
+        from app.store import open_store
+        store = open_store(tmp_path / "jobs.sqlite3")
+        for by, song in ((GUEST, "theirs"), (ADMIN, "mine")):
+            store.save(Job(id=f"job-{song}", created_at=AT, requested_by=by,
+                           source_url="https://example.invalid/x",
+                           bank="ppbank", stage=Stage.DONE, song=song))
+
+    def test_a_new_address_sees_only_its_own(self, tmp_path):
+        admin, _ = _app(tmp_path, ADMIN)
+        made = admin.post("/users", json={"email": GUEST}, headers=AUTH)
+
+        assert made.json()["see_all_runs"] is False
+
+    def test_granting_it_shows_everybodys(self, tmp_path):
+        admin, _ = _app(tmp_path, ADMIN)
+        admin.post("/users", json={"email": GUEST}, headers=AUTH)
+        self._runs(tmp_path)
+
+        admin.put(f"/users/{GUEST}/runs", json={"see_all_runs": True},
+                  headers=AUTH)
+
+        guest, _ = _app(tmp_path, GUEST)
+        seen = guest.get("/jobs", headers=AUTH).json()["jobs"]
+        assert sorted(j["song"] for j in seen) == ["mine", "theirs"]
+
+    def test_withdrawing_it_takes_them_away_again(self, tmp_path):
+        admin, _ = _app(tmp_path, ADMIN)
+        admin.post("/users", json={"email": GUEST}, headers=AUTH)
+        self._runs(tmp_path)
+        admin.put(f"/users/{GUEST}/runs", json={"see_all_runs": True},
+                  headers=AUTH)
+
+        admin.put(f"/users/{GUEST}/runs", json={"see_all_runs": False},
+                  headers=AUTH)
+
+        guest, _ = _app(tmp_path, GUEST)
+        seen = guest.get("/jobs", headers=AUTH).json()["jobs"]
+        assert [j["song"] for j in seen] == ["theirs"]
+
+    def test_an_administrator_cannot_have_it_taken_away(self, tmp_path):
+        admin, _ = _app(tmp_path, ADMIN)
+
+        answer = admin.put(f"/users/{ADMIN}/runs",
+                           json={"see_all_runs": False}, headers=AUTH)
+
+        assert answer.status_code == 409
+
+
+class TestLookingAtOnePersonsRuns:
+    """A convenience for somebody who can already see all of them, never a way
+    to see more."""
+
+    def _runs(self, tmp_path):
+        from app.jobs import Job, Stage
+        from app.store import open_store
+        store = open_store(tmp_path / "jobs.sqlite3")
+        for by, song in ((GUEST, "theirs"), (ADMIN, "mine")):
+            store.save(Job(id=f"job-{song}", created_at=AT, requested_by=by,
+                           source_url="https://example.invalid/x",
+                           bank="ppbank", stage=Stage.DONE, song=song))
+
+    def test_an_administrator_can_narrow_to_one_address(self, tmp_path):
+        admin, _ = _app(tmp_path, ADMIN)
+        self._runs(tmp_path)
+
+        seen = admin.get(f"/jobs?requested_by={GUEST}",
+                         headers=AUTH).json()["jobs"]
+
+        assert [j["song"] for j in seen] == ["theirs"]
+
+    def test_the_filter_cannot_show_what_the_check_refuses(self, tmp_path):
+        """Naming somebody else's address must return nothing rather than
+        their runs."""
+        admin, _ = _app(tmp_path, ADMIN)
+        admin.post("/users", json={"email": GUEST}, headers=AUTH)
+        self._runs(tmp_path)
+
+        guest, _ = _app(tmp_path, GUEST)
+        seen = guest.get(f"/jobs?requested_by={ADMIN}",
+                         headers=AUTH).json()["jobs"]
+
+        assert seen == []

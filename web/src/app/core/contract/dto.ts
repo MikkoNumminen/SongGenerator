@@ -103,6 +103,10 @@ export interface LibraryReply {
   tracks: Array<TrackReply>;
 }
 
+export interface RunsVisibilityRequest {
+  see_all_runs: boolean;
+}
+
 /**
  * A request to make a song.
  *
@@ -136,6 +140,7 @@ export interface UserReply {
   banks: Array<string>;
   email: string;
   is_admin: boolean;
+  see_all_runs: boolean;
 }
 
 export interface UsersReply {

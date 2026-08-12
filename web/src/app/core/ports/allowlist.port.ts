@@ -29,6 +29,14 @@ export interface Allowlist {
   /** Change which libraries an address may see. Returns the list afterwards. */
   setBanks(email: string, banks: readonly string[]): Observable<UsersReply>;
 
+  /**
+   * Whether an address sees every run or only the ones it asked for.
+   *
+   * Off unless granted. A run names a song somebody chose to make, which is a
+   * more personal thing than the list of what exists.
+   */
+  setSeesAllRuns(email: string, seeAll: boolean): Observable<UsersReply>;
+
   /** Revoke access. Returns the list as it stands afterwards. */
   revoke(email: string): Observable<UsersReply>;
 }
