@@ -29,6 +29,12 @@ class FakeLibrary implements Library {
     this.tracks = tracks;
   }
 
+  forgotten = 0;
+
+  forget(): void {
+    this.forgotten += 1;
+  }
+
   list(): Observable<LibraryReply> {
     return this.failListWith
       ? throwError(() => this.failListWith)

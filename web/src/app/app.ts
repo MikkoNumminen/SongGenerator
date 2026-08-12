@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, OnInit, computed, inject } from '@a
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 import { IdleSignOut } from './core/auth/idle-sign-out';
+import { Prime } from './core/data/prime';
 import { BackendHealth } from './core/health/backend-health';
 import { GoogleSignIn } from './core/auth/google-sign-in';
 import { AUTH_CONTEXT } from './core/ports/auth-context.port';
@@ -29,6 +30,7 @@ interface MachineState {
 export class App implements OnInit {
   readonly health = inject(BackendHealth);
   private readonly idle = inject(IdleSignOut);
+  private readonly prime = inject(Prime);
   // Through the port, like every other component. Reaching for GoogleAuth
   // here would tie the shell to the one implementation, which is the thing
   // the ports exist to prevent.
@@ -78,5 +80,9 @@ export class App implements OnInit {
     // Half an hour with nobody there ends the session. Started here because
     // the shell is the one thing that outlives every route.
     this.idle.start();
+    // Signing in is both when the answers become gettable and when somebody
+    // starts clicking. Asking once here means the first page usually finds
+    // the answer already in hand.
+    this.prime.start();
   }
 }
