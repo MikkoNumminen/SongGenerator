@@ -70,6 +70,7 @@
             <p class="path mono">{{ run.output_dir }}</p>
           }
           <p class="note">The files stay on the machine that made them; nothing is uploaded.</p>
+          <app-run-takes [runId]="run.id" [finished]="true" />
         </div>
       }
 
