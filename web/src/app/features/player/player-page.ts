@@ -36,7 +36,12 @@ export interface SongGroup {
   /** The folder name read as something a person would say. */
   readonly title: string;
   readonly takes: readonly TrackReply[];
+  /** The newest take in it, as seconds since the epoch. */
+  readonly newest: number;
 }
+
+/** The orders the list can be put in. */
+export type Order = 'newest' | 'name';
 
 /** Any bank, or a named one. */
 export const ANY = '__any__';
@@ -105,6 +110,14 @@ export class PlayerPage implements OnDestroy {
 
   readonly bank = signal(ANY);
 
+  /** How the list is ordered. Newest first, because that is what was made
+   * most recently and what somebody usually came to hear. */
+  readonly order = signal<Order>('newest');
+
+  choose(order: Order): void {
+    this.order.set(order);
+  }
+
   /**
    * What this page is called for whoever is looking at it.
    *
@@ -151,11 +164,20 @@ export class PlayerPage implements OnDestroy {
         bySong.set(take.song, [take]);
       }
     }
-    return [...bySong.entries()].map(([song, takes]) => ({
+    const groups = [...bySong.entries()].map(([song, takes]) => ({
       song,
       title: prettySongTitle(song),
       takes,
+      // A song is as new as its newest take: re-rendering one moves the song,
+      // which is what somebody looking for "the one I just made" means.
+      newest: Math.max(...takes.map((take) => take.modified_at)),
     }));
+    return this.order() === 'name'
+      // Compared with the locale's own rules, so a Finnish reader finds ä
+      // where they expect it rather than after z.
+      ? groups.sort((a, b) =>
+          a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }))
+      : groups.sort((a, b) => b.newest - a.newest);
   });
 
   /** What shuffle would play, given the two choices above. */

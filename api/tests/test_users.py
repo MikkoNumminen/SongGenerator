@@ -811,3 +811,49 @@ class TestAskingToBeLetIn:
                          headers=AUTH).json()["requests"] == []
         after, _ = _app(tmp_path, STRANGER, seeded=frozenset({ADMIN}))
         assert after.get("/library", headers=AUTH).status_code == 403
+
+
+class TestAFolderThatIsNoLongerABank:
+    """Renderings do not stop existing because a bank was renamed or retired.
+
+    Filtering the library by grants hid them from everybody, including the
+    person who made them, because a folder whose name is not a bank on this
+    machine is grantable to nobody.
+    """
+
+    def _retired(self, tmp_path):
+        out = tmp_path / "output" / "a_song" / "AB-syllables"
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "a_song.wild.mp3").write_bytes(b"still mine")
+        return out
+
+    def test_an_administrator_still_sees_it(self, tmp_path):
+        self._retired(tmp_path)
+        admin, _ = _app(tmp_path, ADMIN)
+
+        tracks = admin.get("/library", headers=AUTH).json()["tracks"]
+
+        assert [t["bank"] for t in tracks] == ["AB-syllables"]
+
+    def test_an_administrator_can_still_play_it(self, tmp_path):
+        self._retired(tmp_path)
+        admin, _ = _app(tmp_path, ADMIN)
+
+        answer = admin.get("/library/a_song/AB-syllables/a_song.wild.mp3",
+                           headers=AUTH)
+
+        assert answer.status_code == 200
+        assert answer.content == b"still mine"
+
+    def test_it_is_not_a_way_in_for_anybody_else(self, tmp_path):
+        """An unknown folder is visible because somebody is an administrator,
+        never because the name was not recognised."""
+        self._retired(tmp_path)
+        admin, _ = _app(tmp_path, ADMIN)
+        admin.post("/users", json={"email": GUEST}, headers=AUTH)
+
+        guest, _ = _app(tmp_path, GUEST)
+
+        assert guest.get("/library", headers=AUTH).json()["tracks"] == []
+        assert guest.get("/library/a_song/AB-syllables/a_song.wild.mp3",
+                         headers=AUTH).status_code == 404

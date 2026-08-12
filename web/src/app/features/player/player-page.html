@@ -76,6 +76,31 @@
         </div>
 
         <div class="filter">
+          <span class="label" id="pick-order">Order</span>
+          <div class="segmented segmented--compact" role="radiogroup"
+               aria-labelledby="pick-order">
+            <label class="seg">
+              <input
+                type="radio"
+                name="order"
+                [checked]="order() === 'newest'"
+                (change)="choose('newest')"
+              />
+              <span>newest</span>
+            </label>
+            <label class="seg">
+              <input
+                type="radio"
+                name="order"
+                [checked]="order() === 'name'"
+                (change)="choose('name')"
+              />
+              <span>name</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="filter">
           <span class="label" id="pick-take">Take</span>
           <div class="segmented segmented--compact" role="radiogroup" aria-labelledby="pick-take">
             <label class="seg">

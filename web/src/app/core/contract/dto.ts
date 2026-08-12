@@ -162,6 +162,7 @@ export interface TrackReply {
   bank: string;
   bytes: number;
   level?: string | null;
+  modified_at: number;
   name: string;
   song: string;
 }

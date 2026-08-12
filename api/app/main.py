@@ -181,6 +181,11 @@ class TrackReply(BaseModel):
     level: str | None = None
     name: str
     bytes: int
+    #: When the file was written, so a list can be put in the order things
+    #: were made. Read off the file rather than from the job history, because
+    #: the directory is the truth: renderings exist that predate the edge, and
+    #: deleting a file is how something leaves the library.
+    modified_at: float
 
 
 class LibraryReply(BaseModel):
@@ -350,6 +355,17 @@ def create_app(
         """Everything that can be granted: the demo library, then the banks
         this machine actually holds."""
         return [DEMO, *sorted(banks)]
+
+    def sees_everything(who: Principal) -> bool:
+        """An administrator, for whom the library is not filtered at all.
+
+        Not the same as holding every grantable name. A folder under output/
+        whose name is no longer a bank on this machine is grantable to nobody,
+        so filtering by grants hid it from everybody, including the person who
+        made it. Renderings do not stop existing because a bank was renamed or
+        retired.
+        """
+        return who.email in settings.admin_emails
 
     def granted_to(who: Principal) -> frozenset[str]:
         """Which libraries this caller may see.
@@ -592,8 +608,10 @@ def create_app(
     def library(who: Caller) -> LibraryReply:
         return LibraryReply(tracks=[
             TrackReply(song=song, bank=bank, level=_level_of(path),
-                       name=path.name, bytes=path.stat().st_size)
-            for song, bank, path in _library_tracks(granted_to(who))
+                       name=path.name, bytes=path.stat().st_size,
+                       modified_at=path.stat().st_mtime)
+            for song, bank, path in _library_tracks(
+                None if sees_everything(who) else granted_to(who))
         ])
 
     @app.get("/library/{song}/{bank}/{name}")
@@ -615,7 +633,7 @@ def create_app(
 
         # Checked before the path is built, so a library nobody granted is
         # not merely absent from the listing.
-        if bank not in granted_to(who):
+        if not sees_everything(who) and bank not in granted_to(who):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "no such track")
 
         if bank == DEMO:
