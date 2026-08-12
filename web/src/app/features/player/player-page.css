@@ -59,7 +59,7 @@
 .shuffle {
   display: flex;
   align-items: end;
-  gap: var(--space-4);
+  gap: var(--space-3);
   flex-wrap: wrap;
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--line);
@@ -71,7 +71,7 @@
 .filters {
   display: flex;
   align-items: end;
-  gap: var(--space-4);
+  gap: var(--space-3);
   flex-wrap: wrap;
 }
 
@@ -86,12 +86,6 @@
   border-left: 1px solid color-mix(in srgb, var(--accent-ink) 30%, transparent);
   font-variant-numeric: tabular-nums;
   opacity: 0.75;
-}
-
-/* Pushed to the end of the strip: the fields say what to shuffle, this does
-   it, and an action belongs where a form's submit belongs. */
-.shuffle__go {
-  margin-left: auto;
 }
 
 /* ---- the list ---- */
@@ -265,10 +259,12 @@
   padding: var(--space-2) var(--space-3) var(--space-3);
 }
 
+/* Wears the button's own shape, so the row keeps its size and the change
+   reads as that button working rather than as the controls leaving. */
 .panel__busy {
   margin: 0;
-  color: var(--text-muted);
-  font-size: var(--text-sm);
+  color: var(--accent-text);
+  cursor: default;
 }
 
 /* The native control, kept because it is the one audio UI everybody already
