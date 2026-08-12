@@ -54,14 +54,21 @@ def _runner() -> tuple[JobRunner, list[Job]]:
 # ---------------------------------------------------------------------------
 
 def test_only_the_flags_that_were_asked_for_are_passed():
-    """The pipeline's defaults are the defaults. Passing --play always would
-    silently halve every run to one level."""
+    """The pipeline's defaults are the defaults, with one exception.
+
+    --play is not passed, because passing it always would silently halve every
+    run to one level. Neither is --engine.
+
+    --mimicry is the exception and is always passed. Leaving it to the
+    pipeline's own default is the seven-rung sweep, which is what turned one
+    submitted song into fourteen files. See AGENTS.md, "Never write more than
+    two renderings for a song".
+    """
     cmd = render_command("python", REQUEST, Path("input/song.mp4"))
 
     assert "--play" not in cmd
-    assert "--mimicry" not in cmd
     assert "--engine" not in cmd
-    assert cmd[-2:] == ["--bank", "ppbank"]
+    assert cmd[cmd.index("--mimicry") + 1] == "1"
 
 
 def test_the_settings_that_were_asked_for_do_reach_the_command():
@@ -281,3 +288,28 @@ def test_a_quick_run_ends_settled_in_the_record(tmp_path):
 
     assert seen[-1].settled is True
     assert seen[-1].stage is Stage.DONE
+
+
+def test_the_site_renders_one_rung_rather_than_the_whole_sweep():
+    """The pipeline's own default is seven rungs, which is right at a terminal
+    where somebody is comparing them by ear. Through the site nobody asked for
+    seven: the machine spends a GPU on all of them and one song arrives as
+    fourteen near-identical rows in a library that already holds hundreds."""
+    from app.main import FULL_MIMICRY, SubmitBody
+
+    asked = SubmitBody(source_url="https://example.invalid/x", bank="ppbank")
+
+    assert asked.mimicry == FULL_MIMICRY == 1.0
+
+
+def test_the_rung_still_reaches_the_command_line():
+    from app.jobs import JobRequest, render_command
+    from pathlib import Path
+
+    cmd = render_command("python", JobRequest(
+        requested_by="owner@example.invalid",
+        source_url="https://example.invalid/x",
+        bank="ppbank", mimicry=1.0), Path("song.mp4"))
+
+    assert "--mimicry" in cmd
+    assert cmd[cmd.index("--mimicry") + 1] == "1"

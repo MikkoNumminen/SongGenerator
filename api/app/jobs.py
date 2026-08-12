@@ -34,6 +34,10 @@ def _now() -> str:
     return datetime.now(UTC).isoformat(timespec="seconds")
 
 
+#: See AGENTS.md, "Never write more than two renderings for a song".
+FULL_RUNG = 1.0
+
+
 @dataclass(frozen=True)
 class JobRequest:
     """What the caller asked for. Validated before it gets here."""
@@ -42,7 +46,12 @@ class JobRequest:
     bank: str
     requested_by: str
     level: str | None = None          # None means every level the config has
-    mimicry: float | None = None      # None means the full seven-rung sweep
+    # The rung where the melody survives whole, and the only one anything here
+    # renders. Defaulted rather than left to each caller: the sweep is seven
+    # full passes over the audio per level, and a route that forgot to say so
+    # is how one song became fourteen files. Passing None still means the
+    # sweep, for a caller that genuinely wants it.
+    mimicry: float | None = FULL_RUNG
     engine: str | None = None
     arrangement: str | None = None    # .arr text to replay, if any
 

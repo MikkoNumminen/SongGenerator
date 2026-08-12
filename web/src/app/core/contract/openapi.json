@@ -626,17 +626,11 @@
             "title": "Level"
           },
           "mimicry": {
-            "anyOf": [
-              {
-                "maximum": 1.0,
-                "minimum": 0.0,
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mimicry"
+            "default": 1.0,
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Mimicry",
+            "type": "number"
           },
           "source_url": {
             "maxLength": 2048,

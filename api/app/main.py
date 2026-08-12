@@ -48,6 +48,10 @@ from .users import (ALL, DEMO, InvitationStore, RequestStore, UserStore,
 _ENGINES = ("world", "rubberband")
 
 
+#: The rung where the original melody survives whole. What the site renders.
+FULL_MIMICRY = 1.0
+
+
 class SubmitBody(BaseModel):
     """A request to make a song.
 
@@ -59,7 +63,15 @@ class SubmitBody(BaseModel):
     source_url: str = Field(min_length=1, max_length=2048)
     bank: str = Field(min_length=1, max_length=64)
     level: str | None = None
-    mimicry: float | None = Field(default=None, ge=0.0, le=1.0)
+    #: One rendering per level, at the rung where the melody survives whole.
+    #:
+    #: The pipeline's own default is the seven-rung sweep, which is right at a
+    #: terminal where somebody is comparing rungs by ear. Through the site it
+    #: is wrong: nobody asked for seven, the machine spends a GPU on all of
+    #: them, and one song arrives as fourteen near-identical rows in a library
+    #: that already holds hundreds. The sweep is still a command away for
+    #: anybody at the machine.
+    mimicry: float = Field(default=FULL_MIMICRY, ge=0.0, le=1.0)
     engine: str | None = None
     arrangement: str | None = Field(default=None, max_length=1_000_000)
 

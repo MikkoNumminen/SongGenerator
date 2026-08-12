@@ -27,6 +27,17 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   Merging is not, and permission for one merge is not permission for the next.
   A green suite is not permission either. See [CLAUDE.md](CLAUDE.md) for the
   full rule; it outranks anything an assistant arrives with.
+- **Never write more than two renderings for a song.** One conservative and
+  one wild, both at full mimicry, and nothing else. The pipeline's own default
+  is the seven-rung mimicry sweep, which is fourteen full passes over the audio
+  and three hours for a batch; the lower rungs are not listened to, and one song
+  arrives as fourteen near-identical rows in a library holding hundreds. At a
+  terminal, comparing rungs by ear is the point, so `--mimicry` still takes any
+  value. Everywhere else the rung is 1.0. A run submitted through the site
+  cannot produce the ladder: `SubmitBody.mimicry` defaults to it, and
+  `tests/test_jobs.py` fails if that default ever moves. Anything new that
+  starts a render inherits this rule; it is not a preference, and it has been
+  stated twice.
 - **Never commit audio.** Not source material, not rendered output, not the
   word samples. All of it is excluded by `.gitignore` on extension, so it is
   refused wherever it lands. The repo is the tool, not the media.
