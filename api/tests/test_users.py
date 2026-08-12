@@ -421,3 +421,81 @@ class TestUpgradingADatabaseThatPredatesLibraries:
         tracks = guest.get("/library", headers=AUTH).json()["tracks"]
 
         assert {t["bank"] for t in tracks} == {"ppbank", "later_bank"}
+
+
+class TestWhoseRunIsWhose:
+    """A run carries the song's name, the bank it used and the files it made.
+
+    Without this the library grant is decoration: an address holding the demo
+    alone could list every run ever and fetch what those runs produced, which
+    is the same audio the library refuses it.
+    """
+
+    def _a_run(self, tmp_path, by, *, song="a_song", bank="ppbank"):
+        from app.jobs import Job, Stage
+        out = tmp_path / "output" / song / bank
+        out.mkdir(parents=True, exist_ok=True)
+        (out / f"{song}.wild.mp3").write_bytes(b"their rendering")
+        return Job(id=f"job-{by}", created_at=AT, requested_by=by,
+                   source_url="https://example.invalid/x", bank=bank,
+                   stage=Stage.DONE, song=song, output_dir=str(out))
+
+    def _with_run(self, tmp_path, as_who, job):
+        client, users = _app(tmp_path, as_who)
+        # The store the app was built around is the one on that connection.
+        from app.store import open_store
+        open_store(tmp_path / "jobs.sqlite3").save(job)
+        return client, users
+
+    def test_the_history_shows_only_your_own_runs(self, tmp_path):
+        mine = self._a_run(tmp_path, GUEST, song="mine")
+        theirs = self._a_run(tmp_path, ADMIN, song="theirs")
+        admin, _ = _app(tmp_path, ADMIN)
+        admin.post("/users", json={"email": GUEST}, headers=AUTH)
+        from app.store import open_store
+        store = open_store(tmp_path / "jobs.sqlite3")
+        store.save(mine)
+        store.save(theirs)
+
+        guest, _ = _app(tmp_path, GUEST)
+        seen = guest.get("/jobs", headers=AUTH).json()["jobs"]
+
+        assert [j["song"] for j in seen] == ["mine"]
+
+    def test_somebody_elses_run_is_not_readable(self, tmp_path):
+        theirs = self._a_run(tmp_path, ADMIN, song="theirs")
+        admin, _ = _app(tmp_path, ADMIN)
+        admin.post("/users", json={"email": GUEST}, headers=AUTH)
+        from app.store import open_store
+        open_store(tmp_path / "jobs.sqlite3").save(theirs)
+
+        guest, _ = _app(tmp_path, GUEST)
+
+        assert guest.get(f"/jobs/{theirs.id}", headers=AUTH).status_code == 404
+        assert guest.get(f"/jobs/{theirs.id}/files",
+                         headers=AUTH).status_code == 404
+
+    def test_somebody_elses_rendering_is_not_downloadable(self, tmp_path):
+        """The route the library grant would otherwise be walked around."""
+        theirs = self._a_run(tmp_path, ADMIN, song="theirs")
+        admin, _ = _app(tmp_path, ADMIN)
+        admin.post("/users", json={"email": GUEST}, headers=AUTH)
+        from app.store import open_store
+        open_store(tmp_path / "jobs.sqlite3").save(theirs)
+
+        guest, _ = _app(tmp_path, GUEST)
+        answer = guest.get(f"/jobs/{theirs.id}/files/theirs.wild.mp3",
+                           headers=AUTH)
+
+        assert answer.status_code == 404
+        assert b"their rendering" not in answer.content
+
+    def test_an_administrator_still_sees_every_run(self, tmp_path):
+        mine = self._a_run(tmp_path, GUEST, song="mine")
+        from app.store import open_store
+        admin, _ = _app(tmp_path, ADMIN)
+        open_store(tmp_path / "jobs.sqlite3").save(mine)
+
+        seen = admin.get("/jobs", headers=AUTH).json()["jobs"]
+
+        assert [j["song"] for j in seen] == ["mine"]

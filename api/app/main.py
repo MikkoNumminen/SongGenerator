@@ -381,18 +381,34 @@ def create_app(
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
         return _job_payload(job)
 
+    def _own(job: Job | None, who: Principal) -> bool:
+        """Whether this caller may look at this run.
+
+        A run carries the song's name, the bank it used and the files it
+        produced, so the runs somebody else asked for are somebody else's
+        business. Without this the library grant is decoration: an address
+        holding the demo alone could list every run ever and fetch what it
+        produced, which is the same audio the library refuses it.
+        """
+        return job is not None and (
+            who.email in settings.admin_emails
+            or job.requested_by.strip().lower() == who.email.strip().lower())
+
     @app.get("/jobs")
-    def history(_: Caller, limit: int = 50) -> HistoryReply:
+    def history(who: Caller, limit: int = 50) -> HistoryReply:
         capped = max(1, min(limit, 200))
-        return HistoryReply(jobs=[_job_payload(j) for j in store.recent(capped)])
+        return HistoryReply(jobs=[_job_payload(j) for j in store.recent(capped)
+                                  if _own(j, who)])
 
     @app.get("/jobs/{job_id}")
-    def one(job_id: str, _: Caller) -> JobReply:
+    def one(job_id: str, who: Caller) -> JobReply:
         live = runner.current
         if live is not None and live.id == job_id:
+            if not _own(live, who):
+                raise HTTPException(status.HTTP_404_NOT_FOUND, "no such run")
             return _job_payload(live)
         job = store.get(job_id)
-        if job is None:
+        if not _own(job, who):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "no such run")
         return _job_payload(job)
 
@@ -406,9 +422,9 @@ def create_app(
         return sorted(p for p in folder.glob("*.mp3") if p.is_file())
 
     @app.get("/jobs/{job_id}/files")
-    def files(job_id: str, _: Caller) -> FilesReply:
+    def files(job_id: str, who: Caller) -> FilesReply:
         job = store.get(job_id)
-        if job is None:
+        if not _own(job, who):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "no such run")
         return FilesReply(files=[
             FileReply(name=p.name, level=_level_of(p), bytes=p.stat().st_size)
@@ -416,7 +432,7 @@ def create_app(
         ])
 
     @app.get("/jobs/{job_id}/files/{name}")
-    def one_file(job_id: str, name: str, _: Caller):
+    def one_file(job_id: str, name: str, who: Caller):
         """Hand back one rendering.
 
         The name is matched against the files the job actually produced rather
@@ -429,7 +445,7 @@ def create_app(
         from fastapi.responses import FileResponse
 
         job = store.get(job_id)
-        if job is None:
+        if not _own(job, who):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "no such run")
         for path in _finished_files(job):
             if path.name == name:
@@ -597,10 +613,14 @@ def create_app(
         return _users_reply()
 
     @app.post("/jobs/{job_id}/cancel")
-    def cancel(job_id: str, _: Caller) -> CancelReply:
+    def cancel(job_id: str, who: Caller) -> CancelReply:
         live = runner.current
         if live is None or live.id != job_id:
             raise HTTPException(status.HTTP_409_CONFLICT, "that run is not the one going")
+        # One machine takes one run at a time, so stopping somebody else's is
+        # taking the machine off them.
+        if not _own(live, who):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "no such run")
         if not runner.cancel():
             raise HTTPException(status.HTTP_409_CONFLICT, "that run had already finished")
         current = runner.current
