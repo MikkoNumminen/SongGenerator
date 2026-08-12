@@ -16,8 +16,18 @@ export class HttpAllowlist implements Allowlist {
     return this.http.get<UsersReply>(`${this.baseUrl}/users`);
   }
 
-  grant(email: string): Observable<UserReply> {
-    return this.http.post<UserReply>(`${this.baseUrl}/users`, { email });
+  grant(email: string, banks?: readonly string[]): Observable<UserReply> {
+    // Omitted rather than sent empty: the edge reads "no banks field" as its
+    // own default, and an empty array as somebody clearing every box.
+    const body = banks ? { email, banks: [...banks] } : { email };
+    return this.http.post<UserReply>(`${this.baseUrl}/users`, body);
+  }
+
+  setBanks(email: string, banks: readonly string[]): Observable<UsersReply> {
+    return this.http.put<UsersReply>(
+      `${this.baseUrl}/users/${encodeURIComponent(email)}/banks`,
+      { banks: [...banks] },
+    );
   }
 
   revoke(email: string): Observable<UsersReply> {

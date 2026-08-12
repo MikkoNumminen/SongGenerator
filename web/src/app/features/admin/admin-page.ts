@@ -11,7 +11,11 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { API_BASE_URL } from '../../core/api/api-config';
 import { detailOf, isUnreachable, stateForFailure } from '../../core/api/http-failure';
-import { UsersReply } from '../../core/contract/dto';
+import { UserReply, UsersReply } from '../../core/contract/dto';
+/** The library everybody starts with. Named on the edge; repeated here only
+ * so the panel can tick the right box before anything has been fetched. */
+const DEMO = 'demo';
+
 import { ALLOWLIST } from '../../core/ports/allowlist.port';
 import { AUTH_CONTEXT } from '../../core/ports/auth-context.port';
 import { loadWhenSignedIn } from '../../core/auth/load-when-signed-in';
@@ -67,6 +71,47 @@ export class AdminPage {
   /** The signed-in address, so the list can say which row is you. */
   readonly me = computed(() => this.auth?.user()?.email ?? null);
 
+  /**
+   * What the next grant will include. Starts at the demo library alone.
+   *
+   * A stranger is a stranger, so the box that is already ticked is the one
+   * that gives away the least, and widening is a deliberate click rather than
+   * whatever the last grant happened to leave behind.
+   */
+  readonly wanted = signal<readonly string[]>([DEMO]);
+
+  toggleWanted(name: string): void {
+    const now = this.wanted();
+    this.wanted.set(now.includes(name)
+      ? now.filter((b) => b !== name)
+      : [...now, name]);
+  }
+
+  /** Change one box on an address that already has access. */
+  toggleFor(user: UserReply, name: string): void {
+    if (this.working()) {
+      return;
+    }
+    const next = user.banks.includes(name)
+      ? user.banks.filter((b) => b !== name)
+      : [...user.banks, name];
+    this.problem.set(null);
+    this.working.set(true);
+    this.allowlist
+      .setBanks(user.email, next)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (reply) => {
+          this.working.set(false);
+          this.state.set(ready(reply));
+        },
+        error: (failure: HttpErrorResponse) => {
+          this.working.set(false);
+          this.problem.set(this.explain(failure));
+        },
+      });
+  }
+
   load(): void {
     if (!this.configured) {
       this.state.set(empty());
@@ -91,11 +136,12 @@ export class AdminPage {
     this.problem.set(null);
     this.working.set(true);
     this.allowlist
-      .grant(email)
+      .grant(email, this.wanted())
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
           this.typed.set('');
+          this.wanted.set([DEMO]);
           this.working.set(false);
           // Re-read rather than patching the list locally. The edge decides
           // what the list is, including whether this address was already on

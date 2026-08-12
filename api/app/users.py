@@ -24,13 +24,40 @@ import sqlite3
 from dataclasses import dataclass
 
 
+#: The library everybody starts with, and the only one a new address gets.
+#: It is not a bank on this machine; it is a folder of things chosen to be
+#: shown to strangers, so granting it gives away nothing that was not put
+#: there on purpose.
+DEMO = "demo"
+
+#: Everything this machine has, whatever that turns out to be. Stored rather
+#: than expanded, so a bank added next week is included without anybody
+#: revisiting a row. It is what addresses granted before libraries existed
+#: carry, because they had everything and a migration must not quietly take
+#: it away.
+ALL = "*"
+
+
+def parse_banks(raw: str) -> frozenset[str]:
+    """The stored column as a set. Empty means demo, never everything."""
+    names = {part.strip() for part in raw.split(",") if part.strip()}
+    return frozenset(names) or frozenset({DEMO})
+
+
+def join_banks(banks: frozenset[str] | set[str] | list[str]) -> str:
+    """Back to the column. Sorted, so the same grant stores the same bytes."""
+    cleaned = {str(b).strip() for b in banks if str(b).strip()}
+    return ",".join(sorted(cleaned or {DEMO}))
+
+
 @dataclass(frozen=True)
 class AllowedUser:
-    """A granted address, and the trail of who granted it."""
+    """A granted address, the trail of who granted it, and what it may see."""
 
     email: str
     added_at: str
     added_by: str
+    banks: frozenset[str]
 
 
 class UserStore:
@@ -47,16 +74,35 @@ class UserStore:
     def all(self) -> list[AllowedUser]:
         """Every grant, oldest first, for the panel."""
         rows = self._conn.execute(
-            "SELECT email, added_at, added_by FROM allowed_emails"
+            "SELECT email, added_at, added_by, banks FROM allowed_emails"
             " ORDER BY added_at, email"
         ).fetchall()
         return [
             AllowedUser(email=str(r["email"]), added_at=str(r["added_at"]),
-                        added_by=str(r["added_by"]))
+                        added_by=str(r["added_by"]),
+                        banks=parse_banks(str(r["banks"])))
             for r in rows
         ]
 
-    def add(self, email: str, *, added_by: str, at: str) -> bool:
+    def banks_for(self, email: str) -> frozenset[str]:
+        """What this address may see. Demo for anybody not on the list, which
+        is nobody: the caller has already been checked against it."""
+        row = self._conn.execute(
+            "SELECT banks FROM allowed_emails WHERE email = ?",
+            (email.strip().lower(),)
+        ).fetchone()
+        return parse_banks(str(row["banks"])) if row is not None else frozenset({DEMO})
+
+    def set_banks(self, email: str, banks: frozenset[str] | set[str] | list[str]) -> bool:
+        """Change what an address may see. False when it is not on the list."""
+        cur = self._conn.execute(
+            "UPDATE allowed_emails SET banks = ? WHERE email = ?",
+            (join_banks(banks), email.strip().lower()),
+        )
+        return cur.rowcount > 0
+
+    def add(self, email: str, *, added_by: str, at: str,
+            banks: frozenset[str] | set[str] | list[str] | None = None) -> bool:
         """Grant access. False when that address already had it.
 
         Idempotent rather than an error, because the panel's own list is what
@@ -64,9 +110,10 @@ class UserStore:
         not read as a failure.
         """
         cur = self._conn.execute(
-            "INSERT OR IGNORE INTO allowed_emails (email, added_at, added_by)"
-            " VALUES (?, ?, ?)",
-            (email.strip().lower(), at, added_by.strip().lower()),
+            "INSERT OR IGNORE INTO allowed_emails"
+            " (email, added_at, added_by, banks) VALUES (?, ?, ?, ?)",
+            (email.strip().lower(), at, added_by.strip().lower(),
+             join_banks(banks if banks is not None else {DEMO})),
         )
         return cur.rowcount > 0
 
@@ -101,7 +148,10 @@ class UserStore:
         )
         added = 0
         for email in sorted(emails):
-            if self.add(email, added_by="SONGGEN_ALLOWED_EMAILS", at=at):
+            # The environment variable is the owner naming people they trust,
+            # from before there was anything to choose between.
+            if self.add(email, added_by="SONGGEN_ALLOWED_EMAILS", at=at,
+                        banks={ALL}):
                 added += 1
         return added
 

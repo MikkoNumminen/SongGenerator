@@ -41,6 +41,10 @@ export interface SongGroup {
 /** Any bank, or a named one. */
 export const ANY = '__any__';
 
+/** The library everybody starts with. Named on the edge; repeated here so the
+ * page can say what it is showing before anything else has been fetched. */
+const DEMO = 'demo';
+
 function keyOf(track: TrackReply): string {
   return `${track.song}/${track.bank}/${track.name}`;
 }
@@ -100,6 +104,26 @@ export class PlayerPage implements OnDestroy {
   readonly ANY = ANY;
 
   readonly bank = signal(ANY);
+
+  /**
+   * What this page is called for whoever is looking at it.
+   *
+   * Somebody holding the demo library alone is not looking at everything made
+   * so far, and a heading that said so would be describing a machine they
+   * cannot see. It is the same page either way; only the claim it makes about
+   * itself changes.
+   */
+  readonly title = computed(() => {
+    const banks = this.banks();
+    return banks.length === 1 && banks[0] === DEMO
+      ? 'SongGenerator demo'
+      : 'Everything made so far';
+  });
+
+  readonly lead = computed(() =>
+    this.title() === 'SongGenerator demo'
+      ? 'A few things made on that desktop, to show what this does.'
+      : 'Straight off that desktop. Pick a song to see its takes.');
   readonly level = signal(ANY);
 
   /** What shuffle is playing through, in order, once it has started. */

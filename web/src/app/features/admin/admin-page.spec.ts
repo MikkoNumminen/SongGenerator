@@ -20,8 +20,10 @@ function reply(users: string[] = [GUEST]): UsersReply {
       added_at: '2026-01-01T00:00:00+00:00',
       added_by: OWNER,
       is_admin: email === OWNER,
+      banks: email === OWNER ? ['demo', 'ppbank'] : ['demo'],
     })),
     admins: [OWNER],
+    grantable: ['demo', 'ppbank'],
   };
 }
 
@@ -29,6 +31,8 @@ function reply(users: string[] = [GUEST]): UsersReply {
 class FakeAllowlist implements Allowlist {
   listed: UsersReply = reply();
   granted: string[] = [];
+  grantedBanks: string[][] = [];
+  setFor: [string, string[]][] = [];
   revoked: string[] = [];
   failListWith: HttpErrorResponse | null = null;
   failWriteWith: HttpErrorResponse | null = null;
@@ -39,17 +43,27 @@ class FakeAllowlist implements Allowlist {
       : of(this.listed);
   }
 
-  grant(email: string): Observable<UserReply> {
+  grant(email: string, banks?: readonly string[]): Observable<UserReply> {
     if (this.failWriteWith) {
       return throwError(() => this.failWriteWith);
     }
     this.granted.push(email);
+    this.grantedBanks.push([...(banks ?? [])]);
     return of({
       email,
       added_at: 'now',
       added_by: OWNER,
       is_admin: false,
+      banks: [...(banks ?? ['demo'])],
     });
+  }
+
+  setBanks(email: string, banks: readonly string[]): Observable<UsersReply> {
+    if (this.failWriteWith) {
+      return throwError(() => this.failWriteWith);
+    }
+    this.setFor.push([email, [...banks]]);
+    return of(reply([]));
   }
 
   revoke(email: string): Observable<UsersReply> {
@@ -95,6 +109,57 @@ describe('the allowlist page', () => {
 
     expect(fixture.componentInstance.state().kind).toBe('ready');
     expect(fixture.nativeElement.textContent).toContain(GUEST);
+  });
+
+  it('offers a new address the demo library and nothing else', async () => {
+    // A newly typed address is a stranger. The box already ticked should be
+    // the one that gives away the least.
+    const allowlist = new FakeAllowlist();
+    const fixture = await render(allowlist);
+
+    expect(fixture.componentInstance.wanted()).toEqual(['demo']);
+
+    fixture.componentInstance.typed.set('friend@example.invalid');
+    fixture.componentInstance.grant();
+    await fixture.whenStable();
+
+    expect(allowlist.grantedBanks).toEqual([['demo']]);
+  });
+
+  it('grants the boxes that were ticked', async () => {
+    const allowlist = new FakeAllowlist();
+    const fixture = await render(allowlist);
+
+    fixture.componentInstance.toggleWanted('ppbank');
+    fixture.componentInstance.typed.set('friend@example.invalid');
+    fixture.componentInstance.grant();
+    await fixture.whenStable();
+
+    expect(allowlist.grantedBanks).toEqual([['demo', 'ppbank']]);
+  });
+
+  it('goes back to demo only after a grant', async () => {
+    // Otherwise the next address quietly inherits whatever the last one got.
+    const allowlist = new FakeAllowlist();
+    const fixture = await render(allowlist);
+
+    fixture.componentInstance.toggleWanted('ppbank');
+    fixture.componentInstance.typed.set('friend@example.invalid');
+    fixture.componentInstance.grant();
+    await fixture.whenStable();
+
+    expect(fixture.componentInstance.wanted()).toEqual(['demo']);
+  });
+
+  it('changes what an address already granted may hear', async () => {
+    const allowlist = new FakeAllowlist();
+    const fixture = await render(allowlist);
+    const guest = allowlist.listed.users.find((u) => u.email === GUEST)!;
+
+    fixture.componentInstance.toggleFor(guest, 'ppbank');
+    await fixture.whenStable();
+
+    expect(allowlist.setFor).toEqual([[GUEST, ['demo', 'ppbank']]]);
   });
 
   it('lowercases an address before granting it', async () => {

@@ -65,7 +65,10 @@ CREATE INDEX IF NOT EXISTS jobs_created_at ON jobs (created_at DESC);
 CREATE TABLE IF NOT EXISTS allowed_emails (
     email     TEXT PRIMARY KEY,
     added_at  TEXT NOT NULL,
-    added_by  TEXT NOT NULL
+    added_by  TEXT NOT NULL,
+    -- Which libraries this address may see, comma separated. 'demo' is the
+    -- one everybody starts with; the rest are bank names off this machine.
+    banks     TEXT NOT NULL DEFAULT 'demo'
 );
 
 -- Small facts about this database rather than about a job.
@@ -99,3 +102,29 @@ def connect(path: Path) -> sqlite3.Connection:
 def apply_schema(conn: sqlite3.Connection) -> None:
     """Idempotent. Called at startup rather than shipped as a migration step."""
     conn.executescript(SCHEMA)
+    _add_missing_columns(conn)
+
+
+# Columns added after the first version of a table shipped. CREATE TABLE IF NOT
+# EXISTS does nothing to a table that already exists, so a database written
+# before a column existed never gains it, and the first query naming it fails
+# on the owner's machine and nowhere else.
+_LATER_COLUMNS = (
+    ("allowed_emails", "banks", "TEXT NOT NULL DEFAULT 'demo'", "*"),
+)
+
+
+def _add_missing_columns(conn: sqlite3.Connection) -> None:
+    for table, column, decl, backfill in _LATER_COLUMNS:
+        have = {str(r["name"]) for r in
+                conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        if not have:            # the table itself is not there yet
+            continue
+        if column not in have:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
+            if backfill is not None:
+                # Only the rows that existed before the column did. They were
+                # granted when there was nothing to choose between, so they
+                # had everything, and a migration that narrowed them would
+                # revoke access nobody asked to revoke.
+                conn.execute(f"UPDATE {table} SET {column} = ?", (backfill,))
