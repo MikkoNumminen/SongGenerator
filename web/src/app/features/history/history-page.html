@@ -73,8 +73,12 @@
                 <a [routerLink]="['/runs', run.id]">{{ run.song ?? run.source_url }}</a>
               </td>
               <td data-label="" class="opener">
-                <!-- Only a run that finished has anything to offer. -->
-                @if (run.settled) {
+                <!-- Only a run that finished has anything to offer, and
+                     settled is not that: it also covers refused and failed,
+                     which produced no files. Those opened to an empty row
+                     that read as a box still loading. The run page gates the
+                     same component the same way. -->
+                @if (run.stage === 'done') {
                   <button type="button" class="btn btn--quiet btn--sm"
                           [attr.aria-expanded]="openRun() === run.id"
                           (click)="toggle(run.id)">

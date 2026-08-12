@@ -17,6 +17,16 @@ web/src/app/core/contract/dto.ts       linguist-generated=true
 # Lockfiles are resolved dependency graphs rather than anything anybody typed.
 web/package-lock.json linguist-generated=true
 
-# The bank's own index: measurements of audio, written by build_bank.
-**/words.json          linguist-generated=true
-**/standardized.json   linguist-generated=true
+# Line endings, which is what this file did before it also described the
+# language bar. Without it Git stops normalising on commit, and a file written
+# on Windows and one written by a tool show up as wholly rewritten.
+* text=auto
+
+# The two exceptions, both added with the desktop shortcuts. core.autocrlf is
+# true on the machine this runs on, so text=auto alone checks a shell script
+# out with CRLF; under WSL that puts a carriage return on the end of the
+# shebang and of `UNIT=homelab-songgenerator`, and every systemctl call goes
+# looking for a unit whose name ends in a control character. The .bat files
+# are read by cmd.exe and want the opposite.
+*.sh  text eol=lf
+*.bat text eol=crlf
