@@ -422,9 +422,13 @@ def create_app(
         """
         capped = max(1, min(limit, 200))
         wanted = requested_by.strip().lower() if requested_by else None
+        # Asked once, not once per run. _own() reads the grant from the
+        # database, and up to two hundred runs came back from one request.
+        everything = _sees_every_run(who)
+        mine = who.email.strip().lower()
         return HistoryReply(jobs=[
             _job_payload(j) for j in store.recent(capped)
-            if _own(j, who)
+            if (everything or j.requested_by.strip().lower() == mine)
             and (wanted is None
                  or j.requested_by.strip().lower() == wanted)])
 
