@@ -1,4 +1,4 @@
-import { Injectable, effect, inject } from '@angular/core';
+import { Injectable, Injector, effect, inject } from '@angular/core';
 
 import { LIBRARY } from '../ports/library.port';
 import { AUTH_CONTEXT } from '../ports/auth-context.port';
@@ -19,6 +19,11 @@ import { AUTH_CONTEXT } from '../ports/auth-context.port';
 export class Prime {
   private readonly auth = inject(AUTH_CONTEXT, { optional: true });
   private readonly library = inject(LIBRARY);
+  // Captured here, where there is an injection context, because start() is
+  // called from the shell's ngOnInit, where there is not. Without it effect()
+  // throws NG0203 and the prefetch this class exists for never runs, which is
+  // invisible from the outside: the pages still fetch for themselves.
+  private readonly injector = inject(Injector);
   private primedFor: string | null = null;
 
   /** Begin watching. Called once, by the shell. */
@@ -43,6 +48,6 @@ export class Prime {
         // in the cache, and the page that wants it finds it already there.
         this.library.list().subscribe({ error: () => undefined });
       }
-    });
+    }, { injector: this.injector });
   }
 }
