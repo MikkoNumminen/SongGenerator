@@ -7,6 +7,7 @@ import { API_BASE_URL } from '../../core/api/api-config';
 import { UserReply, UsersReply } from '../../core/contract/dto';
 import { ALLOWLIST, Allowlist } from '../../core/ports/allowlist.port';
 import { AUTH_CONTEXT } from '../../core/ports/auth-context.port';
+import { fakeAuth } from '../../core/auth/fake-auth';
 import { AdminPage } from './admin-page';
 
 const OWNER = 'owner@example.invalid';
@@ -71,6 +72,7 @@ async function render(
   TestBed.configureTestingModule({
     imports: [AdminPage],
     providers: [
+      fakeAuth().provider,
       { provide: ALLOWLIST, useValue: allowlist },
       { provide: API_BASE_URL, useValue: baseUrl },
       { provide: AUTH_CONTEXT, useValue: { user: () => ({ email: OWNER }) } },

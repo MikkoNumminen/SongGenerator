@@ -3,7 +3,6 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
-  OnInit,
   inject,
   signal,
 } from '@angular/core';
@@ -14,6 +13,7 @@ import { API_BASE_URL } from '../../core/api/api-config';
 import { stateForFailure } from '../../core/api/http-failure';
 import { JobReply } from '../../core/contract/dto';
 import { RUN_SOURCE } from '../../core/ports/run-source.port';
+import { loadWhenSignedIn } from '../../core/auth/load-when-signed-in';
 import { AsyncState, empty, idle, loading, ready } from '../../core/state/async-state';
 import { StatePanel } from '../../shared/state-panel/state-panel';
 import { stageTone } from '../../shared/stage-tone';
@@ -25,16 +25,18 @@ import { stageTone } from '../../shared/stage-tone';
   templateUrl: './history-page.html',
   styleUrl: './history-page.css',
 })
-export class HistoryPage implements OnInit {
+export class HistoryPage {
+
+  constructor() {
+    // Not ngOnInit: the identity arrives after the page does, and asking
+    // before it has is the 401 that used to leave a "Try again" button.
+    loadWhenSignedIn(() => this.load());
+  }
   private readonly runs = inject(RUN_SOURCE);
   private readonly destroyRef = inject(DestroyRef);
   private readonly configured = inject(API_BASE_URL) !== '';
 
   readonly state = signal<AsyncState<readonly JobReply[]>>(idle());
-
-  ngOnInit(): void {
-    this.load();
-  }
 
   load(): void {
     // Nothing to read from. An empty address would request `/jobs` on this

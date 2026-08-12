@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { API_BASE_URL } from '../../core/api/api-config';
 import { LibraryReply, TrackReply } from '../../core/contract/dto';
 import { LIBRARY, Library } from '../../core/ports/library.port';
+import { fakeAuth } from '../../core/auth/fake-auth';
 import { ANY, PlayerPage } from './player-page';
 
 function track(song: string, bank: string, level: string): TrackReply {
@@ -50,6 +51,7 @@ async function render(
   TestBed.configureTestingModule({
     imports: [PlayerPage],
     providers: [
+      fakeAuth().provider,
       { provide: LIBRARY, useValue: library },
       { provide: API_BASE_URL, useValue: baseUrl },
     ],
