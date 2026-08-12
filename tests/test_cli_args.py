@@ -196,12 +196,18 @@ class TestARunWritesTwoFiles:
         assert cli.mimicry_targets(parse("--no-shift")) == [None]
         assert cli.single_mimicry(parse("--no-shift")) is None
 
-    def test_naming_a_setting_beats_asking_for_the_ladder(self):
-        """Both together is a contradiction. The narrower one wins, because a
-        run that wrote fourteen files from a command naming one is the exact
-        surprise this whole rule exists to stop."""
-        assert cli.mimicry_targets(parse("--ladder", "--mimicry", "0.6")) == [None]
-        assert cli.mimicry_targets(parse("--ladder", "--no-shift")) == [None]
+    @pytest.mark.parametrize("argv", [
+        ("--ladder", "--mimicry", "0.6"),
+        ("--ladder", "--mimicry", "1"),
+        ("--ladder", "--no-shift"),
+        ("--ladder", "--mix", "0.5"),
+    ])
+    def test_asking_for_the_ladder_and_one_rung_at_once_is_refused(self, argv):
+        """Resolved silently, whichever lost lost without a word. `--ladder
+        --mimicry 1` wrote the two plain takes over the two already there and
+        reported "2 versions" as though that had been the request."""
+        with pytest.raises(SystemExit):
+            cli.main(["song.mp4", *argv])
 
 
 class TestEveryFilenameCarriesTheLevel:
@@ -270,6 +276,17 @@ class TestOnlyThePlainTakeGetsThePlainName:
     def test_the_other_two_ways_of_naming_a_shift_say_so_too(self):
         assert cli.variant_tag(parse("--no-shift")) == "noshift"
         assert cli.variant_tag(parse("--mix", "0.5")) == "mix0p50"
+
+    def test_a_replay_is_not_the_take_it_was_replayed_from(self):
+        """--arrangement is advertised as the way to edit what gets sung, so
+        the usual replay is a different rendering wearing the same level."""
+        assert cli.variant_tag(parse("--arrangement", "w.arr")) == "replay"
+
+    def test_a_rung_a_hair_below_full_cannot_take_the_ladder_s_top_name(self):
+        """0.999 is not 1.0, but both spell mim1p00, which is the name the
+        ladder gives its own full-mimicry rung."""
+        assert cli.variant_tag(parse("--mimicry", "0.999")) is None
+        assert cli.variant_tag(parse("--mimicry", "0.994")) == "mim0p99"
 
     def test_no_one_off_shares_a_name_with_the_plain_take(self):
         from pathlib import Path

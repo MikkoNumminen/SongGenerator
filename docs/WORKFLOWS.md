@@ -21,10 +21,14 @@ output/song/<bank>/song.wild.mp3
 
 No rung in the name, because there is only one. The plain name belongs to the
 take a plain run writes, and anything asked for specially says so in the
-filename instead of landing on top of it: `--mimicry 0.6` writes
-`.mim0p60`, `--no-shift` writes `.noshift`, `--mix 0.5` writes `.mix0p50`, and
-`--ladder` names every rung it renders. Renders made before this was the
-default are still named `.mim1p00`.
+filename instead of landing on top of it: `--mimicry 0.6` writes `.mim0p60`,
+`--no-shift` writes `.noshift`, `--mix 0.5` writes `.mix0p50`,
+`--arrangement` writes `.replay`, and `--ladder` names every rung it renders.
+Renders made before this was the default are still named `.mim1p00`.
+
+`--ladder` cannot be combined with `--mimicry`, `--mix` or `--no-shift`. One
+asks for every rung and the others name a single shift, so the command is
+refused rather than one of them quietly winning.
 
 Each song gets its own folder, one per bank inside it. The song name stays in
 the filename too, so a file dragged out of its folder still says what it is.
@@ -58,7 +62,7 @@ costs is the files.
 | `--mimicry 0.45` | Both levels at that one setting, named `.mim0p45` |
 | `--ladder` | Every mimicry rung, fourteen files instead of two |
 | `--play wild` | One level instead of both |
-| `--arrangement <path>` | Replay a saved arrangement exactly, or an edited one |
+| `--arrangement <path>` | Replay a saved arrangement exactly, or an edited one, named `.replay` |
 | `--bank chaos` | Sing with every candidate clip, identity ignored |
 | `--seed 42` | Fix the arrangement seed; otherwise a new one each run |
 | `--raw-clips` | Ignore the standardised tier, sing the recordings as they are |

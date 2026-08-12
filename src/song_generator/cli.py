@@ -138,10 +138,15 @@ def mimicry_targets(args: argparse.Namespace) -> list[float | None]:
     The ladder used to be the default, which meant every run wrote fourteen
     near-identical files per song per bank; two of them were listened to and
     the other twelve had to be found and deleted by hand afterwards. It is
-    asked for by name now, and naming a single setting beats asking for it,
-    because a command that names one rung must not write fourteen files.
+    asked for by name now.
+
+    Asking for it and naming a single setting at the same time is refused
+    rather than resolved. Letting the narrower one quietly win meant
+    `--ladder --mimicry 1` wrote the two plain takes, over the top of the two
+    already there, and said nothing about having dropped the ladder somebody
+    had just typed.
     """
-    if args.ladder and not drives_its_own_shift(args):
+    if args.ladder:
         return list(config.MIMICRY_VARIANTS)
     return [None]
 
@@ -182,13 +187,25 @@ def variant_tag(args: argparse.Namespace) -> str | None:
 
     None means this IS the plain take. Full mimicry counts as plain, because
     it is what a plain run renders and what the site asks for by name.
+
+    A replay is tagged too. `--arrangement` is advertised as the way to edit
+    what gets sung and hear the change, so the usual replay is a different
+    rendering wearing the same level, and it was landing on top of the take
+    somebody had kept and gone to the trouble of editing from.
+
+    The rung is compared as it will be spelled, to two decimals, so nothing
+    can sit one ten-thousandth away from full mimicry and take the name the
+    ladder gives its own top rung.
     """
+    if args.arrangement:
+        return "replay"
     if args.no_shift:
         return "noshift"
     if args.mix is not None:
         return f"mix{args.mix:.2f}".replace(".", "p")
     rung = single_mimicry(args)
-    return None if rung == config.FULL_MIMICRY else rung_word(rung)
+    return None if rung_word(rung) == rung_word(config.FULL_MIMICRY) \
+        else rung_word(rung)
 
 
 def versioned_name(output: Path, label: str, tag: str | None = None) -> Path:
@@ -323,7 +340,21 @@ def _rollback(args) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    # Said here rather than resolved silently. --ladder means seven rungs per
+    # level; --mimicry, --mix and --no-shift each name one shift outright.
+    # Asked for together they contradict, and whichever one lost used to lose
+    # without a word: `--ladder --mimicry 1` wrote the two plain takes over
+    # the two already there and reported "2 versions" as though that had been
+    # the request.
+    named = [flag for flag, given in (("--mimicry", args.mimicry is not None),
+                                      ("--mix", args.mix is not None),
+                                      ("--no-shift", args.no_shift)) if given]
+    if args.ladder and named:
+        parser.error(f"--ladder renders every rung, so it cannot be combined "
+                     f"with {named[0]}, which names one")
 
     if args.rollback:
         # Before anything expensive. Rolling back needs neither stems nor a
