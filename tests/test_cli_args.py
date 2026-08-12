@@ -153,6 +153,44 @@ class TestOutputGoesInItsOwnFolder:
         assert got.name == "song.mp3"
 
 
+class TestARunWritesTwoFiles:
+    """The ladder is asked for by name, never arrived at by default.
+
+    A run used to render all seven mimicry rungs at both levels, so one song
+    became fourteen files per bank. Two of them were listened to; the rest
+    were deleted by hand afterwards, once they had been noticed. The default
+    moving back is the failure these guard.
+    """
+
+    def test_the_default_is_one_rung_per_level(self):
+        assert cli.mimicry_targets(parse()) == [config.FULL_MIMICRY]
+
+    def test_that_rung_is_the_top_of_the_ladder(self):
+        """Full mimicry, not merely some single value: the two files are the
+        ones that sing the tune as closely as the song allows."""
+        assert config.FULL_MIMICRY == 1.0
+        assert config.FULL_MIMICRY == max(config.MIMICRY_VARIANTS)
+
+    def test_the_ladder_comes_back_when_it_is_asked_for(self):
+        assert cli.mimicry_targets(parse("--ladder")) == \
+            list(config.MIMICRY_VARIANTS)
+
+    def test_one_named_setting_writes_one_file(self):
+        """--mimicry names the shift itself, so there is no rung to walk and
+        no rung in the filename."""
+        assert cli.mimicry_targets(parse("--mimicry", "0.6")) == [None]
+
+    def test_a_run_driving_the_mix_is_not_a_ladder_either(self):
+        assert cli.mimicry_targets(parse("--mix", "0.5")) == [None]
+        assert cli.mimicry_targets(parse("--no-shift")) == [None]
+
+    def test_naming_a_setting_beats_asking_for_the_ladder(self):
+        """Both together is a contradiction. The narrower one wins, because a
+        run that wrote fourteen files from a command naming one is the exact
+        surprise this whole rule exists to stop."""
+        assert cli.mimicry_targets(parse("--ladder", "--mimicry", "0.6")) == [None]
+
+
 class TestEveryFilenameCarriesTheLevel:
     """Both write sites, one function, no way to disagree.
 

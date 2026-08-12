@@ -87,10 +87,10 @@ format.
 **Playfulness level**. How freely the words are rearranged. `conservative`
 stays near what was recorded; `wild` invents more orders, spreads wider and
 leans harder on the shout and the payoff; `off` is the behaviour from before
-any of this existed. One level produces ONE arrangement, which is then
-rendered across the whole mimicry ladder. Playfulness and mimicry are separate
-questions and deliberately do not multiply: a run writes both levels times
-seven rungs, not two arrangements per rung.
+any of this existed. One level produces ONE arrangement, rendered at full
+mimicry. Playfulness and mimicry are separate questions and deliberately do
+not multiply: `--ladder` writes both levels times seven rungs, not two
+arrangements per rung.
 
 **Strategy**. How a bank's units are placed on the slots, declared per level
 in the bank's `bank.json` and read by `banks.py`. `arranged` is the planner:

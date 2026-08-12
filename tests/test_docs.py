@@ -276,13 +276,13 @@ def test_the_readme_describes_both_dials():
 
     Playfulness decides what gets sung and mimicry decides how closely it
     follows the tune. Someone reading only about mimicry would not know the
-    other existed, or why a run writes fourteen files rather than seven.
+    other existed, or why a run writes two files rather than one.
     """
     text = read(ROOT / "README.md").lower()
     assert "mimicry" in text
     assert "playfulness" in text
     assert "conservative" in text and "wild" in text
-    assert "fourteen" in text or "14 " in text
+    assert "two versions" in text or "two files" in text
 
 
 def test_a_test_count_in_the_docs_matches_the_suite():

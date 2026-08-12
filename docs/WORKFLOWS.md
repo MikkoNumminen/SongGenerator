@@ -11,19 +11,20 @@ and the project's own venv.
 .\.venv\Scripts\song-generator.exe input\song.mp4
 ```
 
-Writes **fourteen** mp3s to `output/`: both playfulness levels, and for each,
-seven mimicry settings from 0.00 (words ignore the tune entirely, clashing,
-and funny for it) to 1.00 (sings the melody as closely as the song allows).
+Writes **two** mp3s to `output/`, one per playfulness level, both at full
+mimicry: the words sing the melody as closely as the song allows.
 
 ```
-output/song/song.conservative.mim0p00.mp3 ... mim1p00.mp3
-output/song/song.wild.mim0p00.mp3         ... mim1p00.mp3
+output/song/<bank>/song.conservative.mim1p00.mp3
+output/song/<bank>/song.wild.mim1p00.mp3
 ```
 
-Each song gets its own folder. Fourteen files a run across a dozen songs is
-nearly two hundred in one directory, sorted by name, with every song's levels
-and rungs interleaved. The song name stays in the filename too, so a file
-dragged out of its folder still says what it is.
+Each song gets its own folder, one per bank inside it. The song name stays in
+the filename too, so a file dragged out of its folder still says what it is.
+
+`--ladder` renders the other six mimicry rungs as well, from 0.00 (words ignore
+the tune entirely, clashing, and funny for it) upward. That is fourteen files
+per song per bank, of which two get listened to, so it is opt-in.
 
 Both levels every time, because which is funnier is a listening decision and a
 run that produced one of them has not finished the job. Pick by ear; there is
@@ -38,16 +39,17 @@ First run on a song pays for separation (~0.45x realtime). Every later run on
 the same song reuses the cached stems.
 
 Rendering both levels costs about 50 seconds of resynthesis on a 2.5 minute
-song, since each arrangement is resynthesised separately. The seven mimicry
-settings within a level are nearly free, because they are a selection over the
-same shifted set. `--play conservative` halves the time when only one level is
-wanted.
+song, since each arrangement is resynthesised separately. `--play conservative`
+halves the time when only one level is wanted. `--ladder` costs almost nothing
+on top, because the rungs are a selection over the same shifted set; what it
+costs is the files.
 
 **Useful flags**
 
 | Flag | Effect |
 |---|---|
-| `--mimicry 0.45` | One file at one setting instead of the sweep |
+| `--mimicry 0.45` | One file at one setting instead of the two |
+| `--ladder` | Every mimicry rung, fourteen files instead of two |
 | `--play wild` | One level instead of both |
 | `--arrangement <path>` | Replay a saved arrangement exactly, or an edited one |
 | `--bank chaos` | Sing with every candidate clip, identity ignored |

@@ -103,6 +103,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--mimicry", type=float, default=None, metavar="0..1",
                    help="how closely the words track the original singing; the tool "
                         "solves for the shift this song needs [default: MIMICRY]")
+    p.add_argument("--ladder", action="store_true",
+                   help="render every rung of MIMICRY_VARIANTS rather than the "
+                        "two files a run writes by default")
     p.add_argument("--mix", type=float, default=None, metavar="0..1",
                    help="drive the raw proportion of shifted units instead, "
                         "overriding --mimicry")
@@ -112,6 +115,34 @@ def build_parser() -> argparse.ArgumentParser:
                    help="pitch/time engine")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return p
+
+
+def drives_its_own_shift(args: argparse.Namespace) -> bool:
+    """Whether the run was told exactly what to shift, rather than a rung.
+
+    All three of these name the shift themselves, so there is no ladder to
+    walk and the rung does not go into the filename.
+    """
+    return args.no_shift or args.mix is not None or args.mimicry is not None
+
+
+def mimicry_targets(args: argparse.Namespace) -> list[float | None]:
+    """Which mimicry rungs one run writes.
+
+    Two files, one per level, both at full mimicry. The ladder used to be the
+    default, which meant every run wrote fourteen near-identical files per
+    song per bank; two of them were listened to and the other twelve had to be
+    found and deleted by hand afterwards.
+
+    `--ladder` asks for the sweep back, and `--mimicry` still takes any single
+    value, because comparing rungs by ear at a terminal is the point of having
+    them. Both are typed on purpose. Nothing produces the ladder by default.
+    """
+    if drives_its_own_shift(args):
+        return [None]
+    if args.ladder:
+        return list(config.MIMICRY_VARIANTS)
+    return [config.FULL_MIMICRY]
 
 
 def versioned_name(output: Path, label: str, tag: str | None = None) -> Path:
@@ -393,8 +424,8 @@ def main(argv: list[str] | None = None) -> int:
     else:
         levels = list(config.PLAY_BOTH_LEVELS)
 
-    single = args.no_shift or args.mix is not None or args.mimicry is not None
-    targets = [None] if single else list(config.MIMICRY_VARIANTS)
+    single = drives_its_own_shift(args)
+    targets = mimicry_targets(args)
     written: list[tuple[Path, str, float, int]] = []
 
     for level in levels:

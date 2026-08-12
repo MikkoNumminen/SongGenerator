@@ -147,11 +147,11 @@ the singer's own transition between two words and a crossfade does not. The
 slices are what let the tool say something that was never recorded.
 
 A run renders BOTH playfulness levels, each producing one arrangement of its
-own, and each arrangement is then rendered across the whole mimicry ladder:
-fourteen files. Playfulness and mimicry are different questions and
-deliberately do not multiply into each other, but which level is funnier is a
-listening decision, so shipping one of them and offering the other would leave
-the decision needing another command.
+own, and each at full mimicry: two files. Which level is funnier is a listening
+decision, so shipping one of them and offering the other would leave the
+decision needing another command. The mimicry ladder is a separate question and
+deliberately does not multiply into this one; `--ladder` asks for it and turns
+those two files into fourteen.
 
 Which words get sung is not left to duration fit alone. The bank's words have
 roles with shares of the song attached, weighted per level: a handful of core
