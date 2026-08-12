@@ -154,6 +154,59 @@ def test_a_folder_printed_relative_is_read_against_the_run_directory(tmp_path):
         (tmp_path / "output" / "a_song" / "ppbank").resolve()
 
 
+def test_a_folder_that_cannot_be_resolved_does_not_wedge_the_runner(tmp_path):
+    """The read loop is the only thing that reaps the process and frees the
+    slot, so nothing in it may raise.
+
+    resolve() throws on a NUL byte in a name and on a symlink loop, both of
+    which arrive through a filename. An exception here killed the watcher
+    thread before process.wait(), leaving the runner busy for the life of the
+    edge: every later run refused with "a run is already going", the job stuck
+    at queued, and the child never collected.
+    """
+    runner, _ = _runner()
+    runner.start(REQUEST, tmp_path / "song.mp4", tmp_path, dict(os.environ),
+                 command=_stub(r"print('  wrote     out\\bad\x00name\\x.mp3')"))
+
+    assert _wait_until(lambda: not runner.busy), "the runner never came free"
+    assert runner.current is not None
+    assert runner.current.stage is Stage.DONE
+    assert runner.current.exit_code == 0
+    assert runner.current.output_dir is None
+
+
+def test_the_folder_is_worked_out_once_however_much_follows_it(
+        tmp_path, monkeypatch):
+    """resolve() on a path whose host has gone away blocks for twenty seconds,
+    and the pipeline prints its summary table after the line that names the
+    folder. Repeating the work per line stops draining the pipe the run is
+    still writing to."""
+    made = tmp_path / "output" / "a_song" / "ppbank"
+    made.mkdir(parents=True)
+
+    resolved: list[str] = []
+    real = Path.resolve
+
+    def counting(self, *args, **kwargs):
+        resolved.append(str(self))
+        return real(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", counting)
+
+    runner, _ = _runner()
+    script = (f"print(r'  wrote 2 versions to {made}')\n"
+              "print('    conservative   1.00   12   a.mp3')\n"
+              "print('    wild           1.00   14   b.mp3')\n"
+              "print('  analysis  work/a_song/analysis.json')\n")
+    runner.start(REQUEST, tmp_path / "song.mp4", tmp_path, dict(os.environ),
+                 command=_stub(script))
+
+    assert _wait_until(lambda: not runner.busy)
+    assert runner.current is not None
+    assert Path.resolve is counting, "the patch was undone before the assert"
+    assert [r for r in resolved if str(made) in r] == [str(made)]
+
+
 def test_a_song_with_no_vocal_is_refused_not_failed(tmp_path):
     """Exit 3 is the pipeline's mode B. It is a normal answer about the song,
     and the UI needs to say something different from `it broke`."""

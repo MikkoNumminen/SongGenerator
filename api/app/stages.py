@@ -32,10 +32,13 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from enum import Enum
-# Pure, not Path: this parses what a Windows pipeline printed, and the edge
-# may well be read on another platform in a test. PurePath splits the string
-# the way it was written without asking the filesystem anything.
-from pathlib import PurePath
+# Windows, and pure. Pure because this splits a string the pipeline printed
+# and must not ask the filesystem anything. Windows because that is the only
+# platform the pipeline runs on, and PurePath is PurePosixPath everywhere
+# else: read on Linux it takes no backslash for a separator, so the whole of
+# `D:\repo\output\song\bank\song.wild.mp3` is one name whose parent is `.`,
+# and the folder came back as the directory the run was started in.
+from pathlib import PureWindowsPath
 
 
 class Stage(str, Enum):
@@ -101,7 +104,9 @@ def _wrote_to(text: str) -> str | None:
         return folder.group(1).strip()
     one = _WROTE_FILE.match(text)
     if one:
-        return str(PurePath(one.group(1).strip()).parent)
+        # PureWindowsPath accepts a forward slash as a separator too, so this
+        # reads a path the pipeline spelled either way.
+        return str(PureWindowsPath(one.group(1).strip()).parent)
     return None
 
 

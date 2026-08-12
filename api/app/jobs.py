@@ -126,6 +126,9 @@ class JobRunner:
         # can be made absolute. The edge answers requests from its own working
         # directory, which is not required to be the same one.
         self._cwd = Path.cwd()
+        # The last folder line parsed, and what it came to. See _wrote_where.
+        self._parsed_from: str | None = None
+        self._parsed: tuple[str | None, str | None] = (None, None)
         self._lock = threading.Lock()
         self._cancelled = False
         # Liveness comes from the process, never from the parsed stage. The
@@ -168,6 +171,7 @@ class JobRunner:
             self._cancelled = False
             self._active = True
             self._cwd = Path(cwd)
+            self._parsed_from, self._parsed = None, (None, None)
 
         # Recorded before anything can go wrong, and before the watcher thread
         # exists. Saving it in the caller instead left two writers racing for
@@ -222,14 +226,34 @@ class JobRunner:
         what the run printed rather than assembled from the request: the
         request carries a URL, and what the song ends up called is decided by
         the pipeline after it has fetched the thing.
+
+        Answered once per distinct line and then remembered. This is the only
+        thing in the read loop that touches the filesystem, and `resolve()` on
+        a path whose host has gone away blocks for twenty seconds; repeating
+        that for every remaining line of output would stop draining the pipe
+        the run is writing to.
+
+        Nothing here may raise. The loop that calls it is the only thing that
+        reaps the process and clears the busy flag, so an exception escaping
+        into it left the runner permanently busy, every later run refused with
+        "a run is already going", and the child never collected. `resolve()`
+        raises on a NUL byte and on a symlink loop, both of which can reach it
+        through a filename.
         """
         if not progress.wrote_to:
             return None, None
-        folder = Path(progress.wrote_to)
-        if not folder.is_absolute():
-            folder = self._cwd / folder
-        folder = folder.resolve()
-        return str(folder), folder.parent.name or None
+        if progress.wrote_to == self._parsed_from:
+            return self._parsed
+        try:
+            folder = Path(progress.wrote_to)
+            if not folder.is_absolute():
+                folder = self._cwd / folder
+            folder = folder.resolve()
+            answer = (str(folder), folder.parent.name or None)
+        except (OSError, ValueError, RuntimeError):
+            answer = (None, None)
+        self._parsed_from, self._parsed = progress.wrote_to, answer
+        return answer
 
     def _watch(self) -> None:
         process = self._process

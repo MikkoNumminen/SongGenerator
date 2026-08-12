@@ -25,7 +25,7 @@ It reports liveness and configuration, never anything about songs or accounts.
 
 from collections.abc import Callable
 from dataclasses import asdict
-from datetime import UTC
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -111,6 +111,24 @@ class BankReply(BaseModel):
     usable: bool
 
 
+def _started_at_epoch(job: Job) -> float | None:
+    """When a run began, as a filesystem timestamp, or None if unknowable.
+
+    The slack is not politeness: `started_at` is recorded to the second, and
+    a file written in the same second can carry an mtime a hair below it, so
+    an exact comparison drops the very first rendering of a fast run.
+    """
+    if not job.started_at:
+        return None
+    try:
+        began = datetime.fromisoformat(job.started_at)
+    except ValueError:
+        return None
+    if began.tzinfo is None:
+        began = began.replace(tzinfo=UTC)
+    return began.timestamp() - 2.0
+
+
 def _is_one_name(value: str) -> bool:
     """Whether a path component is a single ordinary name.
 
@@ -130,9 +148,24 @@ def _is_one_name(value: str) -> bool:
     where the spelling stops being visible. The colon is refused for the same
     family of reasons: on Windows it introduces a drive or an alternate data
     stream, neither of which is a rendering.
+
+    Two subtler refusals, both of them Windows being helpful:
+
+    A trailing dot or space is stripped from a path component, so `. ` and
+    `...` both name the current directory as surely as `.` does. Comparing
+    against the literal strings let a component vanish from the join and
+    address the top of the root, where a file the listing never enumerates
+    can sit. The comparison is therefore made against the stripped form.
+
+    A control character, NUL above all, is not a traversal but it does reach
+    `resolve()`, which raises ValueError on it. That left the route answering
+    500 to a malformed request where every other malformed request gets 404.
     """
-    return bool(value) and value not in (".", "..") and not any(
-        bad in value for bad in ("/", "\\", ":"))
+    if not value or any(bad in value for bad in ("/", "\\", ":")):
+        return False
+    if any(ch < " " or ch == "\x7f" for ch in value):
+        return False
+    return value.rstrip(". ") not in ("", ".", "..")
 
 
 #: Where the demo library lives, beside `output/` on the same machine.
@@ -543,13 +576,28 @@ def create_app(
         return _job_payload(job)
 
     def _finished_files(job: Job) -> list[Path]:
-        """The renderings a job produced, or nothing if it produced none."""
+        """The renderings a job produced, or nothing if it produced none.
+
+        Narrowed to what was written during this run rather than everything
+        in the folder. A bank folder is shared by every run of that song, so
+        the folder also holds the takes of runs before this one: a `--play
+        wild` run listed the conservative take somebody else made, and a
+        folder still holding older names listed those too. "What this run
+        made" is what the page offering them says.
+
+        By modification time, because that is the only record of it. The
+        pipeline reports where it wrote and not which names, and asking it to
+        would be parsing a table laid out for a person to read.
+        """
         if not job.output_dir:
             return []
         folder = Path(job.output_dir)
         if not folder.is_dir():
             return []
-        return sorted(p for p in folder.glob("*.mp3") if p.is_file())
+        since = _started_at_epoch(job)
+        return sorted(p for p in folder.glob("*.mp3")
+                      if p.is_file()
+                      and (since is None or p.stat().st_mtime >= since))
 
     @app.get("/jobs/{job_id}/files")
     def files(job_id: str, who: Caller) -> FilesReply:

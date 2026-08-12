@@ -83,6 +83,13 @@ def _auth() -> dict[str, str]:
     return {"Authorization": "Bearer good-token"}
 
 
+def _now_iso() -> str:
+    """A start time of now, for a run whose files are being written now."""
+    from datetime import UTC, datetime
+
+    return datetime.now(UTC).isoformat(timespec="seconds")
+
+
 # ---------------------------------------------------------------------------
 # The open route
 # ---------------------------------------------------------------------------
@@ -332,6 +339,75 @@ def test_the_pasted_arrangement_is_not_shipped_on_every_poll(tmp_path):
     body = client.get("/jobs/abc", headers=_auth()).json()
 
     assert "arrangement" not in body
+
+
+class TestWhatARunProduced:
+    """The box on a finished run offers what THAT run made.
+
+    A bank folder is shared by every run of that song, so the folder also
+    holds the takes of runs before this one, under names the current default
+    no longer writes. Listing the folder offered those as this run's work, and
+    handing one over on request contradicted the route's own refusal text.
+    """
+
+    def _run(self, store, folder: Path, started: str) -> None:
+        store.save(Job(id="abc", created_at=started, started_at=started,
+                       requested_by=OWNER, source_url="u", bank="ppbank",
+                       stage=Stage.DONE, output_dir=str(folder)))
+
+    def _folder(self, tmp_path: Path) -> Path:
+        made = tmp_path / "output" / "a_song" / "ppbank"
+        made.mkdir(parents=True)
+        return made
+
+    def test_it_lists_what_this_run_wrote(self, tmp_path):
+        client, store, _ = _app(tmp_path)
+        made = self._folder(tmp_path)
+        (made / "a.conservative.mp3").write_bytes(b"x")
+        (made / "a.wild.mp3").write_bytes(b"y")
+        self._run(store, made, "2026-08-08T00:00:00+00:00")
+
+        names = [f["name"] for f in
+                 client.get("/jobs/abc/files", headers=_auth()).json()["files"]]
+
+        assert names == ["a.conservative.mp3", "a.wild.mp3"]
+
+    def test_it_does_not_claim_what_an_earlier_run_wrote(self, tmp_path):
+        import os
+        import time
+
+        client, store, _ = _app(tmp_path)
+        made = self._folder(tmp_path)
+        old = made / "a.wild.mim1p00.mp3"
+        old.write_bytes(b"older")
+        # An hour before this run started, which is what an earlier take is.
+        was = time.time() - 3600
+        os.utime(old, (was, was))
+        (made / "a.wild.mp3").write_bytes(b"mine")
+        self._run(store, made, _now_iso())
+
+        listed = client.get("/jobs/abc/files", headers=_auth()).json()["files"]
+
+        assert [f["name"] for f in listed] == ["a.wild.mp3"]
+
+    def test_it_will_not_hand_over_an_earlier_run_s_take_either(self, tmp_path):
+        """Otherwise the listing is a display detail and the route is still a
+        way to fetch anything in the folder."""
+        import os
+        import time
+
+        client, store, _ = _app(tmp_path)
+        made = self._folder(tmp_path)
+        old = made / "a.wild.mim1p00.mp3"
+        old.write_bytes(b"older")
+        was = time.time() - 3600
+        os.utime(old, (was, was))
+        (made / "a.wild.mp3").write_bytes(b"mine")
+        self._run(store, made, _now_iso())
+
+        answer = client.get("/jobs/abc/files/a.wild.mim1p00.mp3", headers=_auth())
+
+        assert answer.status_code == 404
 
 
 def test_cancelling_a_run_that_is_not_going_is_a_conflict(tmp_path):
