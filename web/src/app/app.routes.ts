@@ -33,7 +33,7 @@ export const routes: Routes = [
   },
   {
     path: 'admin',
-    title: 'Who may use this',
+    title: 'Admin Panel',
     loadComponent: () =>
       import('./features/admin/admin-page').then((m) => m.AdminPage),
   },

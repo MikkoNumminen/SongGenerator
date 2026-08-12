@@ -3,7 +3,6 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
-  OnInit,
   computed,
   inject,
   signal,
@@ -19,6 +18,7 @@ const DEMO = 'demo';
 
 import { ALLOWLIST } from '../../core/ports/allowlist.port';
 import { AUTH_CONTEXT } from '../../core/ports/auth-context.port';
+import { loadWhenSignedIn } from '../../core/auth/load-when-signed-in';
 import {
   AsyncState,
   empty,
@@ -46,7 +46,13 @@ import { StatePanel } from '../../shared/state-panel/state-panel';
   templateUrl: './admin-page.html',
   styleUrl: './admin-page.css',
 })
-export class AdminPage implements OnInit {
+export class AdminPage {
+
+  constructor() {
+    // Not ngOnInit: the identity arrives after the page does, and asking
+    // before it has is the 401 that used to leave a "Try again" button.
+    loadWhenSignedIn(() => this.load());
+  }
   private readonly allowlist = inject(ALLOWLIST);
   private readonly auth = inject(AUTH_CONTEXT, { optional: true });
   private readonly destroyRef = inject(DestroyRef);
@@ -104,10 +110,6 @@ export class AdminPage implements OnInit {
           this.problem.set(this.explain(failure));
         },
       });
-  }
-
-  ngOnInit(): void {
-    this.load();
   }
 
   load(): void {

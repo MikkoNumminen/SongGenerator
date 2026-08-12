@@ -127,36 +127,9 @@ import { AsyncState } from '../../core/state/async-state';
       stroke-linecap: round;
       stroke-linejoin: round;
     }
+    /* .bars is in the design system; only its colour is this panel's. */
     .bars {
-      display: flex;
-      align-items: flex-end;
-      gap: 2px;
-      height: 1rem;
-    }
-    .bars i {
-      width: 3px;
-      height: 100%;
-      border-radius: 2px;
-      background: var(--accent);
-      transform-origin: bottom;
-      animation: bounce 1s var(--ease) infinite alternate;
-    }
-    .bars i:nth-child(2) {
-      animation-delay: 0.12s;
-    }
-    .bars i:nth-child(3) {
-      animation-delay: 0.24s;
-    }
-    .bars i:nth-child(4) {
-      animation-delay: 0.36s;
-    }
-    @keyframes bounce {
-      from {
-        scale: 1 0.3;
-      }
-      to {
-        scale: 1 1;
-      }
+      color: var(--accent);
     }
   `,
 })

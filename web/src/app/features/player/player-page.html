@@ -23,13 +23,35 @@
     <!-- The one control that starts something on its own, because asking for
          a shuffle is already the instruction. -->
     <div class="shuffle">
+      <button
+        type="button"
+        class="btn btn--primary shuffle__go"
+        [disabled]="fetching() || !matching().length"
+        [attr.aria-label]="'Shuffle ' + matching().length + ' takes'"
+        (click)="shuffle()"
+      >
+        <!-- Drawn rather than typed: the shuffle character (U+2942) is missing
+             from the stack this page uses and renders as a box. -->
+        <svg class="glyph" viewBox="0 0 16 16" width="14" height="14"
+             fill="none" stroke="currentColor" stroke-width="1.6"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M1 4h3l7 8h4M1 12h3l7-8h4" />
+          <path d="M12.5 1.5 15 4l-2.5 2.5M12.5 9.5 15 12l-2.5 2.5" />
+        </svg>
+        Shuffle
+        <!-- The number belongs on the button rather than beside it: it is
+             what pressing this will play, and as a separate line of text it
+             was a second thing saying the same thing. -->
+        <span class="shuffle__count">{{ matching().length }}</span>
+      </button>
+
       <div class="filters">
         <!-- The design system's segmented control, the same one the submit
              page offers a level with. A select would fold four banks behind a
              closed box and hide what the choice even is. -->
         <div class="filter">
           <span class="label" id="pick-bank">Bank</span>
-          <div class="segmented segmented--verbatim" role="radiogroup" aria-labelledby="pick-bank">
+          <div class="segmented segmented--compact segmented--verbatim" role="radiogroup" aria-labelledby="pick-bank">
             <label class="seg">
               <input
                 type="radio"
@@ -55,7 +77,7 @@
 
         <div class="filter">
           <span class="label" id="pick-take">Take</span>
-          <div class="segmented" role="radiogroup" aria-labelledby="pick-take">
+          <div class="segmented segmented--compact" role="radiogroup" aria-labelledby="pick-take">
             <label class="seg">
               <input
                 type="radio"
@@ -80,27 +102,6 @@
         </div>
       </div>
 
-      <button
-        type="button"
-        class="btn btn--primary shuffle__go"
-        [disabled]="fetching() || !matching().length"
-        [attr.aria-label]="'Shuffle ' + matching().length + ' takes'"
-        (click)="shuffle()"
-      >
-        <!-- Drawn rather than typed: the shuffle character (U+2942) is missing
-             from the stack this page uses and renders as a box. -->
-        <svg class="glyph" viewBox="0 0 16 16" width="14" height="14"
-             fill="none" stroke="currentColor" stroke-width="1.6"
-             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M1 4h3l7 8h4M1 12h3l7-8h4" />
-          <path d="M12.5 1.5 15 4l-2.5 2.5M12.5 9.5 15 12l-2.5 2.5" />
-        </svg>
-        Shuffle
-        <!-- The number belongs on the button rather than beside it: it is
-             what pressing this will play, and as a separate line of text it
-             was a second thing saying the same thing. -->
-        <span class="shuffle__count">{{ matching().length }}</span>
-      </button>
     </div>
 
     @if (problem(); as message) {
@@ -155,7 +156,17 @@
                   @if (chosen) {
                     <div class="panel" animate.enter="panel-in">
                       @if (fetching()) {
-                        <p class="panel__busy" role="status">Fetching the audio...</p>
+                        <!-- Where the Play button was, the same size and the
+                             same place, so pressing it changes that button
+                             rather than emptying the row. A whole song has to
+                             come down the wire before anything can play, and
+                             on a sleeping desktop that is seconds. -->
+                        <p class="btn btn--quiet btn--sm panel__busy" role="status" aria-live="polite">
+                          <span class="bars" aria-hidden="true">
+                            <i></i><i></i><i></i><i></i>
+                          </span>
+                          Fetching the audio
+                        </p>
                       } @else if (source(); as url) {
                         <audio
                           class="panel__audio"

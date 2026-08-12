@@ -92,6 +92,39 @@ These do not run during a song. They turn source videos into reviewed clips.
 | `standardize.py` | Trim, fade and level a bank into a derivative tier beside it |
 | `arrange.py` | Cut words out of recorded phrases; build and replay arrangements |
 
+### The edge
+
+The pipeline is a command line tool and stays one. Everything below is a
+second tier that runs it on request, so that a browser can ask for a song
+without anyone opening a terminal, and so the machine that owns the GPU stays
+the only machine that renders anything.
+
+| Module | Does |
+|---|---|
+| `api/app/main.py` | The HTTP surface. Thin on purpose: routes, and the guards a route needs |
+| `api/app/auth.py` | Verifies a Google token and applies the policy. No network in its tests |
+| `api/app/users.py` | Who may use this edge, and who may decide that |
+| `api/app/jobs.py` | Starting a run, watching it, stopping it, remembering it happened |
+| `api/app/stages.py` | Which stage a run has reached, read from the lines the pipeline prints |
+| `api/app/store.py`, `api/app/db.py` | Jobs in SQLite, so history survives a restart |
+| `api/app/songs.py` | Turning a link into a file on disk the pipeline can read |
+| `api/app/banks.py` | Which banks exist here, and whether they can actually sing |
+| `api/app/config.py` | Environment-driven configuration |
+
+The edge never reimplements a pipeline decision. It starts the same command a
+person would type and reads its output, which is why `api/app/stages.py` parses printed
+lines rather than the pipeline reporting progress through an interface built
+for it: the printing existed first, for the person at the terminal, and a
+second channel would be a second thing to keep true.
+
+Authorisation is read per request rather than captured at startup. The owner
+grants and revokes from a browser, and a revocation that only took effect at
+the next restart of a desktop service would be a revocation in name.
+
+`web/` is the browser client and documents itself in `web/ARCHITECTURE.md`. It
+holds no rules of its own: what it may show, it may show because the edge
+answered.
+
 These are deliberately scripts rather than anything cleverer. Their inputs are
 enumerable and their work is deterministic, so there is no judgement to
 delegate. The one decision that does need judgement, whether a result sounds
@@ -185,10 +218,18 @@ undo that silently.
 | `words_hq.std/*.wav` | `standardize` | Trimmed, levelled derivatives | Yes |
 | `words_hq.std/standardized.json` | `standardize` | Each derivative's source and hash | Yes |
 | `words/candidates/*.wav` **unprefixed** | **a human** | **Reviewed clips** | **No** |
-| `output/*.mp3` | `cli` | The results | Yes |
+| `output/<song>/<bank>/*.mp3` | `cli` | The results, a folder per song and per bank | Yes |
+| `output/<song>/<bank>/previous/*.mp3` | `cli` | The take each rendering replaced, one generation back | **No** |
 | `input/SOURCES.md` | `fetch`, and a human | One row per song: slug, local file, address | **No** |
 
-Two rows cannot be regenerated. The reviewed clips are why no automatic pass
+A run writes into a folder per song and a folder per bank inside it, because
+flat it was nearly two hundred files whose names differed in nothing, and the
+same song from two banks silently overwrote itself. Before a rendering is
+written the file it replaces is moved into `previous/` beside it, and
+`--rollback` swaps the two back. One generation is kept, per song, per bank,
+per level.
+
+Three rows cannot be regenerated. The reviewed clips are why no automatic pass
 touches an unprefixed clip. The sources index is knowledge rather than
 computation: `fetch` appends a row for anything it downloads, but the address
 of a song that arrived any other way exists only in someone's memory, so a
