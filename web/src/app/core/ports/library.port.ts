@@ -14,9 +14,25 @@ import { LibraryReply } from '../contract/dto';
  * memory to play it costs nothing worth counting.
  */
 export interface Library {
+  /**
+   * Everything rendered, fetched once a session.
+   *
+   * Held afterwards, so moving between pages does not re-ask for a library
+   * that has not changed. Whoever asks first starts the request; whoever
+   * arrives later joins it or is answered from what is already in hand.
+   */
   list(): Observable<LibraryReply>;
 
   audio(song: string, bank: string, name: string): Observable<Blob>;
+
+  /**
+   * Throw away what is held, so the next ask fetches again.
+   *
+   * Called when a render finishes and when somebody signs out. Both are
+   * moments this application already knows about, which is why nothing here
+   * expires on a timer: an age would be a guess about the same two events.
+   */
+  forget(): void;
 }
 
 export const LIBRARY = new InjectionToken<Library>('Library');

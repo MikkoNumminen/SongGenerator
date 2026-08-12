@@ -7,6 +7,7 @@ import { JobReply } from '../../core/contract/dto';
 import { RUN_SOURCE, RunSource } from '../../core/ports/run-source.port';
 import { RunWatcher } from '../../core/runs/run-watcher';
 import { AsyncState, ready } from '../../core/state/async-state';
+import { LIBRARY } from '../../core/ports/library.port';
 import { RunPage } from './run-page';
 
 const job = (over: Partial<JobReply> = {}): JobReply => ({
@@ -47,6 +48,7 @@ describe('RunPage', () => {
     TestBed.configureTestingModule({
       imports: [RunPage],
       providers: [
+      { provide: LIBRARY, useValue: { forget: () => undefined } },
         { provide: RunWatcher, useValue: watcher },
         { provide: RUN_SOURCE, useValue: runs },
         { provide: ActivatedRoute, useValue: { paramMap: params.asObservable() } },

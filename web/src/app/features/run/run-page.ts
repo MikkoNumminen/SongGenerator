@@ -5,6 +5,7 @@ import {
   OnDestroy,
   OnInit,
   computed,
+  effect,
   inject,
   signal,
 } from '@angular/core';
@@ -13,6 +14,7 @@ import { ActivatedRoute } from '@angular/router';
 import { Subscription } from 'rxjs';
 
 import { JobReply } from '../../core/contract/dto';
+import { LIBRARY } from '../../core/ports/library.port';
 import { RUN_SOURCE } from '../../core/ports/run-source.port';
 import { RunWatcher } from '../../core/runs/run-watcher';
 import { AsyncState, idle, valueOf } from '../../core/state/async-state';
@@ -40,9 +42,21 @@ const ENDINGS = new Set(['done', 'failed', 'refused']);
   styleUrl: './run-page.css',
 })
 export class RunPage implements OnInit, OnDestroy {
+
+  constructor() {
+    effect(() => {
+      if (this.finished()) {
+        // A finished run is the one thing that makes the held library wrong:
+        // it has just added files to it. Told at the moment it happens rather
+        // than guessed at with an expiry.
+        this.library.forget();
+      }
+    });
+  }
   private readonly route = inject(ActivatedRoute);
   private readonly watcher = inject(RunWatcher);
   private readonly runs = inject(RUN_SOURCE);
+  private readonly library = inject(LIBRARY);
 
   private readonly destroyRef = inject(DestroyRef);
   private watching?: Subscription;
