@@ -23,29 +23,12 @@
     <!-- The one control that starts something on its own, because asking for
          a shuffle is already the instruction. -->
     <div class="shuffle">
-      <button
-        type="button"
-        class="btn btn--primary shuffle__go"
-        [disabled]="fetching() || !matching().length"
-        (click)="shuffle()"
-      >
-        <!-- Drawn rather than typed: the shuffle character (U+2942) is missing
-             from the stack this page uses and renders as a box. -->
-        <svg class="glyph" viewBox="0 0 16 16" width="14" height="14"
-             fill="none" stroke="currentColor" stroke-width="1.6"
-             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M1 4h3l7 8h4M1 12h3l7-8h4" />
-          <path d="M12.5 1.5 15 4l-2.5 2.5M12.5 9.5 15 12l-2.5 2.5" />
-        </svg>
-        Shuffle
-      </button>
-
       <div class="filters">
         <!-- The design system's segmented control, the same one the submit
              page offers a level with. A select would fold four banks behind a
              closed box and hide what the choice even is. -->
         <div class="filter">
-          <span class="filter__label" id="pick-bank">Bank</span>
+          <span class="label" id="pick-bank">Bank</span>
           <div class="segmented segmented--verbatim" role="radiogroup" aria-labelledby="pick-bank">
             <label class="seg">
               <input
@@ -71,7 +54,7 @@
         </div>
 
         <div class="filter">
-          <span class="filter__label" id="pick-take">Take</span>
+          <span class="label" id="pick-take">Take</span>
           <div class="segmented" role="radiogroup" aria-labelledby="pick-take">
             <label class="seg">
               <input
@@ -97,7 +80,27 @@
         </div>
       </div>
 
-      <p class="shuffle__count">{{ matching().length }} to play</p>
+      <button
+        type="button"
+        class="btn btn--primary shuffle__go"
+        [disabled]="fetching() || !matching().length"
+        [attr.aria-label]="'Shuffle ' + matching().length + ' takes'"
+        (click)="shuffle()"
+      >
+        <!-- Drawn rather than typed: the shuffle character (U+2942) is missing
+             from the stack this page uses and renders as a box. -->
+        <svg class="glyph" viewBox="0 0 16 16" width="14" height="14"
+             fill="none" stroke="currentColor" stroke-width="1.6"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M1 4h3l7 8h4M1 12h3l7-8h4" />
+          <path d="M12.5 1.5 15 4l-2.5 2.5M12.5 9.5 15 12l-2.5 2.5" />
+        </svg>
+        Shuffle
+        <!-- The number belongs on the button rather than beside it: it is
+             what pressing this will play, and as a separate line of text it
+             was a second thing saying the same thing. -->
+        <span class="shuffle__count">{{ matching().length }}</span>
+      </button>
     </div>
 
     @if (problem(); as message) {
@@ -119,7 +122,7 @@
               <span class="song__name">{{ group.title }}</span>
               <!-- The folder that desktop actually uses. Shown for the open
                    song only; thirty of them at once is a second list. -->
-              <span class="song__slug">{{ group.song }}</span>
+              <span class="song__slug mono">{{ group.song }}</span>
             </span>
             <span class="song__dots" aria-hidden="true">
               @for (take of group.takes; track take.bank + '/' + take.name) {
