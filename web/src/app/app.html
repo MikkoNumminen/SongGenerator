@@ -76,7 +76,7 @@
   <!-- Signed in and not admitted. The routed pages would each refuse in their
        own words, so this stands in front of all of them and says the one true
        thing once, with the only action there is. -->
-  @if (member.refused()) {
+  @if (locked()) {
     <section class="locked">
       <h1>This machine does not know you yet</h1>
       <p>

@@ -6,16 +6,25 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import {
+  NavigationEnd,
+  Router,
+  RouterLink,
+  RouterLinkActive,
+  RouterOutlet,
+} from '@angular/router';
 
 import { IdleSignOut } from './core/auth/idle-sign-out';
 import { Membership } from './core/auth/membership';
+import { standInFront } from './core/auth/stand-in-front';
 import { ACCESS_REQUESTS } from './core/ports/access-requests.port';
 import { Prime } from './core/data/prime';
 import { BackendHealth } from './core/health/backend-health';
 import { GoogleSignIn } from './core/auth/google-sign-in';
 import { AUTH_CONTEXT } from './core/ports/auth-context.port';
 import { ThemeToggle } from './shared/theme/theme-toggle';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { filter, map } from 'rxjs';
 
 /**
  * The one-line answer to "is the machine on", as a colour and three words.
@@ -41,6 +50,34 @@ export class App implements OnInit {
   private readonly idle = inject(IdleSignOut);
   /** Read by the template, so the bar shows only what is usable. */
   protected readonly member = inject(Membership);
+  private readonly router = inject(Router);
+
+  /**
+   * Where the router is, as a signal.
+   *
+   * Needed because one route is meant for people this machine has not admitted
+   * yet, and standing the refusal in front of it would hide the page that
+   * admits them.
+   */
+  private readonly url = toSignal(
+    this.router.events.pipe(
+      filter((event) => event instanceof NavigationEnd),
+      map(() => this.router.url),
+    ),
+    { initialValue: this.router.url },
+  );
+
+  /**
+   * Whether to stand the refusal in front of the routed page.
+   *
+   * Not on an invitation. Somebody opening one is refused by every other route
+   * on the way in, which is exactly the state the invitation exists to end, so
+   * covering that page with "this machine does not know you" would hide the
+   * one thing that would have let them in.
+   */
+  protected readonly locked = computed(() =>
+    standInFront(this.member.refused(), this.url()),
+  );
   private readonly access = inject(ACCESS_REQUESTS);
 
   /** Set while asking, and once it has been asked, for this session. */

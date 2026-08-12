@@ -25,6 +25,12 @@ export const attachBearerToken: HttpInterceptorFn = (request, next) => {
 
   const goingToTheEdge = baseUrl !== '' && request.url.startsWith(baseUrl);
   const isHealth = request.url === `${baseUrl}/health`;
+  // Routes that answer a stranger on purpose, so their answer says nothing
+  // about whether this account has been admitted. Asking for access is the
+  // one that mattered: it answers 202, and counting that as a success marked
+  // the person admitted the instant they asked, which took away the very
+  // screen they were standing on.
+  const provesNothing = request.url.startsWith(`${baseUrl}/access-requests`);
   const token = auth?.token() ?? null;
 
   if (!goingToTheEdge || isHealth || token === null) {
@@ -34,9 +40,13 @@ export const attachBearerToken: HttpInterceptorFn = (request, next) => {
   // requests being made anyway, rather than by asking a question of its own.
   // Every route but /health refuses a stranger, so the first one to come back
   // settles it.
-  return next(
+  const carried = next(
     request.clone({ setHeaders: { Authorization: `Bearer ${token}` } }),
-  ).pipe(
+  );
+  if (provesNothing) {
+    return carried;
+  }
+  return carried.pipe(
     tap({
       next: (event) => {
         const status = (event as { status?: number }).status;
