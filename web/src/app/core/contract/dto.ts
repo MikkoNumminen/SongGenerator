@@ -151,7 +151,7 @@ export interface SubmitBody {
   bank: string;
   engine?: string | null;
   level?: string | null;
-  mimicry?: number | null;
+  mimicry?: number;
   source_url: string;
 }
 

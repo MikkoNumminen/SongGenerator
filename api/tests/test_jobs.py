@@ -281,3 +281,28 @@ def test_a_quick_run_ends_settled_in_the_record(tmp_path):
 
     assert seen[-1].settled is True
     assert seen[-1].stage is Stage.DONE
+
+
+def test_the_site_renders_one_rung_rather_than_the_whole_sweep():
+    """The pipeline's own default is seven rungs, which is right at a terminal
+    where somebody is comparing them by ear. Through the site nobody asked for
+    seven: the machine spends a GPU on all of them and one song arrives as
+    fourteen near-identical rows in a library that already holds hundreds."""
+    from app.main import FULL_MIMICRY, SubmitBody
+
+    asked = SubmitBody(source_url="https://example.invalid/x", bank="ppbank")
+
+    assert asked.mimicry == FULL_MIMICRY == 1.0
+
+
+def test_the_rung_still_reaches_the_command_line():
+    from app.jobs import JobRequest, render_command
+    from pathlib import Path
+
+    cmd = render_command("python", JobRequest(
+        requested_by="owner@example.invalid",
+        source_url="https://example.invalid/x",
+        bank="ppbank", mimicry=1.0), Path("song.mp4"))
+
+    assert "--mimicry" in cmd
+    assert cmd[cmd.index("--mimicry") + 1] == "1"
