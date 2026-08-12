@@ -9,8 +9,8 @@ analyses, re-pitches, re-times and mixes them.
 
 **Web player:** <https://mikkonumminen.dev/songgenerator>. Sign in with Google to
 play what has already been rendered; the administrator account also grants and
-revokes access from the same page. The rendering still happens on the local GPU,
-so the player answers only while that machine is on.
+revokes access, from the "Who may use this" page. The rendering still happens on
+the local GPU, so the player answers only while that machine is on.
 
 ```powershell
 .\.venv\Scripts\song-generator.exe input\song.mp4
