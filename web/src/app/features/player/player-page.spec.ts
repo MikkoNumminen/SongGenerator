@@ -221,6 +221,27 @@ describe('the player', () => {
     expect(songs.map((s) => s.song)).toEqual(['musicHyva', 'ukkometso']);
   });
 
+  it('narrows the shuffle from the control itself', async () => {
+    // Driven through the DOM rather than by calling the method, because the
+    // binding between the two is the part that can come undone.
+    const fixture = await render(library);
+    const everything = fixture.componentInstance.matching().length;
+
+    const radios: HTMLInputElement[] = Array.from(
+      fixture.nativeElement.querySelectorAll('input[name="level"]'),
+    );
+    const wild = radios.find(
+      (r) => r.closest('label')?.getAttribute('data-level') === 'wild',
+    );
+    expect(wild).toBeTruthy();
+
+    wild!.click();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.level()).toBe('wild');
+    expect(fixture.componentInstance.matching().length).toBeLessThan(everything);
+  });
+
   it('narrows the shuffle by bank and by level', async () => {
     const fixture = await render(library);
     const page = fixture.componentInstance;

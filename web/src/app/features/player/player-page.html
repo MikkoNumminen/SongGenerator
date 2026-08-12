@@ -40,58 +40,58 @@
         Shuffle
       </button>
 
-      <div class="picks">
-        <!-- Segmented rather than a dropdown: there are four banks and two
-             levels, and a closed select hides what the choice even is. -->
-        <div class="pick">
-          <span class="pick__label" id="pick-bank">Bank</span>
-          <div class="seg" role="group" aria-labelledby="pick-bank">
-            <button
-              type="button"
-              class="seg__opt"
-              [class.seg__opt--on]="bank() === ANY"
-              [attr.aria-pressed]="bank() === ANY"
-              (click)="chooseBank(ANY)"
-            >
-              all
-            </button>
+      <div class="filters">
+        <!-- The design system's segmented control, the same one the submit
+             page offers a level with. A select would fold four banks behind a
+             closed box and hide what the choice even is. -->
+        <div class="filter">
+          <span class="filter__label" id="pick-bank">Bank</span>
+          <div class="segmented segmented--verbatim" role="radiogroup" aria-labelledby="pick-bank">
+            <label class="seg">
+              <input
+                type="radio"
+                name="bank"
+                [checked]="bank() === ANY"
+                (change)="chooseBank(ANY)"
+              />
+              <span>all</span>
+            </label>
             @for (b of banks(); track b) {
-              <button
-                type="button"
-                class="seg__opt"
-                [class.seg__opt--on]="bank() === b"
-                [attr.aria-pressed]="bank() === b"
-                (click)="chooseBank(b)"
-              >
-                {{ b }}
-              </button>
+              <label class="seg">
+                <input
+                  type="radio"
+                  name="bank"
+                  [checked]="bank() === b"
+                  (change)="chooseBank(b)"
+                />
+                <span>{{ b }}</span>
+              </label>
             }
           </div>
         </div>
 
-        <div class="pick">
-          <span class="pick__label" id="pick-take">Take</span>
-          <div class="seg" role="group" aria-labelledby="pick-take">
-            <button
-              type="button"
-              class="seg__opt"
-              [class.seg__opt--on]="level() === ANY"
-              [attr.aria-pressed]="level() === ANY"
-              (click)="chooseLevel(ANY)"
-            >
-              either
-            </button>
+        <div class="filter">
+          <span class="filter__label" id="pick-take">Take</span>
+          <div class="segmented" role="radiogroup" aria-labelledby="pick-take">
+            <label class="seg">
+              <input
+                type="radio"
+                name="level"
+                [checked]="level() === ANY"
+                (change)="chooseLevel(ANY)"
+              />
+              <span>either</span>
+            </label>
             @for (l of levels(); track l) {
-              <button
-                type="button"
-                class="seg__opt"
-                [class]="'seg__opt seg__opt--' + l"
-                [class.seg__opt--on]="level() === l"
-                [attr.aria-pressed]="level() === l"
-                (click)="chooseLevel(l)"
-              >
-                {{ l }}
-              </button>
+              <label class="seg" [attr.data-level]="l">
+                <input
+                  type="radio"
+                  name="level"
+                  [checked]="level() === l"
+                  (change)="chooseLevel(l)"
+                />
+                <span>{{ l }}</span>
+              </label>
             }
           </div>
         </div>
@@ -123,7 +123,7 @@
             </span>
             <span class="song__dots" aria-hidden="true">
               @for (take of group.takes; track take.bank + '/' + take.name) {
-                <i class="dot" [class]="'dot dot--' + (take.level ?? 'take')"></i>
+                <i [class]="'dot dot--' + (take.level ?? 'take')"></i>
               }
             </span>
             <span class="song__count">{{ group.takes.length }}</span>
@@ -142,8 +142,7 @@
                     (click)="select(take)"
                   >
                     <span
-                      class="chip"
-                      [class]="'chip chip--' + (take.level ?? 'take')"
+                      [class]="'badge badge--' + (take.level ?? 'take')"
                     >{{ take.level ?? 'take' }}</span>
                     <span class="take__bank">{{ take.bank }}</span>
                     <span class="take__size">{{ size(take.bytes) }}</span>
