@@ -63,6 +63,16 @@ describe('fetching once there is somebody to fetch for', () => {
     expect(fixture.componentInstance.loads).toBe(2);
   });
 
+  it('asks once when there is no auth context at all', () => {
+    // The admin page has always tolerated its absence, and a helper it calls
+    // should not quietly make one of its dependencies required.
+    TestBed.configureTestingModule({ imports: [Probe] });
+    const fixture = TestBed.createComponent(Probe);
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.loads).toBe(1);
+  });
+
   it('asks once where sign-in is not set up at all', () => {
     // A clone with no client id is a working deployment with nobody to wait
     // for, not a broken one.

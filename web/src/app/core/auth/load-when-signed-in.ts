@@ -20,16 +20,19 @@ import { AUTH_CONTEXT } from '../ports/auth-context.port';
  * context, and effects are torn down with the component that made them.
  */
 export function loadWhenSignedIn(load: () => void): void {
-  const auth = inject(AUTH_CONTEXT);
+  // Optional, because the admin page has always tolerated its absence and a
+  // helper it calls should not quietly make one of its dependencies required.
+  const auth = inject(AUTH_CONTEXT, { optional: true });
   let loadedFor: string | null | undefined;
 
   effect(() => {
-    const who = auth.user()?.email ?? null;
+    const who = auth?.user()?.email ?? null;
 
-    // Where sign-in is not configured at all there is nobody to wait for, and
-    // the page should ask once and show whatever the edge says. A clone with
-    // no client id is a working read-only deployment, not a broken one.
-    if (!auth.configured) {
+    // Where sign-in is not configured at all, or there is nobody to ask, there
+    // is nobody to wait for: the page should ask once and show whatever the
+    // edge says. A clone with no client id is a working read-only deployment,
+    // not a broken one.
+    if (!auth?.configured) {
       if (loadedFor === undefined) {
         loadedFor = null;
         load();
