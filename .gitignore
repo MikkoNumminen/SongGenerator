@@ -25,6 +25,10 @@
 input/
 output/
 
+# The demo library: the same kind of thing as output/, chosen by hand rather
+# than rendered, and still somebody else's recordings underneath.
+output-demo/
+
 # Cached stems and analysis: large, and rebuilt from the input on demand.
 work/
 
@@ -112,6 +116,13 @@ src/song_generator/vocabulary_local.py
 # Written per deployment, and per machine in development. See
 # web/public/config.example.json.
 web/public/config.json
+
+# The edge's settings. Holds a Google client id and the addresses that
+# administer this deployment, and this repository is public. See
+# api/.env.example for the shape.
+.env
+*.env
+!*.env.example
 
 # Wrangler's local state. Its account cache carries a Cloudflare account id and
 # the account holder's email, and this repository is public. Ignored rather

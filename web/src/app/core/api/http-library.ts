@@ -3,6 +3,7 @@ import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
 import { LibraryReply } from '../contract/dto';
+import { Kept } from '../data/kept';
 import { Library } from '../ports/library.port';
 import { API_BASE_URL } from './api-config';
 
@@ -12,8 +13,21 @@ export class HttpLibrary implements Library {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = inject(API_BASE_URL);
 
+  /** Fetched once a session. A render finishing is what makes it stale. */
+  private readonly kept = new Kept<LibraryReply>(() =>
+    this.http.get<LibraryReply>(`${this.baseUrl}/library`));
+
   list(): Observable<LibraryReply> {
-    return this.http.get<LibraryReply>(`${this.baseUrl}/library`);
+    return this.kept.get();
+  }
+
+  /** Whether a caller can draw immediately instead of showing a wait. */
+  get ready(): boolean {
+    return this.kept.ready;
+  }
+
+  forget(): void {
+    this.kept.forget();
   }
 
   audio(song: string, bank: string, name: string): Observable<Blob> {
