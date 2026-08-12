@@ -606,10 +606,16 @@ def create_app(
 
     @app.get("/library")
     def library(who: Caller) -> LibraryReply:
+        def described(song: str, bank: str, path: Path) -> TrackReply:
+            # One stat, not one per field. The library is two hundred files on
+            # a spinning disk and this route is called on every page load.
+            found = path.stat()
+            return TrackReply(song=song, bank=bank, level=_level_of(path),
+                              name=path.name, bytes=found.st_size,
+                              modified_at=found.st_mtime)
+
         return LibraryReply(tracks=[
-            TrackReply(song=song, bank=bank, level=_level_of(path),
-                       name=path.name, bytes=path.stat().st_size,
-                       modified_at=path.stat().st_mtime)
+            described(song, bank, path)
             for song, bank, path in _library_tracks(
                 None if sees_everything(who) else granted_to(who))
         ])

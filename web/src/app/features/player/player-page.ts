@@ -173,10 +173,12 @@ export class PlayerPage implements OnDestroy {
       newest: Math.max(...takes.map((take) => take.modified_at)),
     }));
     return this.order() === 'name'
-      // Compared with the locale's own rules, so a Finnish reader finds ä
-      // where they expect it rather than after z.
-      ? groups.sort((a, b) =>
-          a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }))
+      // Finnish collation, named rather than left to the browser: half these
+      // songs are Finnish and the alphabet puts ä and ö after z. The default
+      // rules sort Ähtäri under A, which is where a Finnish reader would
+      // never look for it. Naming the locale also keeps the order the same
+      // whatever language the browser happens to be set to.
+      ? groups.sort((a, b) => a.title.localeCompare(b.title, 'fi'))
       : groups.sort((a, b) => b.newest - a.newest);
   });
 

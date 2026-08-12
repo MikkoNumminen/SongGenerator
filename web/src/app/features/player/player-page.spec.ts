@@ -250,6 +250,24 @@ describe('the player', () => {
       .toEqual(['Music Hyva', 'Ukkometso']);
   });
 
+  it('puts a and o with umlauts after z, where Finnish keeps them', async () => {
+    // The default collation sorts Ahtari-with-an-umlaut under A, which is
+    // where a Finnish reader would never look for it. Half these songs are
+    // Finnish, so the locale is named rather than left to the browser.
+    const finnish = new FakeLibrary([
+      track('ähtäri', 'nbank', 'wild'),
+      track('baarikärpänen', 'nbank', 'wild'),
+      track('ukkometso', 'nbank', 'wild'),
+    ]);
+    const fixture = await render(finnish);
+
+    fixture.componentInstance.choose('name');
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.songs().map((s) => s.song))
+      .toEqual(['baarikärpänen', 'ukkometso', 'ähtäri']);
+  });
+
   it('takes a song to be as new as its newest take', async () => {
     // Re-rendering one moves the song, which is what "the one I just made"
     // means to somebody looking for it.
