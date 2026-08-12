@@ -111,6 +111,30 @@ class BankReply(BaseModel):
     usable: bool
 
 
+def _is_one_name(value: str) -> bool:
+    """Whether a path component is a single ordinary name.
+
+    The library route addresses a file by song, bank and name, and resolving
+    the join and checking it is still under the output root is what contains
+    it. That check is sound for a forward slash, which cannot get in anyway:
+    FastAPI matches a path parameter with `[^/]+`.
+
+    A BACKSLASH gets straight through it, and on Windows, which is where this
+    runs, pathlib treats one as a separator. `..%5C..%5Cother%5Cbank%5Ct.mp3`
+    as the name resolved into a different bank's folder that is still inside
+    output/, still ends in .mp3 and still exists, so every condition held and
+    one grant of any bank read the whole library, including the folders an
+    administrator is the only one meant to see.
+
+    Checked per component rather than on the joined path, because the join is
+    where the spelling stops being visible. The colon is refused for the same
+    family of reasons: on Windows it introduces a drive or an alternate data
+    stream, neither of which is a rendering.
+    """
+    return bool(value) and value not in (".", "..") and not any(
+        bad in value for bad in ("/", "\\", ":"))
+
+
 #: Where the demo library lives, beside `output/` on the same machine.
 DEMO_DIR = "output-demo"
 
@@ -636,6 +660,13 @@ def create_app(
         really lands rather than how it was spelled.
         """
         from fastapi.responses import FileResponse
+
+        # Every part has to be an ordinary name before any of it is joined.
+        # See _is_one_name: resolving and comparing against the root is not
+        # enough on its own, because a backslash inside one component lands
+        # somewhere else that is still inside the root.
+        if not all(_is_one_name(part) for part in (song, bank, name)):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "no such track")
 
         # Checked before the path is built, so a library nobody granted is
         # not merely absent from the listing.

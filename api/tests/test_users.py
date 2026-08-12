@@ -857,3 +857,33 @@ class TestAFolderThatIsNoLongerABank:
         assert guest.get("/library", headers=AUTH).json()["tracks"] == []
         assert guest.get("/library/a_song/AB-syllables/a_song.wild.mp3",
                          headers=AUTH).status_code == 404
+
+    def test_a_backslash_does_not_walk_out_of_the_bank_it_was_granted(
+            self, tmp_path):
+        """The grant names a bank, so the path must not be able to leave it.
+
+        Resolving the join and checking it is still under output/ passes here:
+        the escape lands in another folder of the same library. It was reached
+        by spelling a separator as %5C, which the server unquotes before
+        routing and Windows pathlib then treats as a directory separator, so
+        one grant of any real bank read every rendering on the machine.
+        """
+        self._retired(tmp_path)
+        granted = tmp_path / "output" / "a_song" / "ppbank"
+        granted.mkdir(parents=True, exist_ok=True)
+        (granted / "a_song.wild.mp3").write_bytes(b"granted")
+
+        admin, _ = _app(tmp_path, ADMIN)
+        admin.post("/users", json={"email": GUEST}, headers=AUTH)
+        admin.put(f"/users/{GUEST}/banks", json={"banks": ["ppbank"]},
+                  headers=AUTH)
+
+        guest, _ = _app(tmp_path, GUEST)
+
+        assert guest.get("/library/a_song/ppbank/a_song.wild.mp3",
+                         headers=AUTH).content == b"granted"
+        escaped = guest.get(
+            "/library/a_song/ppbank/..%5CAB-syllables%5Ca_song.wild.mp3",
+            headers=AUTH)
+        assert escaped.status_code == 404
+        assert b"still mine" not in escaped.content

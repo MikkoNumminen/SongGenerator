@@ -104,6 +104,56 @@ def test_a_run_walks_the_stages_and_ends_done(tmp_path):
     assert runner.current is not None and runner.current.exit_code == 0
 
 
+def test_a_finished_run_remembers_where_it_wrote(tmp_path):
+    """Otherwise nothing can offer what the run produced.
+
+    output_dir was declared, stored and read, and never once assigned, so
+    /jobs/{id}/files answered with an empty list for every run there has ever
+    been and the box that lists a run's takes had nothing to show.
+    """
+    runner, _ = _runner()
+    made = tmp_path / "output" / "a_song" / "ppbank"
+    made.mkdir(parents=True)
+    runner.start(REQUEST, tmp_path / "song.mp4", tmp_path, dict(os.environ),
+                 command=_stub(f"print(r'  wrote 2 versions to {made}')"))
+
+    assert _wait_until(lambda: not runner.busy)
+    assert runner.current is not None
+    assert Path(runner.current.output_dir or "") == made
+    # The song is the folder above the bank, which is how output/ is laid out.
+    assert runner.current.song == "a_song"
+
+
+def test_the_folder_is_found_when_only_one_rendering_was_written(tmp_path):
+    """`--play wild` writes one file, and the pipeline then names the file
+    rather than the folder it went in."""
+    runner, _ = _runner()
+    made = tmp_path / "output" / "a_song" / "ppbank"
+    made.mkdir(parents=True)
+    one = made / "a_song.wild.mp3"
+    runner.start(REQUEST, tmp_path / "song.mp4", tmp_path, dict(os.environ),
+                 command=_stub(f"print(r'  wrote     {one}')"))
+
+    assert _wait_until(lambda: not runner.busy)
+    assert runner.current is not None
+    assert Path(runner.current.output_dir or "") == made
+
+
+def test_a_folder_printed_relative_is_read_against_the_run_directory(tmp_path):
+    """The pipeline prints the folder as it spelled it, which is relative when
+    nothing resolved it. The edge answers from its own directory, which is not
+    required to be the one the run was started in."""
+    runner, _ = _runner()
+    (tmp_path / "output" / "a_song" / "ppbank").mkdir(parents=True)
+    runner.start(REQUEST, tmp_path / "song.mp4", tmp_path, dict(os.environ),
+                 command=_stub("print(r'  wrote 2 versions to output\\\\a_song\\\\ppbank')"))
+
+    assert _wait_until(lambda: not runner.busy)
+    assert runner.current is not None
+    assert Path(runner.current.output_dir or "") == \
+        (tmp_path / "output" / "a_song" / "ppbank").resolve()
+
+
 def test_a_song_with_no_vocal_is_refused_not_failed(tmp_path):
     """Exit 3 is the pipeline's mode B. It is a normal answer about the song,
     and the UI needs to say something different from `it broke`."""
