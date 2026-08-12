@@ -33,13 +33,15 @@ from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
-from .auth import AuthError, Principal, google_verifier, verify
+from .auth import (AuthError, Principal, google_verifier, verify,
+                   verify_identity)
 from .banks import catalog
 from .config import Settings, load_settings
 from .jobs import Job, JobRequest, JobRunner
 from .songs import SongError, prepare
 from .store import JobStore, open_store
-from .users import ALL, DEMO, UserStore, open_users
+from .users import (ALL, DEMO, InvitationStore, UserStore,
+                    open_invitations, open_users)
 
 # Levels the pipeline offers. Read from its config at wiring time rather than
 # hardcoded, so a level added there does not need editing here too.
@@ -99,6 +101,10 @@ class BankReply(BaseModel):
 
 #: Where the demo library lives, beside `output/` on the same machine.
 DEMO_DIR = "output-demo"
+
+#: How long an invitation stays usable. Long enough to be read at leisure,
+#: short enough that a link forgotten in a chat window stops working.
+INVITATION_DAYS = 7
 
 
 class BanksReply(BaseModel):
@@ -189,6 +195,24 @@ class RunsVisibilityRequest(BaseModel):
     see_all_runs: bool
 
 
+class InvitationReply(BaseModel):
+    token: str
+    created_at: str
+    created_by: str
+    expires_at: str
+    used_at: str | None = None
+    used_by: str | None = None
+
+
+class InvitationsReply(BaseModel):
+    invitations: list[InvitationReply]
+
+
+class AcceptedReply(BaseModel):
+    email: str
+    banks: list[str]
+
+
 class UsersReply(BaseModel):
     users: list[UserReply]
     #: Everything that can be granted, so the panel can offer the boxes
@@ -233,6 +257,7 @@ def create_app(
     runner: JobRunner,
     store: JobStore,
     users: UserStore,
+    invitations: InvitationStore,
     banks: dict[str, str],
     standardised_suffix: str,
     levels: tuple[str, ...],
@@ -622,6 +647,84 @@ def create_app(
         kept = {b.strip() for b in asked if b.strip() in every}
         return frozenset(kept) or frozenset({DEMO})
 
+    def _invitation_payload(inv) -> InvitationReply:
+        return InvitationReply(token=inv.token, created_at=inv.created_at,
+                               created_by=inv.created_by,
+                               expires_at=inv.expires_at,
+                               used_at=inv.used_at, used_by=inv.used_by)
+
+    @app.get("/invitations")
+    def list_invitations(_: Admin) -> InvitationsReply:
+        return InvitationsReply(
+            invitations=[_invitation_payload(i) for i in invitations.all()])
+
+    @app.post("/invitations", status_code=status.HTTP_201_CREATED)
+    def invite(who: Admin) -> InvitationReply:
+        """A link that admits exactly one account, to the demo library.
+
+        What it grants is not a parameter. A link that could be made to grant
+        more would be a link worth stealing.
+        """
+        from datetime import datetime, timedelta
+
+        now = datetime.now(UTC)
+        made = invitations.create(
+            created_by=who.email,
+            at=now.isoformat(timespec="seconds"),
+            expires_at=(now + timedelta(days=INVITATION_DAYS))
+            .isoformat(timespec="seconds"))
+        return _invitation_payload(made)
+
+    @app.delete("/invitations/{token}")
+    def withdraw(token: str, _: Admin) -> InvitationsReply:
+        if not invitations.revoke(token):
+            raise HTTPException(status.HTTP_404_NOT_FOUND,
+                                "no unused invitation with that link")
+        return InvitationsReply(
+            invitations=[_invitation_payload(i) for i in invitations.all()])
+
+    @app.post("/invitations/{token}/accept")
+    def accept(token: str, request: Request) -> AcceptedReply:
+        """Redeem an invitation.
+
+        The only route that admits somebody not already on the allowlist, so
+        every other check is kept and only that one is skipped. A real Google
+        token is still required and still checked for issuer, audience and a
+        verified address: the invitation says a stranger may join, not that
+        anybody may claim to be anyone.
+
+        The address admitted is the one Google verified, never one the caller
+        supplies, so a link cannot be redeemed on somebody else's behalf.
+        """
+        from datetime import datetime
+
+        header = request.headers.get("Authorization", "")
+        bearer = header[7:].strip() if header.lower().startswith("bearer ") else ""
+        try:
+            newcomer = verify_identity(bearer, settings.google_client_id, verifier)
+        except AuthError as exc:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(exc)) from exc
+
+        found = invitations.find(token)
+        now = datetime.now(UTC)
+        # One refusal for every reason, so a caller cannot learn which links
+        # exist from the wording of the answer.
+        if (found is None or found.spent()
+                or found.expires_at < now.isoformat(timespec="seconds")):
+            raise HTTPException(status.HTTP_404_NOT_FOUND,
+                                "that invitation is not usable")
+
+        stamp = now.isoformat(timespec="seconds")
+        # Spent first. If the grant then fails, an unusable link is a smaller
+        # problem than a link that can be spent twice.
+        if not invitations.spend(token, by=newcomer.email, at=stamp):
+            raise HTTPException(status.HTTP_404_NOT_FOUND,
+                                "that invitation is not usable")
+        users.add(newcomer.email, added_by=f"invitation from {found.created_by}",
+                  at=stamp, banks={DEMO})
+        return AcceptedReply(email=newcomer.email,
+                             banks=sorted(users.banks_for(newcomer.email)))
+
     @app.put("/users/{email}/runs")
     def set_runs_visibility(email: str, body: RunsVisibilityRequest,
                             _: Admin) -> UsersReply:
@@ -709,6 +812,7 @@ def build() -> FastAPI:
     # without anybody being told to do something.
     users = open_users(store.connection)
     users.seed(settings.allowed_emails, at=now)
+    invitations = open_invitations(store.connection)
 
     runner = JobRunner(on_update=store.save)
 
@@ -721,6 +825,7 @@ def build() -> FastAPI:
         runner=runner,
         store=store,
         users=users,
+        invitations=invitations,
         banks=dict(pipeline_config.BANKS),
         standardised_suffix=pipeline_config.STD_SUFFIX,
         levels=tuple(pipeline_config.PLAY_LEVELS),

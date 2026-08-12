@@ -4,7 +4,12 @@ import { Observable, of, throwError } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { API_BASE_URL } from '../../core/api/api-config';
-import { UserReply, UsersReply } from '../../core/contract/dto';
+import {
+  InvitationReply,
+  InvitationsReply,
+  UserReply,
+  UsersReply,
+} from '../../core/contract/dto';
 import { ALLOWLIST, Allowlist } from '../../core/ports/allowlist.port';
 import { AUTH_CONTEXT } from '../../core/ports/auth-context.port';
 import { fakeAuth } from '../../core/auth/fake-auth';
@@ -35,6 +40,7 @@ class FakeAllowlist implements Allowlist {
   grantedBanks: string[][] = [];
   setFor: [string, string[]][] = [];
   runsSetFor: [string, boolean][] = [];
+  links: InvitationReply[] = [];
   revoked: string[] = [];
   failListWith: HttpErrorResponse | null = null;
   failWriteWith: HttpErrorResponse | null = null;
@@ -59,6 +65,31 @@ class FakeAllowlist implements Allowlist {
       banks: [...(banks ?? ['demo'])],
       see_all_runs: false,
     });
+  }
+
+  invitations(): Observable<InvitationsReply> {
+    return of({ invitations: this.links });
+  }
+
+  invite(): Observable<InvitationReply> {
+    if (this.failWriteWith) {
+      return throwError(() => this.failWriteWith);
+    }
+    const made = {
+      token: `link-${this.links.length + 1}`,
+      created_at: 'now',
+      created_by: OWNER,
+      expires_at: 'later',
+      used_at: null,
+      used_by: null,
+    };
+    this.links = [made, ...this.links];
+    return of(made);
+  }
+
+  withdraw(token: string): Observable<InvitationsReply> {
+    this.links = this.links.filter((l) => l.token !== token);
+    return of({ invitations: this.links });
   }
 
   setSeesAllRuns(email: string, seeAll: boolean): Observable<UsersReply> {

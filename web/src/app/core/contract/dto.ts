@@ -9,6 +9,11 @@
 // A hand-edit here is a lie about what the server sends, and it will be
 // overwritten. Change the Python model instead.
 
+export interface AcceptedReply {
+  banks: Array<string>;
+  email: string;
+}
+
 /**
  * One bank, as `banks.BankInfo` reports it plus the derived verdict.
  */
@@ -70,6 +75,19 @@ export interface HealthReply {
 
 export interface HistoryReply {
   jobs: Array<JobReply>;
+}
+
+export interface InvitationReply {
+  created_at: string;
+  created_by: string;
+  expires_at: string;
+  token: string;
+  used_at?: string | null;
+  used_by?: string | null;
+}
+
+export interface InvitationsReply {
+  invitations: Array<InvitationReply>;
 }
 
 /**

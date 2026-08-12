@@ -1,0 +1,58 @@
+.invite {
+  display: grid;
+  gap: var(--space-5);
+  max-width: 34rem;
+  margin-inline: auto;
+  padding-block: var(--space-5);
+}
+
+.head {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--accent-text);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.head h1 {
+  margin: 0;
+  font-size: var(--text-xl);
+  letter-spacing: -0.02em;
+}
+
+.card {
+  display: grid;
+  gap: var(--space-3);
+  justify-items: start;
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm), var(--sheen);
+}
+
+.card p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+/* Waiting is a row, not a stack: the bars belong beside the sentence. */
+.card--waiting {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.done {
+  color: var(--text) !important;
+  font-size: var(--text-lg);
+  font-weight: 700;
+}

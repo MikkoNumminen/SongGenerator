@@ -1,6 +1,27 @@
 {
   "components": {
     "schemas": {
+      "AcceptedReply": {
+        "properties": {
+          "banks": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Banks",
+            "type": "array"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "banks"
+        ],
+        "title": "AcceptedReply",
+        "type": "object"
+      },
       "BankReply": {
         "description": "One bank, as `banks.BankInfo` reports it plus the derived verdict.",
         "properties": {
@@ -241,6 +262,72 @@
           "jobs"
         ],
         "title": "HistoryReply",
+        "type": "object"
+      },
+      "InvitationReply": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "expires_at": {
+            "title": "Expires At",
+            "type": "string"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          },
+          "used_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Used At"
+          },
+          "used_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Used By"
+          }
+        },
+        "required": [
+          "token",
+          "created_at",
+          "created_by",
+          "expires_at"
+        ],
+        "title": "InvitationReply",
+        "type": "object"
+      },
+      "InvitationsReply": {
+        "properties": {
+          "invitations": {
+            "items": {
+              "$ref": "#/components/schemas/InvitationReply"
+            },
+            "title": "Invitations",
+            "type": "array"
+          }
+        },
+        "required": [
+          "invitations"
+        ],
+        "title": "InvitationsReply",
         "type": "object"
       },
       "JobReply": {
@@ -703,6 +790,120 @@
           }
         },
         "summary": "Health"
+      }
+    },
+    "/invitations": {
+      "get": {
+        "operationId": "list_invitations_invitations_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationsReply"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Invitations"
+      },
+      "post": {
+        "description": "A link that admits exactly one account, to the demo library.\n\nWhat it grants is not a parameter. A link that could be made to grant\nmore would be a link worth stealing.",
+        "operationId": "invite_invitations_post",
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationReply"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Invite"
+      }
+    },
+    "/invitations/{token}": {
+      "delete": {
+        "operationId": "withdraw_invitations__token__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationsReply"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Withdraw"
+      }
+    },
+    "/invitations/{token}/accept": {
+      "post": {
+        "description": "Redeem an invitation.\n\nThe only route that admits somebody not already on the allowlist, so\nevery other check is kept and only that one is skipped. A real Google\ntoken is still required and still checked for issuer, audience and a\nverified address: the invitation says a stranger may join, not that\nanybody may claim to be anyone.\n\nThe address admitted is the one Google verified, never one the caller\nsupplies, so a link cannot be redeemed on somebody else's behalf.",
+        "operationId": "accept_invitations__token__accept_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token",
+            "required": true,
+            "schema": {
+              "title": "Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptedReply"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Accept"
       }
     },
     "/jobs": {

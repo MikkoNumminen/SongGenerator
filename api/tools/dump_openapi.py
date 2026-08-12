@@ -25,7 +25,7 @@ from app.config import load_settings
 from app.jobs import JobRunner
 from app.main import create_app
 from app.store import open_store
-from app.users import open_users
+from app.users import open_invitations, open_users
 
 # Stand-ins for the pipeline's own lists. The schema does not carry their
 # values, only the shapes of the requests and replies, so plausible names are
@@ -50,6 +50,7 @@ def schema() -> dict:
             runner=JobRunner(on_update=lambda _job: None),
             store=store,
             users=open_users(store.connection),
+            invitations=open_invitations(store.connection),
             banks=BANKS,
             standardised_suffix=".std",
             levels=LEVELS,

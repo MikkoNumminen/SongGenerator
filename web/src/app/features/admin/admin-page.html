@@ -64,6 +64,60 @@
       }
     </div>
 
+    <div class="card rise">
+      <div class="invite">
+        <div class="invite__text">
+          <h2>Invite by link</h2>
+          <p class="hint">
+            One link admits one Google account, to the demo library and nothing
+            else. It stops working once it has been used, and after a week.
+          </p>
+        </div>
+        <button type="button" [disabled]="working()" (click)="invite()">
+          {{ working() ? 'Working...' : 'Create a link' }}
+        </button>
+      </div>
+
+      @if (freshLink(); as link) {
+        <div class="link">
+          <!-- Shown rather than only copied: the clipboard can refuse, and a
+               link somebody cannot see is a link they cannot send. -->
+          <code class="link__value">{{ link }}</code>
+          <button type="button" class="link__copy" (click)="copyLink()">
+            {{ copied() ? 'Copied' : 'Copy' }}
+          </button>
+        </div>
+      }
+
+      @if (invitations().length) {
+        <ul class="links">
+          @for (invitation of invitations(); track invitation.token) {
+            <li class="links__row">
+              @if (invitation.used_at) {
+                <span class="tag">used</span>
+                <span class="mono">{{ invitation.used_by }}</span>
+                <span class="links__when mono">{{ invitation.used_at }}</span>
+              } @else {
+                <span class="tag tag--open">unused</span>
+                <span class="mono links__token">{{ invitation.token }}</span>
+                <span class="links__when mono">
+                  until {{ invitation.expires_at }}
+                </span>
+                <button
+                  type="button"
+                  class="revoke"
+                  [disabled]="working()"
+                  (click)="withdraw(invitation.token)"
+                >
+                  Withdraw
+                </button>
+              }
+            </li>
+          }
+        </ul>
+      }
+    </div>
+
     <div class="card table-card rise">
       <table>
         <caption class="visually-hidden">

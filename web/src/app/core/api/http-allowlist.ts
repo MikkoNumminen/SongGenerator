@@ -2,7 +2,12 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
-import { UserReply, UsersReply } from '../contract/dto';
+import {
+  InvitationReply,
+  InvitationsReply,
+  UserReply,
+  UsersReply,
+} from '../contract/dto';
 import { Allowlist } from '../ports/allowlist.port';
 import { API_BASE_URL } from './api-config';
 
@@ -34,6 +39,20 @@ export class HttpAllowlist implements Allowlist {
     return this.http.put<UsersReply>(
       `${this.baseUrl}/users/${encodeURIComponent(email)}/runs`,
       { see_all_runs: seeAll },
+    );
+  }
+
+  invitations(): Observable<InvitationsReply> {
+    return this.http.get<InvitationsReply>(`${this.baseUrl}/invitations`);
+  }
+
+  invite(): Observable<InvitationReply> {
+    return this.http.post<InvitationReply>(`${this.baseUrl}/invitations`, {});
+  }
+
+  withdraw(token: string): Observable<InvitationsReply> {
+    return this.http.delete<InvitationsReply>(
+      `${this.baseUrl}/invitations/${encodeURIComponent(token)}`,
     );
   }
 

@@ -74,6 +74,21 @@ CREATE TABLE IF NOT EXISTS allowed_emails (
     see_all_runs INTEGER NOT NULL DEFAULT 0
 );
 
+-- A one-time way in, handed out as a link.
+--
+-- The token is the secret, so it is the key: knowing it is the whole of the
+-- claim. Single use is enforced by the update that spends it, which only
+-- matches a row that has not been spent, so two people opening the same link
+-- at the same moment cannot both be let in.
+CREATE TABLE IF NOT EXISTS invitations (
+    token      TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL,
+    created_by TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    used_at    TEXT,
+    used_by    TEXT
+);
+
 -- Small facts about this database rather than about a job.
 --
 -- It exists for one of them: whether the allowlist has ever been seeded from

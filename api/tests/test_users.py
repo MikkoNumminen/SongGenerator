@@ -17,7 +17,7 @@ from app.config import Settings
 from app.jobs import JobRunner
 from app.main import create_app
 from app.store import open_store
-from app.users import open_users
+from app.users import open_invitations, open_users
 from fastapi.testclient import TestClient
 
 CLIENT_ID = "1234.apps.googleusercontent.com"
@@ -49,10 +49,11 @@ def _app(tmp_path: Path, as_who: str, *, admins=frozenset({ADMIN}),
     )
     store = open_store(settings.database_path)
     users = open_users(store.connection)
+    invitations = open_invitations(store.connection)
     users.seed(settings.allowed_emails, at=AT)
     app = create_app(
         settings=settings, runner=JobRunner(on_update=store.save),
-        store=store, users=users, banks=banks or BANKS, standardised_suffix=".std",
+        store=store, users=users, invitations=invitations, banks=banks or BANKS, standardised_suffix=".std",
         levels=LEVELS, verifier=_verifier(as_who),
         prepare_song=lambda url: tmp_path / "song.mp4",
     )
@@ -589,3 +590,109 @@ class TestLookingAtOnePersonsRuns:
                          headers=AUTH).json()["jobs"]
 
         assert seen == []
+
+
+class TestInvitations:
+    """A link that admits exactly one account, to the demo library.
+
+    It is the only route that lets in somebody not already on the allowlist,
+    so what it does not skip matters as much as what it does.
+    """
+
+    def test_only_an_administrator_can_make_one(self, tmp_path):
+        admin, _ = _app(tmp_path, ADMIN)
+        admin.post("/users", json={"email": GUEST}, headers=AUTH)
+
+        guest, _ = _app(tmp_path, GUEST)
+
+        assert guest.post("/invitations", headers=AUTH).status_code == 403
+
+    def test_redeeming_admits_the_address_google_verified(self, tmp_path):
+        """Never one the caller supplies, or a link could be redeemed on
+        somebody else's behalf."""
+        admin, _ = _app(tmp_path, ADMIN)
+        token = admin.post("/invitations", headers=AUTH).json()["token"]
+
+        # A stranger: not seeded, not granted, not an administrator.
+        stranger, _ = _app(tmp_path, STRANGER, seeded=frozenset({ADMIN}))
+        answer = stranger.post(f"/invitations/{token}/accept", headers=AUTH)
+
+        assert answer.status_code == 200
+        assert answer.json() == {"email": STRANGER, "banks": ["demo"]}
+
+    def test_it_grants_the_demo_library_and_nothing_else(self, tmp_path):
+        admin, _ = _app(tmp_path, ADMIN)
+        out = tmp_path / "output" / "a_song" / "ppbank"
+        out.mkdir(parents=True)
+        (out / "a_song.wild.mp3").write_bytes(b"not for a stranger")
+        token = admin.post("/invitations", headers=AUTH).json()["token"]
+
+        stranger, _ = _app(tmp_path, STRANGER, seeded=frozenset({ADMIN}))
+        stranger.post(f"/invitations/{token}/accept", headers=AUTH)
+
+        after, _ = _app(tmp_path, STRANGER, seeded=frozenset({ADMIN}))
+        tracks = after.get("/library", headers=AUTH).json()["tracks"]
+        assert tracks == []
+
+    def test_one_registration_only(self, tmp_path):
+        admin, _ = _app(tmp_path, ADMIN)
+        token = admin.post("/invitations", headers=AUTH).json()["token"]
+        first, _ = _app(tmp_path, STRANGER, seeded=frozenset({ADMIN}))
+        first.post(f"/invitations/{token}/accept", headers=AUTH)
+
+        second, _ = _app(tmp_path, GUEST, seeded=frozenset({ADMIN}))
+        answer = second.post(f"/invitations/{token}/accept", headers=AUTH)
+
+        assert answer.status_code == 404
+
+    def test_a_link_nobody_issued_is_refused(self, tmp_path):
+        stranger, _ = _app(tmp_path, STRANGER, seeded=frozenset({ADMIN}))
+
+        answer = stranger.post("/invitations/made-up/accept", headers=AUTH)
+
+        assert answer.status_code == 404
+
+    def test_redeeming_without_a_google_token_is_refused(self, tmp_path):
+        """The invitation says a stranger may join, not that anybody may
+        claim to be anyone."""
+        admin, _ = _app(tmp_path, ADMIN)
+        token = admin.post("/invitations", headers=AUTH).json()["token"]
+
+        stranger, _ = _app(tmp_path, STRANGER, seeded=frozenset({ADMIN}))
+        answer = stranger.post(f"/invitations/{token}/accept")
+
+        assert answer.status_code == 401
+
+    def test_an_expired_link_stops_working(self, tmp_path):
+        from app.store import open_store
+        from app.users import open_invitations
+        admin, _ = _app(tmp_path, ADMIN)
+        token = admin.post("/invitations", headers=AUTH).json()["token"]
+        conn = open_store(tmp_path / "jobs.sqlite3").connection
+        conn.execute("UPDATE invitations SET expires_at = ?",
+                     ("2000-01-01T00:00:00+00:00",))
+        conn.commit()
+
+        stranger, _ = _app(tmp_path, STRANGER, seeded=frozenset({ADMIN}))
+        answer = stranger.post(f"/invitations/{token}/accept", headers=AUTH)
+
+        assert answer.status_code == 404
+
+    def test_an_unused_link_can_be_withdrawn(self, tmp_path):
+        admin, _ = _app(tmp_path, ADMIN)
+        token = admin.post("/invitations", headers=AUTH).json()["token"]
+
+        admin.delete(f"/invitations/{token}", headers=AUTH)
+
+        stranger, _ = _app(tmp_path, STRANGER, seeded=frozenset({ADMIN}))
+        assert stranger.post(f"/invitations/{token}/accept",
+                             headers=AUTH).status_code == 404
+
+    def test_two_links_are_not_the_same_link(self, tmp_path):
+        admin, _ = _app(tmp_path, ADMIN)
+
+        first = admin.post("/invitations", headers=AUTH).json()["token"]
+        second = admin.post("/invitations", headers=AUTH).json()["token"]
+
+        assert first != second
+        assert len(first) > 20

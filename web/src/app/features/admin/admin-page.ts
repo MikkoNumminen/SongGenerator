@@ -11,7 +11,11 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { API_BASE_URL } from '../../core/api/api-config';
 import { detailOf, isUnreachable, stateForFailure } from '../../core/api/http-failure';
-import { UserReply, UsersReply } from '../../core/contract/dto';
+import {
+  InvitationReply,
+  UserReply,
+  UsersReply,
+} from '../../core/contract/dto';
 /** The library everybody starts with. Named on the edge; repeated here only
  * so the panel can tick the right box before anything has been fetched. */
 const DEMO = 'demo';
@@ -51,7 +55,10 @@ export class AdminPage {
   constructor() {
     // Not ngOnInit: the identity arrives after the page does, and asking
     // before it has is the 401 that used to leave a "Try again" button.
-    loadWhenSignedIn(() => this.load());
+    loadWhenSignedIn(() => {
+      this.load();
+      this.readInvitations();
+    });
   }
   private readonly allowlist = inject(ALLOWLIST);
   private readonly auth = inject(AUTH_CONTEXT, { optional: true });
@@ -85,6 +92,88 @@ export class AdminPage {
     this.wanted.set(now.includes(name)
       ? now.filter((b) => b !== name)
       : [...now, name]);
+  }
+
+  /** Outstanding invitations, and the one just made. */
+  readonly invitations = signal<readonly InvitationReply[]>([]);
+  /** The link just created, shown once so it can be copied and sent. */
+  readonly freshLink = signal<string | null>(null);
+  readonly copied = signal(false);
+
+  /** The address a link is opened at, built from where this page is served. */
+  linkFor(token: string): string {
+    return `${location.origin}${location.pathname.replace(/\/[^/]*$/, '')}/invite/${token}`;
+  }
+
+  readInvitations(): void {
+    this.allowlist
+      .invitations()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (reply) => this.invitations.set(reply.invitations),
+        // Quietly: the panel's main job is the allowlist, and a failure to
+        // read invitations should not replace the list with an error.
+        error: () => this.invitations.set([]),
+      });
+  }
+
+  invite(): void {
+    if (this.working()) {
+      return;
+    }
+    this.problem.set(null);
+    this.copied.set(false);
+    this.working.set(true);
+    this.allowlist
+      .invite()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (made) => {
+          this.working.set(false);
+          this.freshLink.set(this.linkFor(made.token));
+          this.readInvitations();
+        },
+        error: (failure: HttpErrorResponse) => {
+          this.working.set(false);
+          this.problem.set(this.explain(failure));
+        },
+      });
+  }
+
+  async copyLink(): Promise<void> {
+    const link = this.freshLink();
+    if (!link) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(link);
+      this.copied.set(true);
+    } catch {
+      // Refused, or no clipboard. The link is on screen and selectable, so
+      // there is nothing to recover from and nothing worth an alarm.
+      this.copied.set(false);
+    }
+  }
+
+  withdraw(token: string): void {
+    if (this.working()) {
+      return;
+    }
+    this.working.set(true);
+    this.allowlist
+      .withdraw(token)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (reply) => {
+          this.working.set(false);
+          this.invitations.set(reply.invitations);
+          this.freshLink.set(null);
+        },
+        error: (failure: HttpErrorResponse) => {
+          this.working.set(false);
+          this.problem.set(this.explain(failure));
+        },
+      });
   }
 
   /** Grant or withdraw seeing everybody's runs. */

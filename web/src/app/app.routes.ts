@@ -37,5 +37,12 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/admin/admin-page').then((m) => m.AdminPage),
   },
+  {
+    // Open to somebody with no account at all, which is the point of it.
+    path: 'invite/:token',
+    title: 'You have been invited',
+    loadComponent: () =>
+      import('./features/invite/invite-page').then((m) => m.InvitePage),
+  },
   { path: '**', redirectTo: '' },
 ];
