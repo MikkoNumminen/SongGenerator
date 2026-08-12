@@ -25,7 +25,7 @@ It reports liveness and configuration, never anything about songs or accounts.
 
 from collections.abc import Callable
 from dataclasses import asdict
-from datetime import UTC
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -111,6 +111,63 @@ class BankReply(BaseModel):
     usable: bool
 
 
+def _started_at_epoch(job: Job) -> float | None:
+    """When a run began, as a filesystem timestamp, or None if unknowable.
+
+    The slack is not politeness: `started_at` is recorded to the second, and
+    a file written in the same second can carry an mtime a hair below it, so
+    an exact comparison drops the very first rendering of a fast run.
+    """
+    if not job.started_at:
+        return None
+    try:
+        began = datetime.fromisoformat(job.started_at)
+    except ValueError:
+        return None
+    if began.tzinfo is None:
+        began = began.replace(tzinfo=UTC)
+    return began.timestamp() - 2.0
+
+
+def _is_one_name(value: str) -> bool:
+    """Whether a path component is a single ordinary name.
+
+    The library route addresses a file by song, bank and name, and resolving
+    the join and checking it is still under the output root is what contains
+    it. That check is sound for a forward slash, which cannot get in anyway:
+    FastAPI matches a path parameter with `[^/]+`.
+
+    A BACKSLASH gets straight through it, and on Windows, which is where this
+    runs, pathlib treats one as a separator. `..%5C..%5Cother%5Cbank%5Ct.mp3`
+    as the name resolved into a different bank's folder that is still inside
+    output/, still ends in .mp3 and still exists, so every condition held and
+    one grant of any bank read the whole library, including the folders an
+    administrator is the only one meant to see.
+
+    Checked per component rather than on the joined path, because the join is
+    where the spelling stops being visible. The colon is refused for the same
+    family of reasons: on Windows it introduces a drive or an alternate data
+    stream, neither of which is a rendering.
+
+    Two subtler refusals, both of them Windows being helpful:
+
+    A trailing dot or space is stripped from a path component, so `. ` and
+    `...` both name the current directory as surely as `.` does. Comparing
+    against the literal strings let a component vanish from the join and
+    address the top of the root, where a file the listing never enumerates
+    can sit. The comparison is therefore made against the stripped form.
+
+    A control character, NUL above all, is not a traversal but it does reach
+    `resolve()`, which raises ValueError on it. That left the route answering
+    500 to a malformed request where every other malformed request gets 404.
+    """
+    if not value or any(bad in value for bad in ("/", "\\", ":")):
+        return False
+    if any(ch < " " or ch == "\x7f" for ch in value):
+        return False
+    return value.rstrip(". ") not in ("", ".", "..")
+
+
 #: Where the demo library lives, beside `output/` on the same machine.
 DEMO_DIR = "output-demo"
 
@@ -181,6 +238,11 @@ class TrackReply(BaseModel):
     level: str | None = None
     name: str
     bytes: int
+    #: When the file was written, so a list can be put in the order things
+    #: were made. Read off the file rather than from the job history, because
+    #: the directory is the truth: renderings exist that predate the edge, and
+    #: deleting a file is how something leaves the library.
+    modified_at: float
 
 
 class LibraryReply(BaseModel):
@@ -351,6 +413,17 @@ def create_app(
         this machine actually holds."""
         return [DEMO, *sorted(banks)]
 
+    def sees_everything(who: Principal) -> bool:
+        """An administrator, for whom the library is not filtered at all.
+
+        Not the same as holding every grantable name. A folder under output/
+        whose name is no longer a bank on this machine is grantable to nobody,
+        so filtering by grants hid it from everybody, including the person who
+        made it. Renderings do not stop existing because a bank was renamed or
+        retired.
+        """
+        return who.email in settings.admin_emails
+
     def granted_to(who: Principal) -> frozenset[str]:
         """Which libraries this caller may see.
 
@@ -503,13 +576,28 @@ def create_app(
         return _job_payload(job)
 
     def _finished_files(job: Job) -> list[Path]:
-        """The renderings a job produced, or nothing if it produced none."""
+        """The renderings a job produced, or nothing if it produced none.
+
+        Narrowed to what was written during this run rather than everything
+        in the folder. A bank folder is shared by every run of that song, so
+        the folder also holds the takes of runs before this one: a `--play
+        wild` run listed the conservative take somebody else made, and a
+        folder still holding older names listed those too. "What this run
+        made" is what the page offering them says.
+
+        By modification time, because that is the only record of it. The
+        pipeline reports where it wrote and not which names, and asking it to
+        would be parsing a table laid out for a person to read.
+        """
         if not job.output_dir:
             return []
         folder = Path(job.output_dir)
         if not folder.is_dir():
             return []
-        return sorted(p for p in folder.glob("*.mp3") if p.is_file())
+        since = _started_at_epoch(job)
+        return sorted(p for p in folder.glob("*.mp3")
+                      if p.is_file()
+                      and (since is None or p.stat().st_mtime >= since))
 
     @app.get("/jobs/{job_id}/files")
     def files(job_id: str, who: Caller) -> FilesReply:
@@ -590,10 +678,18 @@ def create_app(
 
     @app.get("/library")
     def library(who: Caller) -> LibraryReply:
+        def described(song: str, bank: str, path: Path) -> TrackReply:
+            # One stat, not one per field. The library is two hundred files on
+            # a spinning disk and this route is called on every page load.
+            found = path.stat()
+            return TrackReply(song=song, bank=bank, level=_level_of(path),
+                              name=path.name, bytes=found.st_size,
+                              modified_at=found.st_mtime)
+
         return LibraryReply(tracks=[
-            TrackReply(song=song, bank=bank, level=_level_of(path),
-                       name=path.name, bytes=path.stat().st_size)
-            for song, bank, path in _library_tracks(granted_to(who))
+            described(song, bank, path)
+            for song, bank, path in _library_tracks(
+                None if sees_everything(who) else granted_to(who))
         ])
 
     @app.get("/library/{song}/{bank}/{name}")
@@ -613,9 +709,16 @@ def create_app(
         """
         from fastapi.responses import FileResponse
 
+        # Every part has to be an ordinary name before any of it is joined.
+        # See _is_one_name: resolving and comparing against the root is not
+        # enough on its own, because a backslash inside one component lands
+        # somewhere else that is still inside the root.
+        if not all(_is_one_name(part) for part in (song, bank, name)):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "no such track")
+
         # Checked before the path is built, so a library nobody granted is
         # not merely absent from the listing.
-        if bank not in granted_to(who):
+        if not sees_everything(who) and bank not in granted_to(who):
             raise HTTPException(status.HTTP_404_NOT_FOUND, "no such track")
 
         if bank == DEMO:

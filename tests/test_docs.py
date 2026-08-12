@@ -170,9 +170,17 @@ def test_no_assistant_is_credited_as_an_author():
 
     exempt = {"CLAUDE.md", "tests/test_docs.py"}  # both must name what they forbid
 
-    tracked = subprocess.run(
-        ["git", "ls-files"], cwd=ROOT, capture_output=True, text=True, check=True
-    ).stdout.split()
+    # -z, and split on NUL rather than whitespace: `ops/desktop/SongGenerator
+    # On.bat` has a space in it, and splitting on whitespace turned one tracked
+    # path into two nonexistent ones. Missing files are deliberately not
+    # skipped below, so this surfaced as an error rather than as coverage
+    # quietly falling off the end.
+    listing = subprocess.run(
+        ["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, text=True, check=True
+    ).stdout
+    # The listing ends with a NUL, so the last field is empty; ROOT / "" is the
+    # repo root, and reading a directory is not the failure this reports.
+    tracked = [rel for rel in listing.split("\0") if rel]
 
     offenders = []
     for rel in tracked:

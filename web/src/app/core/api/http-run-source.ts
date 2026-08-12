@@ -2,7 +2,12 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 
-import { HistoryReply, JobReply, SubmitBody } from '../contract/dto';
+import {
+  FilesReply,
+  HistoryReply,
+  JobReply,
+  SubmitBody,
+} from '../contract/dto';
 import { RunSource } from '../ports/run-source.port';
 import { API_BASE_URL } from './api-config';
 
@@ -45,6 +50,17 @@ export class HttpRunSource implements RunSource {
     return this.http.get<HistoryReply>(`${this.baseUrl}/jobs`, {
       params: params.keys().length ? params : undefined,
     });
+  }
+
+  files(id: string): Observable<FilesReply> {
+    return this.http.get<FilesReply>(
+      `${this.baseUrl}/jobs/${encodeURIComponent(id)}/files`);
+  }
+
+  file(id: string, name: string): Observable<Blob> {
+    return this.http.get(
+      `${this.baseUrl}/jobs/${encodeURIComponent(id)}/files/${encodeURIComponent(name)}`,
+      { responseType: 'blob' });
   }
 
   cancel(id: string): Observable<void> {

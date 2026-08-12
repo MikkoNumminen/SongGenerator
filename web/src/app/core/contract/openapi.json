@@ -668,6 +668,10 @@
             ],
             "title": "Level"
           },
+          "modified_at": {
+            "title": "Modified At",
+            "type": "number"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -681,7 +685,8 @@
           "song",
           "bank",
           "name",
-          "bytes"
+          "bytes",
+          "modified_at"
         ],
         "title": "TrackReply",
         "type": "object"

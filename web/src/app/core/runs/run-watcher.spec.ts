@@ -1,6 +1,6 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
-import { Observable, Subscription, throwError } from 'rxjs';
+import { Observable, Subscription, of, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { JobReply } from '../contract/dto';
@@ -27,6 +27,8 @@ function scripted(answers: Array<JobReply | HttpErrorResponse>) {
     submit: () => { throw new Error('not used'); },
     history: () => { throw new Error('not used'); },
     cancel: () => { throw new Error('not used'); },
+    files: () => of({ files: [] }),
+    file: () => of(new Blob()),
     job: () =>
       new Observable<JobReply>((subscriber) => {
         const answer = answers[Math.min(asked, answers.length - 1)];
@@ -158,6 +160,8 @@ describe('RunWatcher', () => {
           submit: () => throwError(() => new Error('not used')),
           history: () => throwError(() => new Error('not used')),
           cancel: () => throwError(() => new Error('not used')),
+          files: () => of({ files: [] }),
+          file: () => of(new Blob()),
           job: () =>
             new Observable<JobReply>(() => {
               open += 1;

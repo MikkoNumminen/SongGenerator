@@ -32,6 +32,13 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from enum import Enum
+# Windows, and pure. Pure because this splits a string the pipeline printed
+# and must not ask the filesystem anything. Windows because that is the only
+# platform the pipeline runs on, and PurePath is PurePosixPath everywhere
+# else: read on Linux it takes no backslash for a separator, so the whole of
+# `D:\repo\output\song\bank\song.wild.mp3` is one name whose parent is `.`,
+# and the folder came back as the directory the run was started in.
+from pathlib import PureWindowsPath
 
 
 class Stage(str, Enum):
@@ -73,8 +80,34 @@ _MARKERS: tuple[tuple[str, Stage], ...] = (
 
 _REFUSED = "MODE B -- no vocals"
 
+# Where a finished run says it put its files. Two shapes, because the pipeline
+# says it two ways: a folder when it wrote more than one rendering, and the
+# file itself when it wrote exactly one (`--play wild`, or a single rung).
+# Ordered, since the folder form also matches the looser file pattern.
+_WROTE_FOLDER = re.compile(r"^ {2}wrote \d+ versions? to (.+)$")
+_WROTE_FILE = re.compile(r"^ {2}wrote\s+(\S.*)$")
+
 # The separator's own progress, the only within-stage number that is real.
 _PERCENT = re.compile(r"(\d{1,3})(?:\.\d+)?%")
+
+
+def _wrote_to(text: str) -> str | None:
+    """The folder a `wrote` line names, whichever way it was phrased.
+
+    The one-file form names the file, so its folder is the parent. Both are
+    returned exactly as the pipeline spelled them, relative or absolute:
+    making that absolute needs the directory the run was started in, which is
+    the runner's business rather than this parser's.
+    """
+    folder = _WROTE_FOLDER.match(text)
+    if folder:
+        return folder.group(1).strip()
+    one = _WROTE_FILE.match(text)
+    if one:
+        # PureWindowsPath accepts a forward slash as a separator too, so this
+        # reads a path the pipeline spelled either way.
+        return str(PureWindowsPath(one.group(1).strip()).parent)
+    return None
 
 
 @dataclass(frozen=True)
@@ -84,25 +117,32 @@ class Progress:
     stage: Stage = Stage.QUEUED
     percent: int | None = None      # separation only, None everywhere else
     detail: str | None = None       # the line that moved it, for the log view
+    #: Where the run said it wrote, as the pipeline spelled it. Taken from the
+    #: run's own words rather than worked out from the request, because the
+    #: pipeline decides where it puts things and nothing here should have a
+    #: second opinion. Without it the edge could list a finished run's files
+    #: and always answered with none.
+    wrote_to: str | None = None
 
     def advance(self, line: str) -> Progress:
         """Fold one line of output in. Never moves backwards."""
         text = line.rstrip()
 
         if _REFUSED in text:
-            return Progress(Stage.REFUSED, None, text.strip())
+            return Progress(Stage.REFUSED, None, text.strip(), self.wrote_to)
 
         for marker, stage in _MARKERS:
             if text.startswith(marker):
                 if _ORDER[stage] < _ORDER[self.stage]:
                     return self
-                return Progress(stage, None, text.strip())
+                return Progress(stage, None, text.strip(),
+                                _wrote_to(text) or self.wrote_to)
 
         if self.stage is Stage.SEPARATING:
             found = _PERCENT.search(text)
             if found:
                 pct = min(100, int(found.group(1)))
-                return Progress(self.stage, pct, self.detail)
+                return Progress(self.stage, pct, self.detail, self.wrote_to)
 
         return self
 

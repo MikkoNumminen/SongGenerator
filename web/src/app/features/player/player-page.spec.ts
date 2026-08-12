@@ -9,8 +9,11 @@ import { LIBRARY, Library } from '../../core/ports/library.port';
 import { fakeAuth } from '../../core/auth/fake-auth';
 import { ANY, PlayerPage } from './player-page';
 
+let madeAt = 1_700_000_000;
+
 function track(song: string, bank: string, level: string): TrackReply {
-  return { song, bank, level, name: `${song}.${level}.mp3`, bytes: 3_000_000 };
+  return { song, bank, level, name: `${song}.${level}.mp3`, modified_at: (madeAt += 60),
+    bytes: 3_000_000 };
 }
 
 const TRACKS: TrackReply[] = [
@@ -216,11 +219,62 @@ describe('the player', () => {
   });
 
   it('groups the takes under their song', async () => {
+    // Newest first by default, which is why ukkometso leads: its takes were
+    // made after musicHyva's. Order is asserted by the tests below.
     const fixture = await render(library);
 
     const songs = fixture.componentInstance.songs();
-    expect(songs.map((s) => s.song)).toEqual(['musicHyva', 'ukkometso']);
-    expect(songs[0]!.takes.length).toBe(2);
+    expect(new Set(songs.map((s) => s.song)))
+      .toEqual(new Set(['musicHyva', 'ukkometso']));
+    // Named rather than taken by position, because the list is ordered now
+    // and position is what the order tests are for.
+    const hyva = songs.find((s) => s.song === 'musicHyva')!;
+    expect(hyva.takes.length).toBe(2);
+  });
+
+  it('puts the newest song first by default', async () => {
+    // What somebody came to hear is usually the one they just made.
+    const fixture = await render(library);
+
+    const songs = fixture.componentInstance.songs();
+    expect(songs[0]!.newest).toBeGreaterThan(songs[1]!.newest);
+  });
+
+  it('orders by name when asked, by the locale rules', async () => {
+    const fixture = await render(library);
+
+    fixture.componentInstance.choose('name');
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.songs().map((s) => s.title))
+      .toEqual(['Music Hyva', 'Ukkometso']);
+  });
+
+  it('puts a and o with umlauts after z, where Finnish keeps them', async () => {
+    // The default collation sorts Ahtari-with-an-umlaut under A, which is
+    // where a Finnish reader would never look for it. Half these songs are
+    // Finnish, so the locale is named rather than left to the browser.
+    const finnish = new FakeLibrary([
+      track('ähtäri', 'nbank', 'wild'),
+      track('baarikärpänen', 'nbank', 'wild'),
+      track('ukkometso', 'nbank', 'wild'),
+    ]);
+    const fixture = await render(finnish);
+
+    fixture.componentInstance.choose('name');
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.songs().map((s) => s.song))
+      .toEqual(['baarikärpänen', 'ukkometso', 'ähtäri']);
+  });
+
+  it('takes a song to be as new as its newest take', async () => {
+    // Re-rendering one moves the song, which is what "the one I just made"
+    // means to somebody looking for it.
+    const fixture = await render(library);
+
+    const group = fixture.componentInstance.songs()[0]!;
+    expect(group.newest).toBe(Math.max(...group.takes.map((t) => t.modified_at)));
   });
 
   it('calls itself the demo when that is all there is', async () => {
@@ -250,8 +304,10 @@ describe('the player', () => {
     const fixture = await render(library);
 
     const songs = fixture.componentInstance.songs();
-    expect(songs.map((s) => s.title)).toEqual(['Music Hyva', 'Ukkometso']);
-    expect(songs.map((s) => s.song)).toEqual(['musicHyva', 'ukkometso']);
+    expect(new Set(songs.map((s) => s.title)))
+      .toEqual(new Set(['Music Hyva', 'Ukkometso']));
+    expect(new Set(songs.map((s) => s.song)))
+      .toEqual(new Set(['musicHyva', 'ukkometso']));
   });
 
   it('says on the button how much it would play', async () => {

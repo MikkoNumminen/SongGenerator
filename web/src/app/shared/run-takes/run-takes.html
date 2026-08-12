@@ -1,0 +1,51 @@
+@if (takes().length) {
+  <div class="takes">
+    <p class="takes__head">What it made</p>
+
+    <ul class="takes__list">
+      @for (take of takes(); track take.name) {
+        <li class="take">
+          <span [class]="'badge badge--' + (take.level ?? 'take')">
+            {{ take.level ?? 'take' }}
+          </span>
+          <span class="take__size mono">{{ size(take.bytes) }}</span>
+
+          <button
+            type="button"
+            class="btn btn--primary btn--sm"
+            [disabled]="busy() !== null"
+            (click)="play(take)"
+          >
+            @if (busy() === take.name) {
+              <span class="bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+              Fetching
+            } @else if (playing() === take.name) {
+              Stop
+            } @else {
+              Listen
+            }
+          </button>
+
+          <button
+            type="button"
+            class="btn btn--quiet btn--sm"
+            [disabled]="busy() !== null"
+            (click)="save(take)"
+          >
+            Download
+          </button>
+
+          <!-- Under the one being played, so what is sounding is next to what
+               was pressed and there is never a second player. -->
+          @if (playing() === take.name && source(); as url) {
+            <audio class="take__audio" [src]="url" controls autoplay></audio>
+          }
+        </li>
+      }
+    </ul>
+
+    @if (problem(); as message) {
+      <p class="problem" role="alert">{{ message }}</p>
+    }
+  </div>
+}

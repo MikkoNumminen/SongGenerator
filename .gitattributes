@@ -1,26 +1,32 @@
-# How GitHub should read this repository.
+# What GitHub counts as code written here.
 #
-# GitHub detects languages, not frameworks: there is no "Angular" for it to
-# find, and there never will be. What it can get right is which files are
-# written by a person and which are produced by a tool, and by default it
-# counts both. That skews the language bar and buries real changes under
-# generated ones in every diff.
+# The language bar is a claim about what somebody wrote. Two things in this
+# repository are produced by a tool and checked in only so the two halves
+# cannot drift apart, and counting them flattered the JSON and TypeScript
+# figures while saying nothing true about the work.
 #
-# `linguist-generated` does two things: keeps the file out of the language
-# statistics, and collapses it in pull requests. Both are what you want for a
-# file whose only correct edit is to regenerate it.
+# Nothing is hidden by this. The files stay tracked, reviewed and diffed; they
+# are simply not counted as authored code, which is what `linguist-generated`
+# means.
 
-# The contract. Produced by api/tools/dump_openapi.py and generate_dtos.py from
-# the response models, and checked by tests that fail if either is stale. Its
-# header says as much; a hand edit here is a lie about what the server sends.
+# Written by api/tools/dump_openapi.py and api/tools/generate_dtos.py.
+# tests/test_contract.py fails if either drifts from the app it came from.
 web/src/app/core/contract/openapi.json linguist-generated=true
 web/src/app/core/contract/dto.ts       linguist-generated=true
 
-# npm's resolution of the dependency tree. Committed on purpose so a build is
-# reproducible, but nobody writes it.
-web/package-lock.json                  linguist-generated=true
+# Lockfiles are resolved dependency graphs rather than anything anybody typed.
+web/package-lock.json linguist-generated=true
 
-# Normalise line endings so a file written on Windows and one written by a tool
-# do not show up as wholly rewritten. Git already warns about this on nearly
-# every commit here.
+# Line endings, which is what this file did before it also described the
+# language bar. Without it Git stops normalising on commit, and a file written
+# on Windows and one written by a tool show up as wholly rewritten.
 * text=auto
+
+# The two exceptions, both added with the desktop shortcuts. core.autocrlf is
+# true on the machine this runs on, so text=auto alone checks a shell script
+# out with CRLF; under WSL that puts a carriage return on the end of the
+# shebang and of `UNIT=homelab-songgenerator`, and every systemctl call goes
+# looking for a unit whose name ends in a control character. The .bat files
+# are read by cmd.exe and want the opposite.
+*.sh  text eol=lf
+*.bat text eol=crlf
