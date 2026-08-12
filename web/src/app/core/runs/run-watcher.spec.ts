@@ -14,7 +14,7 @@ const job = (over: Partial<JobReply> = {}): JobReply => ({
   created_at: '2026-08-08T00:00:00+00:00',
   requested_by: 'owner@example.invalid',
   source_url: 'https://example.invalid/watch?v=x',
-  bank: 'curated',
+  bank: 'ppbank',
   stage: 'rendering',
   settled: false,
   ...over,

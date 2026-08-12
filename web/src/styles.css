@@ -22,6 +22,11 @@
    -------------------------------------------------------------------------- */
 
 :root {
+  /* Lets a height animate to `auto`. Has to live in the global sheet: a
+     `:root` rule inside a component stylesheet is given that component's
+     scoping attribute and matches nothing. */
+  interpolate-size: allow-keywords;
+
   /* Ink: the dark theme's ground, from the page up through raised surfaces. */
   --ink-1000: #06070a;
   --ink-950: #0a0c11;
@@ -425,6 +430,13 @@ svg {
   font-size: var(--text-sm);
 }
 
+/* A leading icon inside a button: sized to the label, never squeezed by it. */
+.glyph {
+  font-size: 0.9em;
+  line-height: 1;
+  flex: none;
+}
+
 /* -----------------------------------------------------------------------------
    7. Form controls
    -------------------------------------------------------------------------- */
@@ -598,6 +610,12 @@ input:focus {
     background var(--fast) var(--ease);
 }
 
+/* Bank names are identifiers somebody chose, so they are shown as written:
+   capitalising turns ppbank into Ppbank and lavisBank into LavisBank. */
+.segmented--verbatim .seg span {
+  text-transform: none;
+}
+
 .seg span:hover {
   color: var(--text);
 }
@@ -610,6 +628,19 @@ input:focus {
 .seg input:focus-visible + span {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* The chosen level keeps its own colour, the same one its badge carries, so
+   the filter and the rows it filters agree. Shared: two pages offer this
+   choice now. */
+.seg[data-level='conservative'] input:checked + span {
+  background: var(--ok-wash);
+  color: var(--ok-text);
+}
+
+.seg[data-level='wild'] input:checked + span {
+  background: var(--wild-wash);
+  color: var(--wild-text);
 }
 
 /* -----------------------------------------------------------------------------
@@ -657,6 +688,30 @@ input:focus {
   flex: none;
 }
 
+/* The two ways a take can be sung. Named for the level itself, because the
+   modifier is built from the data rather than chosen by hand. */
+.badge--conservative {
+  background: var(--ok-wash);
+  border-color: color-mix(in srgb, var(--ok) 35%, transparent);
+  color: var(--ok-text);
+}
+
+.badge--wild {
+  background: var(--wild-wash);
+  border-color: color-mix(in srgb, var(--wild) 35%, transparent);
+  color: var(--wild-text);
+}
+
+/* Colour, not background: .dot paints itself with currentColor, and the five
+   places that use one rely on inheriting it. */
+.dot--conservative {
+  color: var(--ok);
+}
+
+.dot--wild {
+  color: var(--wild);
+}
+
 /* A dot that breathes, for the one thing on screen that is still happening. */
 .dot--live {
   animation: dot-pulse 1.6s var(--ease) infinite;
@@ -670,6 +725,17 @@ input:focus {
   70% {
     box-shadow: 0 0 0 0.35rem transparent;
   }
+}
+
+/* An inline failure, next to the thing that failed rather than at the top of
+   the page. Shared, because more than one page has to say one. */
+.problem {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--bad-wash);
+  color: var(--text);
+  font-size: var(--text-sm);
 }
 
 .mono {

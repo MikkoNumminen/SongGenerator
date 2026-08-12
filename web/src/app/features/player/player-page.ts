@@ -28,10 +28,13 @@ import {
   valueOf,
 } from '../../core/state/async-state';
 import { StatePanel } from '../../shared/state-panel/state-panel';
+import { prettySongTitle } from './song-title';
 
 /** One song, with the takes that exist for it. */
 export interface SongGroup {
   readonly song: string;
+  /** The folder name read as something a person would say. */
+  readonly title: string;
   readonly takes: readonly TrackReply[];
 }
 
@@ -118,7 +121,11 @@ export class PlayerPage implements OnInit, OnDestroy {
         bySong.set(take.song, [take]);
       }
     }
-    return [...bySong.entries()].map(([song, takes]) => ({ song, takes }));
+    return [...bySong.entries()].map(([song, takes]) => ({
+      song,
+      title: prettySongTitle(song),
+      takes,
+    }));
   });
 
   /** What shuffle would play, given the two choices above. */
@@ -129,6 +136,16 @@ export class PlayerPage implements OnInit, OnDestroy {
         (this.level() === ANY || t.level === this.level()),
     ),
   );
+
+  /** Narrow the shuffle to one bank, or widen it back to all of them. */
+  chooseBank(bank: string): void {
+    this.bank.set(bank);
+  }
+
+  /** Narrow the shuffle to one level, or widen it back to either. */
+  chooseLevel(level: string): void {
+    this.level.set(level);
+  }
 
   ngOnInit(): void {
     this.load();

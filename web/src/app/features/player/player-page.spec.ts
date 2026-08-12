@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { API_BASE_URL } from '../../core/api/api-config';
 import { LibraryReply, TrackReply } from '../../core/contract/dto';
 import { LIBRARY, Library } from '../../core/ports/library.port';
-import { PlayerPage } from './player-page';
+import { ANY, PlayerPage } from './player-page';
 
 function track(song: string, bank: string, level: string): TrackReply {
   return { song, bank, level, name: `${song}.${level}.mp3`, bytes: 3_000_000 };
@@ -15,7 +15,7 @@ function track(song: string, bank: string, level: string): TrackReply {
 const TRACKS: TrackReply[] = [
   track('musicHyva', 'nbank', 'conservative'),
   track('musicHyva', 'nbank', 'wild'),
-  track('ukkometso', 'curated', 'conservative'),
+  track('ukkometso', 'ppbank', 'conservative'),
 ];
 
 class FakeLibrary implements Library {
@@ -209,6 +209,53 @@ describe('the player', () => {
     const songs = fixture.componentInstance.songs();
     expect(songs.map((s) => s.song)).toEqual(['musicHyva', 'ukkometso']);
     expect(songs[0]!.takes.length).toBe(2);
+  });
+
+  it('carries a readable title beside the folder name', async () => {
+    // The folder name has to stay reachable, because that is what the machine
+    // calls it, but it is not what a list of thirty is read by.
+    const fixture = await render(library);
+
+    const songs = fixture.componentInstance.songs();
+    expect(songs.map((s) => s.title)).toEqual(['Music Hyva', 'Ukkometso']);
+    expect(songs.map((s) => s.song)).toEqual(['musicHyva', 'ukkometso']);
+  });
+
+  it('narrows the shuffle from the control itself', async () => {
+    // Driven through the DOM rather than by calling the method, because the
+    // binding between the two is the part that can come undone.
+    const fixture = await render(library);
+    const everything = fixture.componentInstance.matching().length;
+
+    const radios: HTMLInputElement[] = Array.from(
+      fixture.nativeElement.querySelectorAll('input[name="level"]'),
+    );
+    const wild = radios.find(
+      (r) => r.closest('label')?.getAttribute('data-level') === 'wild',
+    );
+    expect(wild).toBeTruthy();
+
+    wild!.click();
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.level()).toBe('wild');
+    expect(fixture.componentInstance.matching().length).toBeLessThan(everything);
+  });
+
+  it('narrows the shuffle by bank and by level', async () => {
+    const fixture = await render(library);
+    const page = fixture.componentInstance;
+    const everything = page.matching().length;
+
+    page.chooseLevel('wild');
+    fixture.detectChanges();
+
+    expect(page.matching().length).toBeLessThan(everything);
+    expect(page.matching().every((t) => t.level === 'wild')).toBe(true);
+
+    page.chooseLevel(ANY);
+    fixture.detectChanges();
+    expect(page.matching().length).toBe(everything);
   });
 
   it('fetches the audio rather than pointing an element at the edge', async () => {

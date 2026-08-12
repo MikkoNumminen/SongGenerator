@@ -576,23 +576,24 @@ WORD_SEQUENCE = None
 # Prebuilt banks, switchable per run with --bank. Both are built ahead of time
 # and the song's stems are cached, so switching costs only a re-render.
 #
-# "curated" - clips named by ear. The words are actually words, which is the
-#             whole point, so this is the default.
-# "chaos"   - every candidate clip taken as raw material, names ignored. The
-#             mapper only needs each clip's syllable count and pitch, so this
-#             still sings; it just stops saying anything.
+# "ppbank" - clips named by ear, from the song the bank is named after. The
+#            words are actually words, which is the whole point, so this is
+#            the default.
+# "chaos"  - every candidate clip taken as raw material, names ignored. The
+#            mapper only needs each clip's syllable count and pitch, so this
+#            still sings; it just stops saying anything.
 BANKS = {
     # Cut from Mel-Band Roformer stems. Around 47% of each clip's content in
     # the older bank turned out to be instrumental Demucs had left behind,
     # audible as a synthesiser tone under some words. Cleaner separation also
     # lets pitch detection read the sung note more accurately, so clips match
     # their targets better and fold less often.
-    "curated": "words_hq",
+    "ppbank": "words_hq",
     # The original Demucs-cut bank, kept for comparison.
     "demucs": "words",
     "chaos": "words_chaos",
 }
-DEFAULT_BANK = "curated"
+DEFAULT_BANK = "ppbank"
 
 # Optional: snap placed word onsets to the beat grid from stage 2. Off by
 # default because in Mode A the original vocal's timing is already musical and

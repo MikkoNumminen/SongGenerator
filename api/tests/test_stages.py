@@ -27,10 +27,10 @@ CACHED_RUN = """\
   melody + timing extraction
     tempo             90.7 BPM, 264 beats
     notes found       931 in 18 phrases
-  bank      curated (words_hq4.std, standardised)
+  bank      ppbank (words_hq4.std, standardised)
   play      conservative, seed 984547
   words     work\\ellinoora\\arrangements\\984547-conservative.arr
-  wrote 14 versions to D:\\output\\ellinoora\\curated
+  wrote 14 versions to D:\\output\\ellinoora\\ppbank
 """.splitlines()
 
 # A first run of a song, where the separator does the work and reports it.

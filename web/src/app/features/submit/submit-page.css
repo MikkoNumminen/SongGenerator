@@ -133,16 +133,6 @@
    unknown level from a newer pipeline matches neither rule and gets the
    neutral treatment. */
 
-.seg[data-level='wild'] input:checked + span {
-  background: var(--wild-wash);
-  color: var(--wild-text);
-}
-
-.seg[data-level='conservative'] input:checked + span {
-  background: var(--ok-wash);
-  color: var(--ok-text);
-}
-
 /* ---- the button, and what it will do ---- */
 
 .go {

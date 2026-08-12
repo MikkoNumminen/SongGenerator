@@ -25,7 +25,7 @@ ADMIN = "owner@example.invalid"
 GUEST = "friend@example.invalid"
 STRANGER = "nobody@example.invalid"
 
-BANKS = {"curated": "words_hq"}
+BANKS = {"ppbank": "words_hq"}
 LEVELS = ("conservative", "wild")
 AT = "2026-01-01T00:00:00+00:00"
 
@@ -201,7 +201,7 @@ class TestServingATrack:
     whole security of the route."""
 
     def _track(self, tmp_path, name="song.conservative.mp3"):
-        out = tmp_path / "output" / "a_song" / "curated"
+        out = tmp_path / "output" / "a_song" / "ppbank"
         out.mkdir(parents=True, exist_ok=True)
         (out / name).write_bytes(b"not really an mp3")
         return out / name
@@ -211,7 +211,7 @@ class TestServingATrack:
         client, _ = _app(tmp_path, ADMIN)
 
         answer = client.get(
-            "/library/a_song/curated/song.conservative.mp3", headers=AUTH)
+            "/library/a_song/ppbank/song.conservative.mp3", headers=AUTH)
 
         assert answer.status_code == 200
         assert answer.content == b"not really an mp3"
@@ -227,18 +227,18 @@ class TestServingATrack:
 
         for attempt in ("..%2f..%2fsecret.mp3", "..%2F..%2Fsecret.mp3"):
             answer = client.get(
-                f"/library/a_song/curated/{attempt}", headers=AUTH)
+                f"/library/a_song/ppbank/{attempt}", headers=AUTH)
             assert answer.status_code == 404, attempt
             assert b"not for you" not in answer.content
 
     def test_only_renderings_are_served(self, tmp_path):
         """Containment alone would happily hand over anything inside output/."""
-        out = tmp_path / "output" / "a_song" / "curated"
+        out = tmp_path / "output" / "a_song" / "ppbank"
         out.mkdir(parents=True, exist_ok=True)
         (out / "notes.txt").write_text("private", encoding="utf-8")
         client, _ = _app(tmp_path, ADMIN)
 
-        answer = client.get("/library/a_song/curated/notes.txt", headers=AUTH)
+        answer = client.get("/library/a_song/ppbank/notes.txt", headers=AUTH)
 
         assert answer.status_code == 404
 
@@ -247,6 +247,6 @@ class TestServingATrack:
         client, _ = _app(tmp_path, STRANGER, seeded=frozenset())
 
         answer = client.get(
-            "/library/a_song/curated/song.conservative.mp3", headers=AUTH)
+            "/library/a_song/ppbank/song.conservative.mp3", headers=AUTH)
 
         assert answer.status_code == 401

@@ -26,7 +26,7 @@ def test_a_bank_that_was_never_built_is_reported_not_faulted(tmp_path):
     """The state of a fresh clone. The clips are gitignored, so every
     configured bank names an empty directory, and calling that an error would
     make a correct checkout look broken."""
-    info = inspect("curated", tmp_path / "words_hq", SUFFIX)
+    info = inspect("ppbank", tmp_path / "words_hq", SUFFIX)
 
     assert info.built is False
     assert info.problem is None, "not built yet is not a fault"
@@ -34,7 +34,7 @@ def test_a_bank_that_was_never_built_is_reported_not_faulted(tmp_path):
 
 
 def test_a_built_bank_reports_how_many_clips_it_holds(tmp_path):
-    info = inspect("curated", _build(tmp_path / "words_hq", clips=25), SUFFIX)
+    info = inspect("ppbank", _build(tmp_path / "words_hq", clips=25), SUFFIX)
 
     assert info.built is True
     assert info.units == 25
@@ -44,7 +44,7 @@ def test_a_built_bank_reports_how_many_clips_it_holds(tmp_path):
 def test_an_empty_index_is_built_but_not_usable(tmp_path):
     """A bank whose index parses and holds nothing renders nothing. It has to
     read as unusable, or the picker offers it and the run fails at the end."""
-    info = inspect("curated", _build(tmp_path / "words_hq", clips=0), SUFFIX)
+    info = inspect("ppbank", _build(tmp_path / "words_hq", clips=0), SUFFIX)
 
     assert info.built is True
     assert info.units == 0
@@ -56,7 +56,7 @@ def test_an_unreadable_index_says_so_rather_than_reading_as_empty(tmp_path):
     directory.mkdir()
     (directory / "words.json").write_text("{ this is not json", encoding="utf-8")
 
-    info = inspect("curated", directory, SUFFIX)
+    info = inspect("ppbank", directory, SUFFIX)
 
     assert info.built is True
     assert info.problem is not None
@@ -68,11 +68,11 @@ def test_the_standardised_tier_beside_a_bank_is_noticed(tmp_path):
     """A render prefers the tier when it exists, so the front end has to be
     able to say which audio would actually be sung."""
     _build(tmp_path / "words_hq")
-    plain = inspect("curated", tmp_path / "words_hq", SUFFIX)
+    plain = inspect("ppbank", tmp_path / "words_hq", SUFFIX)
     assert plain.standardised is False
 
     _build(tmp_path / ("words_hq" + SUFFIX))
-    with_tier = inspect("curated", tmp_path / "words_hq", SUFFIX)
+    with_tier = inspect("ppbank", tmp_path / "words_hq", SUFFIX)
     assert with_tier.standardised is True
 
 
@@ -82,17 +82,17 @@ def test_the_catalog_keeps_the_configured_order(tmp_path):
     for name in ("words_hq", "words_muslim", "words_chaos"):
         _build(tmp_path / name)
 
-    banks = {"curated": "words_hq", "muslimbank": "words_muslim",
+    banks = {"ppbank": "words_hq", "muslimbank": "words_muslim",
              "chaos": "words_chaos"}
     got = catalog(banks, tmp_path, SUFFIX)
 
-    assert [b.name for b in got] == ["curated", "muslimbank", "chaos"]
+    assert [b.name for b in got] == ["ppbank", "muslimbank", "chaos"]
 
 
 def test_the_catalog_can_be_entirely_unbuilt(tmp_path):
     """A fresh clone. Every bank is configured, none is built, and the answer
     is a list of unusable banks rather than an exception."""
-    banks = {"curated": "words_hq", "chaos": "words_chaos"}
+    banks = {"ppbank": "words_hq", "chaos": "words_chaos"}
 
     got = catalog(banks, tmp_path, SUFFIX)
 
@@ -116,6 +116,6 @@ def test_reading_the_catalog_does_not_open_the_audio(tmp_path, monkeypatch):
         return real_open(self, *a, **kw)
 
     monkeypatch.setattr(Path, "open", watched)
-    catalog({"curated": "words_hq"}, tmp_path, SUFFIX)
+    catalog({"ppbank": "words_hq"}, tmp_path, SUFFIX)
 
     assert not any(name.endswith(".wav") for name in opened), opened

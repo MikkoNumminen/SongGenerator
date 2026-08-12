@@ -126,8 +126,8 @@ class TestOutputGoesInItsOwnFolder:
 
         from song_generator.cli import output_path
 
-        got = output_path(None, Path("input/musicHyva.mp4"), "curated")
-        assert got.parent.name == "curated"
+        got = output_path(None, Path("input/musicHyva.mp4"), "ppbank")
+        assert got.parent.name == "ppbank"
         assert got.parent.parent.name == "musicHyva"
         assert got.parent.parent.parent.name == "output"
 
@@ -137,7 +137,7 @@ class TestOutputGoesInItsOwnFolder:
 
         from song_generator.cli import output_path
 
-        got = output_path(None, Path("input/musicHyva.mp4"), "curated")
+        got = output_path(None, Path("input/musicHyva.mp4"), "ppbank")
         assert got.name == "musicHyva.mp3"
 
     def test_an_explicit_output_is_folded_the_same_way(self):
@@ -146,8 +146,8 @@ class TestOutputGoesInItsOwnFolder:
 
         from song_generator.cli import output_path
 
-        got = output_path(Path("elsewhere/song.mp3"), Path("input/x.mp4"), "curated")
-        assert got.parent.name == "curated"
+        got = output_path(Path("elsewhere/song.mp3"), Path("input/x.mp4"), "ppbank")
+        assert got.parent.name == "ppbank"
         assert got.parent.parent.name == "song"
         assert got.parent.parent.parent.name == "elsewhere"
         assert got.name == "song.mp3"
@@ -168,7 +168,7 @@ class TestEveryFilenameCarriesTheLevel:
 
         from song_generator.cli import versioned_name
 
-        out = Path("output/song/curated/song.mp3")
+        out = Path("output/song/ppbank/song.mp3")
         a = versioned_name(out, "conservative")
         b = versioned_name(out, "wild")
         assert a != b
@@ -180,7 +180,7 @@ class TestEveryFilenameCarriesTheLevel:
 
         from song_generator.cli import versioned_name
 
-        out = Path("output/song/curated/song.mp3")
+        out = Path("output/song/ppbank/song.mp3")
         got = versioned_name(out, "wild", tag="0p60")
         assert got.name == "song.wild.mim0p60.mp3"
 
@@ -189,7 +189,7 @@ class TestEveryFilenameCarriesTheLevel:
 
         from song_generator.cli import versioned_name
 
-        out = Path("output/song/curated/song.wild.mp3")
+        out = Path("output/song/ppbank/song.wild.mp3")
         assert versioned_name(out, "wild").name == "song.wild.mp3"
         assert versioned_name(out, "wild", tag="0p60").name == \
             "song.wild.mim0p60.mp3"
@@ -256,7 +256,7 @@ class TestOneGenerationBack:
         song = tmp_path / "song.mp4"
         song.write_bytes(b"not actually read")
         out = tmp_path / "out" / "song.mp3"
-        folder = out.parent / "song" / "curated"
+        folder = out.parent / "song" / "ppbank"
         folder.mkdir(parents=True)
         for level in ("wild", "conservative"):
             take = folder / f"song.{level}.mp3"
@@ -264,7 +264,7 @@ class TestOneGenerationBack:
             cli.keep_the_one_it_replaces(take)
             take.write_bytes(f"bad {level}".encode())
 
-        code = cli.main([str(song), "--bank", "curated", "--output", str(out),
+        code = cli.main([str(song), "--bank", "ppbank", "--output", str(out),
                          "--rollback"])
 
         assert code == cli.EXIT_OK
@@ -277,7 +277,7 @@ class TestOneGenerationBack:
         song = tmp_path / "song.mp4"
         song.write_bytes(b"not actually read")
 
-        code = cli.main([str(song), "--bank", "curated",
+        code = cli.main([str(song), "--bank", "ppbank",
                          "--output", str(tmp_path / "out" / "song.mp3"),
                          "--rollback"])
 
@@ -335,7 +335,7 @@ class TestOneGenerationBack:
         """A wild render must not evict the conservative backup, nor one bank
         another's. Those are the slots the naming already separates."""
         song = tmp_path / "song"
-        for bank in ("nbank", "curated"):
+        for bank in ("nbank", "ppbank"):
             for level in ("wild", "conservative"):
                 folder = song / bank
                 folder.mkdir(parents=True, exist_ok=True)
@@ -346,10 +346,10 @@ class TestOneGenerationBack:
         kept = sorted(p.relative_to(song).as_posix()
                       for p in song.rglob(f"{cli.PREVIOUS_DIR}/*.mp3"))
         assert kept == [
-            "curated/previous/song.conservative.mp3",
-            "curated/previous/song.wild.mp3",
             "nbank/previous/song.conservative.mp3",
             "nbank/previous/song.wild.mp3",
+            "ppbank/previous/song.conservative.mp3",
+            "ppbank/previous/song.wild.mp3",
         ]
 
     def test_the_kept_take_is_not_listed_as_a_rendering(self, tmp_path):

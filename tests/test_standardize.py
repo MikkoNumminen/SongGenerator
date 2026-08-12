@@ -757,8 +757,8 @@ def test_doctor_reports_the_same_bank_a_run_would_sing_from(built, monkeypatch):
     invisible: 23 units reported where a song was sung from 37."""
     from song_generator.mapping import load_bank
 
-    monkeypatch.setattr(config, "BANKS", {"curated": str(built)})
-    monkeypatch.setattr(config, "DEFAULT_BANK", "curated")
+    monkeypatch.setattr(config, "BANKS", {"ppbank": str(built)})
+    monkeypatch.setattr(config, "DEFAULT_BANK", "ppbank")
 
     assert len(load_bank(built, singable_only=False)) >= len(load_bank(built))
 
@@ -770,8 +770,8 @@ def test_doctor_names_a_stale_tier(built, capsys, monkeypatch):
 
     out = _out(built)
     standardise_bank(built, out, "offset")
-    monkeypatch.setattr(config, "BANKS", {"curated": str(built)})
-    monkeypatch.setattr(config, "DEFAULT_BANK", "curated")
+    monkeypatch.setattr(config, "BANKS", {"ppbank": str(built)})
+    monkeypatch.setattr(config, "DEFAULT_BANK", "ppbank")
 
     report_environment()
     assert "up to date" in capsys.readouterr().out

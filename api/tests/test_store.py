@@ -18,7 +18,7 @@ def _job(job_id: str, stage: Stage = Stage.QUEUED, created: str = "2026-08-08T00
         created_at=created,
         requested_by="someone@example.invalid",
         source_url="https://example.invalid/watch?v=abc",
-        bank="curated",
+        bank="ppbank",
         stage=stage,
     )
 
@@ -31,7 +31,7 @@ def test_a_job_round_trips(tmp_path):
     assert got is not None
     assert got.id == "aaa"
     assert got.stage is Stage.QUEUED
-    assert got.bank == "curated"
+    assert got.bank == "ppbank"
 
 
 def test_saving_the_same_job_again_updates_it(tmp_path):
