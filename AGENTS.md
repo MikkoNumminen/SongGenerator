@@ -36,7 +36,7 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   Every entry point now defaults to the two: `cli.py` renders
   `config.FULL_MIMICRY`, `batch.py` inherits that, and `SubmitBody.mimicry`
   defaults to it so a run submitted through the site cannot produce the ladder.
-  `tests/test_cli.py` and `api/tests/test_jobs.py` fail if any of those
+  `tests/test_cli_args.py` and `api/tests/test_jobs.py` fail if any of those
   defaults moves.
 
   Comparing rungs by ear is still worth doing at a terminal, so `--mimicry`

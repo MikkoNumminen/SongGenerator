@@ -15,9 +15,13 @@ Writes **two** mp3s to `output/`, one per playfulness level, both at full
 mimicry: the words sing the melody as closely as the song allows.
 
 ```
-output/song/<bank>/song.conservative.mim1p00.mp3
-output/song/<bank>/song.wild.mim1p00.mp3
+output/song/<bank>/song.conservative.mp3
+output/song/<bank>/song.wild.mp3
 ```
+
+No rung in the name, because there is only one. `--ladder` and `--mimicry 0.6`
+add `.mim0p60` to tell their files apart; renders made before this was the
+default are still named `.mim1p00`.
 
 Each song gets its own folder, one per bank inside it. The song name stays in
 the filename too, so a file dragged out of its folder still says what it is.

@@ -65,12 +65,13 @@ class SubmitBody(BaseModel):
     level: str | None = None
     #: One rendering per level, at the rung where the melody survives whole.
     #:
-    #: The pipeline's own default is the seven-rung sweep, which is right at a
-    #: terminal where somebody is comparing rungs by ear. Through the site it
-    #: is wrong: nobody asked for seven, the machine spends a GPU on all of
-    #: them, and one song arrives as fourteen near-identical rows in a library
-    #: that already holds hundreds. The sweep is still a command away for
-    #: anybody at the machine.
+    #: Stated here rather than left unset, even though the pipeline now
+    #: defaults to the same rung. What a route sends is the site's own promise
+    #: about what a submission does, and it should not quietly change with a
+    #: default two layers down. The seven-rung sweep is a `--ladder` away for
+    #: anybody at the machine, where comparing rungs by ear is the point;
+    #: through the site nobody asked for seven, and one song would arrive as
+    #: fourteen near-identical rows in a library that already holds hundreds.
     mimicry: float = Field(default=FULL_MIMICRY, ge=0.0, le=1.0)
     engine: str | None = None
     arrangement: str | None = Field(default=None, max_length=1_000_000)

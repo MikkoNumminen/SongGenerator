@@ -102,7 +102,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="place clips at their own recorded pitch (the step 3 sound)")
     p.add_argument("--mimicry", type=float, default=None, metavar="0..1",
                    help="how closely the words track the original singing; the tool "
-                        "solves for the shift this song needs [default: MIMICRY]")
+                        "solves for the shift this song needs [default: 1.0, "
+                        "the melody whole]")
     p.add_argument("--ladder", action="store_true",
                    help="render every rung of MIMICRY_VARIANTS rather than the "
                         "two files a run writes by default")
@@ -247,13 +248,13 @@ def output_path(explicit: Path | None, song: Path, bank: str) -> Path:
     """Where a run writes, with every song in a folder of its own and every
     bank in a folder inside that.
 
-    A run writes fourteen files and there are a dozen songs, so flat that is
-    nearly two hundred sorted by name, interleaving every song's levels and
-    rungs. The song name stays in the filename as well, so a file dragged out
-    of its folder still says what it is.
+    A run writes two files, `--ladder` writes fourteen, and there are dozens
+    of songs, so flat that is hundreds sorted by name, interleaving every
+    song's levels and rungs. The song name stays in the filename as well, so a
+    file dragged out of its folder still says what it is.
 
     Banks get the same treatment for the same reason, one level down. The
-    same song sung from two banks is twenty-eight files whose names differ in
+    same song sung from two banks writes names that differ in
     nothing at all, so without the folder the second bank's render silently
     replaces the first. The folder is named for what --bank was given, or for
     the directory itself when --words-dir pointed somewhere directly.
