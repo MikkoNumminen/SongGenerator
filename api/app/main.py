@@ -715,6 +715,14 @@ def create_app(
                                 "that invitation is not usable")
 
         stamp = now.isoformat(timespec="seconds")
+        # Somebody already allowed in gains nothing from a link, so spending
+        # one on them burns it for nobody. The obvious way to find that out is
+        # to open your own link to see whether it works, which used to be the
+        # thing that destroyed it.
+        if newcomer.email in (users.emails() | settings.admin_emails):
+            return AcceptedReply(email=newcomer.email,
+                                 banks=sorted(granted_to(newcomer)))
+
         # Spent first. If the grant then fails, an unusable link is a smaller
         # problem than a link that can be spent twice.
         if not invitations.spend(token, by=newcomer.email, at=stamp):

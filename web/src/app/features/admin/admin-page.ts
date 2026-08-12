@@ -1,3 +1,4 @@
+import { LocationStrategy } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   ChangeDetectionStrategy,
@@ -63,6 +64,7 @@ export class AdminPage {
   private readonly allowlist = inject(ALLOWLIST);
   private readonly auth = inject(AUTH_CONTEXT, { optional: true });
   private readonly destroyRef = inject(DestroyRef);
+  private readonly where = inject(LocationStrategy);
   private readonly configured = inject(API_BASE_URL) !== '';
 
   readonly state = signal<AsyncState<UsersReply>>(idle());
@@ -100,9 +102,18 @@ export class AdminPage {
   readonly freshLink = signal<string | null>(null);
   readonly copied = signal(false);
 
-  /** The address a link is opened at, built from where this page is served. */
+  /**
+   * The address a link is opened at.
+   *
+   * Built through the location strategy rather than by trimming the current
+   * path, which was wrong the moment the path had a trailing slash: `/admin/`
+   * produced `/admin/invite/...`. A broken invitation is the worst kind of
+   * bug here, because nobody finds out until the person it was sent to
+   * cannot get in. This applies the base href the application was built with,
+   * which is the same thing the router uses.
+   */
   linkFor(token: string): string {
-    return `${location.origin}${location.pathname.replace(/\/[^/]*$/, '')}/invite/${token}`;
+    return `${location.origin}${this.where.prepareExternalUrl(`/invite/${token}`)}`;
   }
 
   readInvitations(): void {

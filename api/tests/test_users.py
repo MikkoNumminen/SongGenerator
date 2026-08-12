@@ -696,3 +696,37 @@ class TestInvitations:
 
         assert first != second
         assert len(first) > 20
+
+
+class TestOpeningYourOwnLink:
+    """Somebody already allowed in gains nothing from a link, so spending one
+    on them burns it for nobody. Checking that a link works by opening it is
+    the obvious thing to do, and it used to be what destroyed it."""
+
+    def test_an_existing_member_does_not_spend_it(self, tmp_path):
+        admin, _ = _app(tmp_path, ADMIN)
+        token = admin.post("/invitations", headers=AUTH).json()["token"]
+
+        # The owner opens their own link to see whether it works.
+        opened = admin.post(f"/invitations/{token}/accept", headers=AUTH)
+        assert opened.status_code == 200
+
+        # It still admits the person it was meant for.
+        stranger, _ = _app(tmp_path, STRANGER, seeded=frozenset({ADMIN}))
+        answer = stranger.post(f"/invitations/{token}/accept", headers=AUTH)
+        assert answer.status_code == 200
+        assert answer.json()["banks"] == ["demo"]
+
+    def test_it_does_not_narrow_somebody_who_already_has_more(self, tmp_path):
+        """The grant is 'demo', and an existing member has at least that."""
+        admin, _ = _app(tmp_path, ADMIN)
+        admin.post("/users", json={"email": GUEST, "banks": ["ppbank"]},
+                   headers=AUTH)
+        token = admin.post("/invitations", headers=AUTH).json()["token"]
+
+        guest, _ = _app(tmp_path, GUEST)
+        guest.post(f"/invitations/{token}/accept", headers=AUTH)
+
+        row = next(u for u in admin.get("/users", headers=AUTH).json()["users"]
+                   if u["email"] == GUEST)
+        assert row["banks"] == ["ppbank"]
