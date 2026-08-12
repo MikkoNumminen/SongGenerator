@@ -22,6 +22,10 @@ export interface BankReply {
   usable: boolean;
 }
 
+export interface BanksGrantRequest {
+  banks: Array<string>;
+}
+
 export interface BanksReply {
   any_usable: boolean;
   banks: Array<BankReply>;
@@ -47,6 +51,7 @@ export interface FilesReply {
 }
 
 export interface GrantRequest {
+  banks?: Array<string> | null;
   email: string;
 }
 
@@ -128,12 +133,14 @@ export interface TrackReply {
 export interface UserReply {
   added_at: string;
   added_by: string;
+  banks: Array<string>;
   email: string;
   is_admin: boolean;
 }
 
 export interface UsersReply {
   admins: Array<string>;
+  grantable: Array<string>;
   users: Array<UserReply>;
 }
 

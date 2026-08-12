@@ -1,8 +1,8 @@
 <section class="library">
   <header class="head">
     <div class="head__text">
-      <h1>Everything made so far</h1>
-      <p class="lead">Straight off that desktop. Pick a song to see its takes.</p>
+      <h1>{{ title() }}</h1>
+      <p class="lead">{{ lead() }}</p>
     </div>
     @if (all().length) {
       <p class="head__tally">

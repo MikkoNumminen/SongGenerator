@@ -16,8 +16,18 @@ export interface Allowlist {
   /** Everyone granted access, and which addresses are administrators. */
   list(): Observable<UsersReply>;
 
-  /** Grant access. Granting an address that already has it is not an error. */
-  grant(email: string): Observable<UserReply>;
+  /**
+   * Grant access. Granting an address that already has it is not an error.
+   *
+   * Without banks the edge gives the demo library and nothing else, which is
+   * what a newly typed address should get: it is a stranger until somebody
+   * says otherwise, and the safe default belongs on the server rather than in
+   * whatever this panel last had on screen.
+   */
+  grant(email: string, banks?: readonly string[]): Observable<UserReply>;
+
+  /** Change which libraries an address may see. Returns the list afterwards. */
+  setBanks(email: string, banks: readonly string[]): Observable<UsersReply>;
 
   /** Revoke access. Returns the list as it stands afterwards. */
   revoke(email: string): Observable<UsersReply>;

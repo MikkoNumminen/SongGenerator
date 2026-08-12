@@ -19,10 +19,14 @@ const TRACKS: TrackReply[] = [
 ];
 
 class FakeLibrary implements Library {
-  tracks: TrackReply[] = TRACKS;
+  tracks: TrackReply[];
   asked: string[] = [];
   failListWith: HttpErrorResponse | null = null;
   failAudioWith: HttpErrorResponse | null = null;
+
+  constructor(tracks: TrackReply[] = TRACKS) {
+    this.tracks = tracks;
+  }
 
   list(): Observable<LibraryReply> {
     return this.failListWith
@@ -210,6 +214,27 @@ describe('the player', () => {
     expect(songs.map((s) => s.song)).toEqual(['musicHyva', 'ukkometso']);
     expect(songs[0]!.takes.length).toBe(2);
   });
+
+  it('calls itself the demo when that is all there is', async () => {
+    // Somebody holding the demo library alone is not looking at everything
+    // made so far, and a heading saying so describes a machine they cannot
+    // see.
+    const onlyDemo = new FakeLibrary([
+      track('a_demo_song', 'demo', 'wild'),
+      track('another_demo_song', 'demo', 'conservative'),
+    ]);
+
+    const fixture = await render(onlyDemo);
+
+    expect(fixture.componentInstance.title()).toBe('SongGenerator demo');
+  });
+
+  it('calls itself everything made so far when there is more than the demo',
+    async () => {
+      const fixture = await render(library);
+
+      expect(fixture.componentInstance.title()).toBe('Everything made so far');
+    });
 
   it('carries a readable title beside the folder name', async () => {
     // The folder name has to stay reachable, because that is what the machine

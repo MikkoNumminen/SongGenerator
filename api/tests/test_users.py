@@ -38,7 +38,7 @@ def _verifier(email: str):
 
 
 def _app(tmp_path: Path, as_who: str, *, admins=frozenset({ADMIN}),
-         seeded=frozenset({ADMIN})):
+         seeded=frozenset({ADMIN}), banks=None):
     settings = Settings(
         repo_root=tmp_path,
         database_path=tmp_path / "jobs.sqlite3",
@@ -52,7 +52,7 @@ def _app(tmp_path: Path, as_who: str, *, admins=frozenset({ADMIN}),
     users.seed(settings.allowed_emails, at=AT)
     app = create_app(
         settings=settings, runner=JobRunner(on_update=store.save),
-        store=store, users=users, banks=BANKS, standardised_suffix=".std",
+        store=store, users=users, banks=banks or BANKS, standardised_suffix=".std",
         levels=LEVELS, verifier=_verifier(as_who),
         prepare_song=lambda url: tmp_path / "song.mp4",
     )
@@ -250,3 +250,174 @@ class TestServingATrack:
             "/library/a_song/ppbank/song.conservative.mp3", headers=AUTH)
 
         assert answer.status_code == 401
+
+
+class TestWhatAnAddressMaySee:
+    """A new address is a stranger. It gets the demo library and nothing else
+    until somebody says otherwise."""
+
+    def _rendering(self, tmp_path, bank="ppbank", song="a_song"):
+        out = tmp_path / "output" / song / bank
+        out.mkdir(parents=True, exist_ok=True)
+        (out / f"{song}.conservative.mp3").write_bytes(b"real one")
+        return out
+
+    def _demo(self, tmp_path, song="a_demo_song"):
+        out = tmp_path / "output-demo" / song
+        out.mkdir(parents=True, exist_ok=True)
+        (out / f"{song}.wild.mp3").write_bytes(b"demo one")
+        return out
+
+    def test_a_new_address_gets_the_demo_library_only(self, tmp_path):
+        admin, _ = _app(tmp_path, ADMIN)
+        made = admin.post("/users", json={"email": GUEST}, headers=AUTH)
+
+        assert made.status_code == 201
+        assert made.json()["banks"] == ["demo"]
+
+    def test_the_demo_library_is_a_folder_of_its_own(self, tmp_path):
+        """Not a flag on the real renderings. What a stranger may hear is a
+        thing somebody put there, never a thing somebody forgot to hide."""
+        self._rendering(tmp_path)
+        self._demo(tmp_path)
+        admin, _ = _app(tmp_path, ADMIN)
+        admin.post("/users", json={"email": GUEST}, headers=AUTH)
+
+        guest, _ = _app(tmp_path, GUEST, seeded=frozenset({ADMIN}))
+        tracks = guest.get("/library", headers=AUTH).json()["tracks"]
+
+        assert [t["bank"] for t in tracks] == ["demo"]
+        assert tracks[0]["song"] == "a_demo_song"
+
+    def test_a_demo_address_cannot_fetch_a_rendering_it_was_not_granted(
+            self, tmp_path):
+        """Absent from the listing is not the same as refused. The route has
+        to check, or the listing is only a suggestion."""
+        self._rendering(tmp_path)
+        admin, _ = _app(tmp_path, ADMIN)
+        admin.post("/users", json={"email": GUEST}, headers=AUTH)
+
+        guest, _ = _app(tmp_path, GUEST)
+        answer = guest.get(
+            "/library/a_song/ppbank/a_song.conservative.mp3", headers=AUTH)
+
+        assert answer.status_code == 404
+        assert b"real one" not in answer.content
+
+    def test_granting_a_bank_shows_its_renderings(self, tmp_path):
+        self._rendering(tmp_path)
+        admin, _ = _app(tmp_path, ADMIN)
+        admin.post("/users", json={"email": GUEST}, headers=AUTH)
+
+        admin.put(f"/users/{GUEST}/banks", json={"banks": ["ppbank"]},
+                  headers=AUTH)
+
+        guest, _ = _app(tmp_path, GUEST)
+        tracks = guest.get("/library", headers=AUTH).json()["tracks"]
+        assert [t["bank"] for t in tracks] == ["ppbank"]
+
+    def test_a_bank_this_machine_does_not_have_is_not_granted(self, tmp_path):
+        """A row naming a bank that is not here would look like access to
+        something and mean nothing until a bank of that name turned up."""
+        admin, _ = _app(tmp_path, ADMIN)
+        admin.post("/users", json={"email": GUEST,
+                                   "banks": ["ppbank", "not_a_bank"]},
+                   headers=AUTH)
+
+        listed = admin.get("/users", headers=AUTH).json()
+        row = next(u for u in listed["users"] if u["email"] == GUEST)
+        assert row["banks"] == ["ppbank"]
+        assert listed["grantable"] == ["demo", "ppbank"]
+
+    def test_an_administrator_sees_everything_without_a_row_saying_so(
+            self, tmp_path):
+        self._rendering(tmp_path)
+        self._demo(tmp_path)
+        admin, _ = _app(tmp_path, ADMIN)
+
+        tracks = admin.get("/library", headers=AUTH).json()["tracks"]
+
+        assert {t["bank"] for t in tracks} == {"ppbank", "demo"}
+        row = next(u for u in admin.get("/users", headers=AUTH).json()["users"]
+                   if u["email"] == ADMIN)
+        assert row["banks"] == ["demo", "ppbank"]
+
+    def test_an_administrator_cannot_be_narrowed_from_the_panel(self, tmp_path):
+        """The account that could widen it again is the one being narrowed."""
+        admin, _ = _app(tmp_path, ADMIN)
+
+        answer = admin.put(f"/users/{ADMIN}/banks", json={"banks": ["demo"]},
+                           headers=AUTH)
+
+        assert answer.status_code == 409
+
+    def test_asking_for_nothing_leaves_the_demo_library(self, tmp_path):
+        """An empty set is somebody clearing every box, which must not read as
+        "everything" and must not lock the address out of the one library it
+        started with."""
+        admin, _ = _app(tmp_path, ADMIN)
+        admin.post("/users", json={"email": GUEST, "banks": ["ppbank"]},
+                   headers=AUTH)
+
+        admin.put(f"/users/{GUEST}/banks", json={"banks": []}, headers=AUTH)
+
+        row = next(u for u in admin.get("/users", headers=AUTH).json()["users"]
+                   if u["email"] == GUEST)
+        assert row["banks"] == ["demo"]
+
+
+class TestUpgradingADatabaseThatPredatesLibraries:
+    """Everybody already on the list had everything, because there was nothing
+    to choose between. The upgrade must not read as a revocation."""
+
+    def _old_shaped_db(self, tmp_path):
+        """A database as it was written before the column existed."""
+        import sqlite3
+        path = tmp_path / "jobs.sqlite3"
+        conn = sqlite3.connect(path)
+        conn.execute("CREATE TABLE allowed_emails ("
+                     " email TEXT PRIMARY KEY, added_at TEXT NOT NULL,"
+                     " added_by TEXT NOT NULL)")
+        conn.execute("INSERT INTO allowed_emails VALUES (?, ?, ?)",
+                     (GUEST, AT, ADMIN))
+        conn.commit()
+        conn.close()
+        return path
+
+    def test_an_address_from_before_keeps_everything(self, tmp_path):
+        self._old_shaped_db(tmp_path)
+        out = tmp_path / "output" / "a_song" / "ppbank"
+        out.mkdir(parents=True)
+        (out / "a_song.wild.mp3").write_bytes(b"still theirs")
+
+        guest, _ = _app(tmp_path, GUEST, seeded=frozenset({ADMIN}))
+        tracks = guest.get("/library", headers=AUTH).json()["tracks"]
+
+        assert [t["bank"] for t in tracks] == ["ppbank"]
+
+    def test_an_address_added_after_the_upgrade_still_starts_at_demo(
+            self, tmp_path):
+        """The backfill is for rows that already existed, not for the column's
+        default. A new address is still a stranger."""
+        self._old_shaped_db(tmp_path)
+        admin, _ = _app(tmp_path, ADMIN)
+
+        made = admin.post("/users", json={"email": STRANGER}, headers=AUTH)
+
+        assert made.json()["banks"] == ["demo"]
+
+    def test_a_bank_added_later_is_included_without_touching_the_row(
+            self, tmp_path):
+        """What they hold is "everything", not a list copied at upgrade time."""
+        self._old_shaped_db(tmp_path)
+        for bank in ("ppbank", "later_bank"):
+            out = tmp_path / "output" / "a_song" / bank
+            out.mkdir(parents=True)
+            (out / "a_song.wild.mp3").write_bytes(b"x")
+
+        settings_banks = {"ppbank": "words_hq", "later_bank": "words_later"}
+        guest, _ = _app(tmp_path, GUEST, seeded=frozenset({ADMIN}),
+                        banks=settings_banks)
+        tracks = guest.get("/library", headers=AUTH).json()["tracks"]
+
+        assert {t["bank"] for t in tracks} == {"ppbank", "later_bank"}

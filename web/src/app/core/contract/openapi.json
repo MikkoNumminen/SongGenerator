@@ -51,6 +51,22 @@
         "title": "BankReply",
         "type": "object"
       },
+      "BanksGrantRequest": {
+        "properties": {
+          "banks": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Banks",
+            "type": "array"
+          }
+        },
+        "required": [
+          "banks"
+        ],
+        "title": "BanksGrantRequest",
+        "type": "object"
+      },
       "BanksReply": {
         "properties": {
           "any_usable": {
@@ -149,6 +165,20 @@
       },
       "GrantRequest": {
         "properties": {
+          "banks": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Banks"
+          },
           "email": {
             "title": "Email",
             "type": "string"
@@ -514,6 +544,13 @@
             "title": "Added By",
             "type": "string"
           },
+          "banks": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Banks",
+            "type": "array"
+          },
           "email": {
             "title": "Email",
             "type": "string"
@@ -527,7 +564,8 @@
           "email",
           "added_at",
           "added_by",
-          "is_admin"
+          "is_admin",
+          "banks"
         ],
         "title": "UserReply",
         "type": "object"
@@ -541,6 +579,13 @@
             "title": "Admins",
             "type": "array"
           },
+          "grantable": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Grantable",
+            "type": "array"
+          },
           "users": {
             "items": {
               "$ref": "#/components/schemas/UserReply"
@@ -551,6 +596,7 @@
         },
         "required": [
           "users",
+          "grantable",
           "admins"
         ],
         "title": "UsersReply",
@@ -1046,6 +1092,55 @@
           }
         },
         "summary": "Revoke"
+      }
+    },
+    "/users/{email}/banks": {
+      "put": {
+        "operationId": "set_banks_users__email__banks_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "email",
+            "required": true,
+            "schema": {
+              "title": "Email",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BanksGrantRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsersReply"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Banks"
       }
     }
   }

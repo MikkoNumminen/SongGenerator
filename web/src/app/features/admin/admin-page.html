@@ -35,6 +35,24 @@
             {{ working() ? 'Working...' : 'Grant' }}
           </button>
         </div>
+        <fieldset class="grants">
+          <legend>What they may hear</legend>
+          <!-- Demo is ticked and the rest are not. A newly typed address is a
+               stranger, so the box that is already ticked should be the one
+               that gives away the least. -->
+          @for (name of reply?.grantable ?? []; track name) {
+            <label class="grant-box">
+              <input
+                type="checkbox"
+                [checked]="wanted().includes(name)"
+                (change)="toggleWanted(name)"
+                [disabled]="working()"
+              />
+              <span>{{ name }}</span>
+            </label>
+          }
+        </fieldset>
+
         <p class="hint">
           It has to be the address of a real Google account, and Google has to
           have verified it. Nothing here grants anything on its own.
@@ -54,6 +72,7 @@
         <thead>
           <tr>
             <th scope="col">Account</th>
+            <th scope="col">May hear</th>
             <th scope="col">Granted</th>
             <th scope="col">By</th>
             <th scope="col"><span class="visually-hidden">Actions</span></th>
@@ -69,6 +88,23 @@
                 }
                 @if (user.is_admin) {
                   <span class="tag tag--admin">administrator</span>
+                }
+              </td>
+              <td data-label="May hear" class="hears">
+                @if (user.is_admin) {
+                  <span class="tag">everything</span>
+                } @else {
+                  @for (name of reply?.grantable ?? []; track name) {
+                    <label class="grant-box">
+                      <input
+                        type="checkbox"
+                        [checked]="user.banks.includes(name)"
+                        (change)="toggleFor(user, name)"
+                        [disabled]="working()"
+                      />
+                      <span>{{ name }}</span>
+                    </label>
+                  }
                 }
               </td>
               <td data-label="Granted" class="mono">{{ user.added_at }}</td>
@@ -94,7 +130,7 @@
             </tr>
           } @empty {
             <tr>
-              <td colspan="4" class="none">
+              <td colspan="5" class="none">
                 Nobody has been granted access. The administrators below can
                 still sign in.
               </td>

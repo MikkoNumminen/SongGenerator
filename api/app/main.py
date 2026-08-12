@@ -39,7 +39,7 @@ from .config import Settings, load_settings
 from .jobs import Job, JobRequest, JobRunner
 from .songs import SongError, prepare
 from .store import JobStore, open_store
-from .users import UserStore, open_users
+from .users import ALL, DEMO, UserStore, open_users
 
 # Levels the pipeline offers. Read from its config at wiring time rather than
 # hardcoded, so a level added there does not need editing here too.
@@ -95,6 +95,10 @@ class BankReply(BaseModel):
     standardised: bool
     problem: str | None = None
     usable: bool
+
+
+#: Where the demo library lives, beside `output/` on the same machine.
+DEMO_DIR = "output-demo"
 
 
 class BanksReply(BaseModel):
@@ -170,10 +174,20 @@ class UserReply(BaseModel):
     added_at: str
     added_by: str
     is_admin: bool
+    #: Which libraries this address may see. An administrator's is every one
+    #: there is, which is why it is reported rather than stored.
+    banks: list[str]
+
+
+class BanksGrantRequest(BaseModel):
+    banks: list[str]
 
 
 class UsersReply(BaseModel):
     users: list[UserReply]
+    #: Everything that can be granted, so the panel can offer the boxes
+    #: without knowing what this machine happens to hold.
+    grantable: list[str]
     # So the panel can say "you" and can refuse to offer a revoke button for
     # an address it knows the server will not revoke.
     admins: list[str]
@@ -181,6 +195,10 @@ class UsersReply(BaseModel):
 
 class GrantRequest(BaseModel):
     email: str
+    #: Left out means the demo library and nothing else. A new address is a
+    #: stranger until somebody says otherwise, so the default is the safe one
+    #: rather than whatever the panel last had on screen.
+    banks: list[str] | None = None
 
     @field_validator("email")
     @classmethod
@@ -230,7 +248,7 @@ def create_app(
             CORSMiddleware,
             allow_origins=list(settings.allowed_origins),
             allow_credentials=True,
-            allow_methods=["GET", "POST", "DELETE"],
+            allow_methods=["GET", "POST", "PUT", "DELETE"],
             allow_headers=["Authorization", "Content-Type"],
         )
 
@@ -264,6 +282,28 @@ def create_app(
 
     Caller = Annotated[Principal, Depends(principal)]
 
+    def grantable_names() -> list[str]:
+        """Everything that can be granted: the demo library, then the banks
+        this machine actually holds."""
+        return [DEMO, *sorted(banks)]
+
+    def granted_to(who: Principal) -> frozenset[str]:
+        """Which libraries this caller may see.
+
+        An administrator gets all of them, computed rather than stored: the
+        panel edits the table, and an admin whose access came from a row could
+        be narrowed through the panel by the only account that could widen it
+        again.
+        """
+        if who.email in settings.admin_emails:
+            return frozenset(grantable_names())
+        held = users.banks_for(who.email)
+        # Expanded here rather than at the row, so a bank added next week is
+        # included without anybody revisiting a grant.
+        if ALL in held:
+            return frozenset(grantable_names())
+        return held
+
     def administrator(who: Caller) -> Principal:
         """An allowed caller who may also change who else is allowed.
 
@@ -279,8 +319,13 @@ def create_app(
     Admin = Annotated[Principal, Depends(administrator)]
 
     @app.get("/banks")
-    def list_banks(_: Caller) -> BanksReply:
-        found = catalog(banks, settings.repo_root, standardised_suffix)
+    def list_banks(who: Caller) -> BanksReply:
+        # Only what this caller may actually render with. Offering the rest
+        # would be a picker whose options are refused on submit.
+        may = granted_to(who)
+        found = [b for b in catalog(banks, settings.repo_root,
+                                    standardised_suffix)
+                 if b.name in may]
         return BanksReply(
             banks=[BankReply(**asdict(b), usable=b.usable) for b in found],
             # Said explicitly so the front end can show the empty state rather
@@ -298,6 +343,12 @@ def create_app(
         if chosen is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST,
                                 f"no bank called {body.bank!r} on this machine")
+        # Checked here as well as in the picker. The picker is a convenience;
+        # this is the rule.
+        if body.bank not in granted_to(who):
+            raise HTTPException(status.HTTP_403_FORBIDDEN,
+                                f"you have not been granted the bank"
+                                f" {body.bank!r}")
         if not chosen.usable:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
@@ -387,7 +438,7 @@ def create_app(
         raise HTTPException(status.HTTP_404_NOT_FOUND,
                             "that run produced no such file")
 
-    def _library_tracks() -> list[tuple[str, str, Path]]:
+    def _library_tracks(granted: frozenset[str] | None = None) -> list[tuple[str, str, Path]]:
         """Every rendering on this machine, as (song, bank, path).
 
         Read off the disk rather than out of the job table on purpose. Most of
@@ -396,15 +447,27 @@ def create_app(
         fraction of the library and look broken. The directory is the truth;
         deleting a file is how the owner takes something out of the playlist.
         """
-        root = settings.repo_root / "output"
-        if not root.is_dir():
-            return []
         found = []
-        for song_dir in sorted(p for p in root.iterdir() if p.is_dir()):
-            for bank_dir in sorted(p for p in song_dir.iterdir() if p.is_dir()):
-                for path in sorted(bank_dir.glob("*.mp3")):
-                    if path.is_file():
-                        found.append((song_dir.name, bank_dir.name, path))
+        root = settings.repo_root / "output"
+        if root.is_dir():
+            for song_dir in sorted(p for p in root.iterdir() if p.is_dir()):
+                for bank_dir in sorted(p for p in song_dir.iterdir() if p.is_dir()):
+                    if granted is not None and bank_dir.name not in granted:
+                        continue
+                    for path in sorted(bank_dir.glob("*.mp3")):
+                        if path.is_file():
+                            found.append((song_dir.name, bank_dir.name, path))
+
+        # The demo library is a folder of its own rather than a flag on these
+        # renderings. What a stranger may hear is then a thing somebody put
+        # there, not a thing somebody forgot to hide.
+        if granted is None or DEMO in granted:
+            demo_root = settings.repo_root / DEMO_DIR
+            if demo_root.is_dir():
+                for song_dir in sorted(p for p in demo_root.iterdir() if p.is_dir()):
+                    for path in sorted(song_dir.glob("*.mp3")):
+                        if path.is_file():
+                            found.append((song_dir.name, DEMO, path))
         return found
 
     def _level_of(path: Path) -> str | None:
@@ -420,15 +483,15 @@ def create_app(
         return level
 
     @app.get("/library")
-    def library(_: Caller) -> LibraryReply:
+    def library(who: Caller) -> LibraryReply:
         return LibraryReply(tracks=[
             TrackReply(song=song, bank=bank, level=_level_of(path),
                        name=path.name, bytes=path.stat().st_size)
-            for song, bank, path in _library_tracks()
+            for song, bank, path in _library_tracks(granted_to(who))
         ])
 
     @app.get("/library/{song}/{bank}/{name}")
-    def track(song: str, bank: str, name: str, _: Caller):
+    def track(song: str, bank: str, name: str, who: Caller):
         """One rendering, to play or to save.
 
         Contained by resolving the path and checking it is still inside the
@@ -444,8 +507,17 @@ def create_app(
         """
         from fastapi.responses import FileResponse
 
-        root = (settings.repo_root / "output").resolve()
-        candidate = (root / song / bank / name).resolve()
+        # Checked before the path is built, so a library nobody granted is
+        # not merely absent from the listing.
+        if bank not in granted_to(who):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "no such track")
+
+        if bank == DEMO:
+            root = (settings.repo_root / DEMO_DIR).resolve()
+            candidate = (root / song / name).resolve()
+        else:
+            root = (settings.repo_root / "output").resolve()
+            candidate = (root / song / bank / name).resolve()
         if (not candidate.is_relative_to(root)
                 or candidate.suffix.lower() != ".mp3"
                 or not candidate.is_file()):
@@ -456,12 +528,19 @@ def create_app(
     def _users_reply() -> UsersReply:
         """The allowlist as the panel wants it, shared by the two routes that
         answer with it rather than one route calling the other."""
+        every = grantable_names()
         return UsersReply(
-            users=[UserReply(email=u.email, added_at=u.added_at,
-                             added_by=u.added_by,
-                             is_admin=u.email in settings.admin_emails)
-                   for u in users.all()],
+            users=[UserReply(
+                email=u.email, added_at=u.added_at, added_by=u.added_by,
+                is_admin=u.email in settings.admin_emails,
+                # An administrator sees everything by being one, so the panel
+                # is told that rather than the row, which would show an admin
+                # holding the demo library alone.
+                banks=every if u.email in settings.admin_emails
+                else sorted(u.banks))
+                for u in users.all()],
             admins=sorted(settings.admin_emails),
+            grantable=every,
         )
 
     @app.get("/users")
@@ -473,9 +552,34 @@ def create_app(
         from datetime import datetime
 
         now = datetime.now(UTC).isoformat(timespec="seconds")
-        users.add(body.email, added_by=who.email, at=now)
+        asked = _known(body.banks) if body.banks is not None else frozenset({DEMO})
+        users.add(body.email, added_by=who.email, at=now, banks=asked)
         return UserReply(email=body.email, added_at=now, added_by=who.email,
-                         is_admin=body.email in settings.admin_emails)
+                         is_admin=body.email in settings.admin_emails,
+                         banks=sorted(users.banks_for(body.email)))
+
+    def _known(asked: list[str]) -> frozenset[str]:
+        """Only names this machine can actually offer.
+
+        A grant for a bank that is not here would sit in the table looking
+        like access to something, and mean nothing until a bank of that name
+        happened to appear.
+        """
+        every = set(grantable_names())
+        kept = {b.strip() for b in asked if b.strip() in every}
+        return frozenset(kept) or frozenset({DEMO})
+
+    @app.put("/users/{email}/banks")
+    def set_banks(email: str, body: BanksGrantRequest, _: Admin) -> UsersReply:
+        target = email.strip().lower()
+        if target in settings.admin_emails:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "that address is an administrator and already sees everything")
+        if not users.set_banks(target, _known(body.banks)):
+            raise HTTPException(status.HTTP_404_NOT_FOUND,
+                                "that address was not on the list")
+        return _users_reply()
 
     @app.delete("/users/{email}")
     def revoke(email: str, _: Admin) -> UsersReply:
