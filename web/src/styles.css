@@ -610,6 +610,17 @@ input:focus {
     background var(--fast) var(--ease);
 }
 
+/* Tighter, for a strip that has to hold two of these and an action on one
+   line. Same control, less air. */
+.segmented--compact {
+  gap: 0.1rem;
+  padding: 0.2rem;
+}
+
+.segmented--compact .seg span {
+  padding: 0.3rem 0.65rem;
+}
+
 /* Bank names are identifiers somebody chose, so they are shown as written:
    capitalising turns ppbank into Ppbank and lavisBank into LavisBank. */
 .segmented--verbatim .seg span {
@@ -710,6 +721,56 @@ input:focus {
 
 .dot--wild {
   color: var(--wild);
+}
+
+/* Four bars keeping time: the mark from the header doing the waiting. Shared,
+   because more than one place has to say "this is happening". Cheaper than a
+   spinner and it says the same thing in the site's own voice. */
+.bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 1rem;
+  flex: none;
+}
+
+.bars i {
+  width: 3px;
+  height: 100%;
+  border-radius: 2px;
+  background: currentColor;
+  transform-origin: bottom;
+  animation: bars-bounce 1s var(--ease) infinite alternate;
+}
+
+.bars i:nth-child(2) {
+  animation-delay: 0.12s;
+}
+
+.bars i:nth-child(3) {
+  animation-delay: 0.24s;
+}
+
+.bars i:nth-child(4) {
+  animation-delay: 0.36s;
+}
+
+@keyframes bars-bounce {
+  from {
+    scale: 1 0.3;
+  }
+  to {
+    scale: 1 1;
+  }
+}
+
+/* Somebody who asked their machine to stop moving things asked this too. The
+   bars stand still at full height rather than vanishing, so the thing still
+   reads as present. */
+@media (prefers-reduced-motion: reduce) {
+  .bars i {
+    animation: none;
+  }
 }
 
 /* A dot that breathes, for the one thing on screen that is still happening. */
