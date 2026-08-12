@@ -54,14 +54,21 @@ def _runner() -> tuple[JobRunner, list[Job]]:
 # ---------------------------------------------------------------------------
 
 def test_only_the_flags_that_were_asked_for_are_passed():
-    """The pipeline's defaults are the defaults. Passing --play always would
-    silently halve every run to one level."""
+    """The pipeline's defaults are the defaults, with one exception.
+
+    --play is not passed, because passing it always would silently halve every
+    run to one level. Neither is --engine.
+
+    --mimicry is the exception and is always passed. Leaving it to the
+    pipeline's own default is the seven-rung sweep, which is what turned one
+    submitted song into fourteen files. See AGENTS.md, "Never write more than
+    two renderings for a song".
+    """
     cmd = render_command("python", REQUEST, Path("input/song.mp4"))
 
     assert "--play" not in cmd
-    assert "--mimicry" not in cmd
     assert "--engine" not in cmd
-    assert cmd[-2:] == ["--bank", "ppbank"]
+    assert cmd[cmd.index("--mimicry") + 1] == "1"
 
 
 def test_the_settings_that_were_asked_for_do_reach_the_command():
