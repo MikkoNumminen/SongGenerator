@@ -1,7 +1,12 @@
 import { InjectionToken } from '@angular/core';
 import { Observable } from 'rxjs';
 
-import { HistoryReply, JobReply, SubmitBody } from '../contract/dto';
+import {
+  FilesReply,
+  HistoryReply,
+  JobReply,
+  SubmitBody,
+} from '../contract/dto';
 
 /**
  * Runs: starting one, watching it, and what happened before.
@@ -29,6 +34,18 @@ export interface RunSource {
    */
   history(limit?: number, requestedBy?: string): Observable<HistoryReply>;
   cancel(id: string): Observable<void>;
+
+  /** What a run produced, once it has finished. Empty while it is still going. */
+  files(id: string): Observable<FilesReply>;
+
+  /**
+   * One of those renderings, as bytes.
+   *
+   * A Blob rather than a URL for the same reason the library hands one back:
+   * an `<audio src>` cannot carry the Authorization header every route needs,
+   * and a token in a query string ends up in logs and history.
+   */
+  file(id: string, name: string): Observable<Blob>;
 }
 
 export const RUN_SOURCE = new InjectionToken<RunSource>('RunSource');

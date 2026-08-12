@@ -18,6 +18,7 @@ import { LIBRARY } from '../../core/ports/library.port';
 import { RUN_SOURCE } from '../../core/ports/run-source.port';
 import { RunWatcher } from '../../core/runs/run-watcher';
 import { AsyncState, idle, valueOf } from '../../core/state/async-state';
+import { RunTakes } from '../../shared/run-takes/run-takes';
 import { StatePanel } from '../../shared/state-panel/state-panel';
 import { stageTone } from '../../shared/stage-tone';
 
@@ -37,7 +38,7 @@ const ENDINGS = new Set(['done', 'failed', 'refused']);
 @Component({
   selector: 'app-run-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [StatePanel],
+  imports: [StatePanel, RunTakes],
   templateUrl: './run-page.html',
   styleUrl: './run-page.css',
 })

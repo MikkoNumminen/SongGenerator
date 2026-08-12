@@ -55,6 +55,7 @@
             <th scope="col">Bank</th>
             <th scope="col">Outcome</th>
             <th scope="col">Song</th>
+            <th scope="col"><span class="visually-hidden">Takes</span></th>
           </tr>
         </thead>
         <tbody>
@@ -71,7 +72,24 @@
               <td data-label="Song" class="song">
                 <a [routerLink]="['/runs', run.id]">{{ run.song ?? run.source_url }}</a>
               </td>
+              <td data-label="" class="opener">
+                <!-- Only a run that finished has anything to offer. -->
+                @if (run.settled) {
+                  <button type="button" class="btn btn--quiet btn--sm"
+                          [attr.aria-expanded]="openRun() === run.id"
+                          (click)="toggle(run.id)">
+                    {{ openRun() === run.id ? 'Hide' : 'Takes' }}
+                  </button>
+                }
+              </td>
             </tr>
+            @if (openRun() === run.id) {
+              <tr class="takes-row">
+                <td colspan="5">
+                  <app-run-takes [runId]="run.id" [finished]="true" />
+                </td>
+              </tr>
+            }
           }
         </tbody>
       </table>

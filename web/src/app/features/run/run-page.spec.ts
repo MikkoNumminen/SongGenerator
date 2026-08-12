@@ -43,6 +43,9 @@ describe('RunPage', () => {
         cancelled.push(id);
         return of(undefined);
       },
+      // The finished run asks what it produced. Empty is a real answer.
+      files: () => of({ files: [] }),
+      file: () => of(new Blob()),
     };
 
     TestBed.configureTestingModule({

@@ -23,6 +23,7 @@ import {
   ready,
   valueOf,
 } from '../../core/state/async-state';
+import { RunTakes } from '../../shared/run-takes/run-takes';
 import { StatePanel } from '../../shared/state-panel/state-panel';
 import { stageTone } from '../../shared/stage-tone';
 
@@ -32,7 +33,7 @@ const EVERYONE = '__everyone__';
 @Component({
   selector: 'app-history-page',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, StatePanel],
+  imports: [RouterLink, StatePanel, RunTakes],
   templateUrl: './history-page.html',
   styleUrl: './history-page.css',
 })
@@ -48,6 +49,13 @@ export class HistoryPage {
   private readonly configured = inject(API_BASE_URL) !== '';
 
   readonly state = signal<AsyncState<readonly JobReply[]>>(idle());
+
+  /** Which run's takes are showing. One at a time keeps the table a table. */
+  readonly openRun = signal<string | null>(null);
+
+  toggle(id: string): void {
+    this.openRun.set(this.openRun() === id ? null : id);
+  }
 
   /** Everybody, or one address. Only offered to somebody who sees all runs. */
   readonly showing = signal<string>(EVERYONE);
