@@ -221,6 +221,24 @@ describe('the player', () => {
     expect(songs.map((s) => s.song)).toEqual(['musicHyva', 'ukkometso']);
   });
 
+  it('says on the button how much it would play', async () => {
+    // The number is the button's, so it has to be part of what the button is
+    // called rather than a decoration beside the word.
+    const fixture = await render(library);
+    const button: HTMLButtonElement =
+      fixture.nativeElement.querySelector('.shuffle__go');
+    const everything = fixture.componentInstance.matching().length;
+
+    expect(button.getAttribute('aria-label')).toBe(`Shuffle ${everything} takes`);
+
+    fixture.componentInstance.chooseLevel('wild');
+    fixture.detectChanges();
+
+    const fewer = fixture.componentInstance.matching().length;
+    expect(fewer).toBeLessThan(everything);
+    expect(button.getAttribute('aria-label')).toBe(`Shuffle ${fewer} takes`);
+  });
+
   it('narrows the shuffle from the control itself', async () => {
     // Driven through the DOM rather than by calling the method, because the
     // binding between the two is the part that can come undone.

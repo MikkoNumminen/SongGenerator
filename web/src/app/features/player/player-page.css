@@ -236,8 +236,13 @@
   background: var(--surface);
 }
 
+/* Capped to its column. The level is read off the filename, so it is not
+   always one of the two words this was measured for, and a badge wider than
+   its column sits on top of the bank name rather than pushing it along. */
 .take__row > .badge {
   justify-self: start;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .take__bank {
@@ -336,10 +341,6 @@
 
   .shuffle {
     gap: var(--space-3);
-  }
-
-  .shuffle__count {
-    margin-left: 0;
   }
 
   .takes {

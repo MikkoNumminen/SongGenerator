@@ -84,6 +84,7 @@
         type="button"
         class="btn btn--primary shuffle__go"
         [disabled]="fetching() || !matching().length"
+        [attr.aria-label]="'Shuffle ' + matching().length + ' takes'"
         (click)="shuffle()"
       >
         <!-- Drawn rather than typed: the shuffle character (U+2942) is missing
