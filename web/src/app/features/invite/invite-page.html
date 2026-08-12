@@ -1,0 +1,72 @@
+<section class="invite">
+  <header class="head">
+    <p class="eyebrow">You have been invited</p>
+    <h1>Songs, with the singing replaced</h1>
+    <p class="lead">
+      This machine takes a song, throws away the singer, and puts words from a
+      bank of recordings back in their place, on the same notes and at the same
+      moments. The invitation lets you hear a few of them.
+    </p>
+  </header>
+
+  @switch (step()) {
+    @case ('waiting') {
+      <div class="card">
+        @if (canSignIn()) {
+          <p>
+            Signing in with Google is how this machine learns which account to
+            let in. Nothing else is asked for, and the address comes from
+            Google rather than from anything typed here.
+          </p>
+          <button type="button" class="btn btn--primary" (click)="signIn()">
+            Sign in with Google
+          </button>
+        } @else {
+          <p class="problem" role="alert">
+            Sign-in is not set up on this site, so this link cannot be used
+            here. Nothing is wrong with the link.
+          </p>
+        }
+      </div>
+    }
+
+    @case ('joining') {
+      <div class="card card--waiting" role="status" aria-live="polite">
+        <span class="bars" aria-hidden="true">
+          <i></i><i></i><i></i><i></i>
+        </span>
+        Letting you in
+      </div>
+    }
+
+    @case ('joined') {
+      <div class="card">
+        <p class="done">You are in.</p>
+        <p>
+          The demo library is what this link opens. The machine that makes the
+          songs is a desktop and is not always switched on, so it will
+          sometimes say it is not answering. That is normal rather than broken.
+        </p>
+        <button type="button" class="btn btn--primary" (click)="goToSongs()">
+          Listen
+        </button>
+      </div>
+    }
+
+    @case ('unreachable') {
+      <div class="card">
+        <p class="problem" role="alert">
+          That machine is not answering. It is a desktop and it is not always
+          on. The link is still good; try again later.
+        </p>
+      </div>
+    }
+
+    @case ('refused') {
+      <div class="card">
+        <p class="problem" role="alert">{{ problem() }}</p>
+        <p>Ask whoever sent it for another one.</p>
+      </div>
+    }
+  }
+</section>

@@ -173,3 +173,77 @@ tbody tr:last-child td {
   flex-wrap: wrap;
   gap: var(--space-2) var(--space-3);
 }
+
+
+/* ---- invitations ---- */
+
+.invite {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.invite__text {
+  flex: 1;
+  min-width: 14rem;
+}
+
+.invite h2 {
+  margin: 0 0 0.2rem;
+  font-size: var(--text-md);
+}
+
+.link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-sunk);
+}
+
+.link__value {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--text-xs);
+}
+
+.links {
+  list-style: none;
+  margin: var(--space-3) 0 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.links__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  font-size: var(--text-sm);
+}
+
+/* The token is the secret. Enough of it to tell two apart, not enough to be
+   read off a shoulder. */
+.links__token {
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.links__when {
+  color: var(--text-faint);
+  font-size: var(--text-xs);
+  margin-left: auto;
+}
+
+.tag--open {
+  background: var(--ok-wash);
+  color: var(--ok-text);
+}

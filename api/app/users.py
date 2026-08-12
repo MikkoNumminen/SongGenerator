@@ -58,6 +58,8 @@ class AllowedUser:
     added_at: str
     added_by: str
     banks: frozenset[str]
+    #: Whether this address sees every run or only the ones it asked for.
+    see_all_runs: bool
 
 
 class UserStore:
@@ -74,13 +76,14 @@ class UserStore:
     def all(self) -> list[AllowedUser]:
         """Every grant, oldest first, for the panel."""
         rows = self._conn.execute(
-            "SELECT email, added_at, added_by, banks FROM allowed_emails"
-            " ORDER BY added_at, email"
+            "SELECT email, added_at, added_by, banks, see_all_runs"
+            " FROM allowed_emails ORDER BY added_at, email"
         ).fetchall()
         return [
             AllowedUser(email=str(r["email"]), added_at=str(r["added_at"]),
                         added_by=str(r["added_by"]),
-                        banks=parse_banks(str(r["banks"])))
+                        banks=parse_banks(str(r["banks"])),
+                        see_all_runs=bool(r["see_all_runs"]))
             for r in rows
         ]
 
@@ -92,6 +95,23 @@ class UserStore:
             (email.strip().lower(),)
         ).fetchone()
         return parse_banks(str(row["banks"])) if row is not None else frozenset({DEMO})
+
+    def sees_all_runs(self, email: str) -> bool:
+        """Whether this address was granted every run. False for anybody not
+        on the list, which is nobody: the caller is checked before this."""
+        row = self._conn.execute(
+            "SELECT see_all_runs FROM allowed_emails WHERE email = ?",
+            (email.strip().lower(),)
+        ).fetchone()
+        return bool(row["see_all_runs"]) if row is not None else False
+
+    def set_sees_all_runs(self, email: str, allowed: bool) -> bool:
+        """Grant or withdraw it. False when the address is not on the list."""
+        cur = self._conn.execute(
+            "UPDATE allowed_emails SET see_all_runs = ? WHERE email = ?",
+            (1 if allowed else 0, email.strip().lower()),
+        )
+        return cur.rowcount > 0
 
     def set_banks(self, email: str, banks: frozenset[str] | set[str] | list[str]) -> bool:
         """Change what an address may see. False when it is not on the list."""
@@ -154,6 +174,90 @@ class UserStore:
                         banks={ALL}):
                 added += 1
         return added
+
+
+@dataclass(frozen=True)
+class Invitation:
+    """A link that admits exactly one account, to the demo library."""
+
+    token: str
+    created_at: str
+    created_by: str
+    expires_at: str
+    used_at: str | None
+    used_by: str | None
+
+    def spent(self) -> bool:
+        return self.used_at is not None
+
+
+class InvitationStore:
+    """One-time invitations, as rows.
+
+    An invitation grants the demo library and nothing else, and that is not a
+    parameter. A link that could be made to grant more would be a link worth
+    stealing; this one is worth no more than the thing it admits you to.
+    """
+
+    def __init__(self, conn: sqlite3.Connection) -> None:
+        self._conn = conn
+
+    def create(self, *, created_by: str, at: str, expires_at: str) -> Invitation:
+        # 32 bytes from the system source. Guessing one is not a threat model
+        # anybody needs to think about again.
+        import secrets
+        token = secrets.token_urlsafe(32)
+        self._conn.execute(
+            "INSERT INTO invitations"
+            " (token, created_at, created_by, expires_at) VALUES (?, ?, ?, ?)",
+            (token, at, created_by.strip().lower(), expires_at),
+        )
+        return Invitation(token=token, created_at=at,
+                          created_by=created_by.strip().lower(),
+                          expires_at=expires_at, used_at=None, used_by=None)
+
+    def all(self) -> list[Invitation]:
+        """Newest first: the panel is usually looking for the one just made."""
+        rows = self._conn.execute(
+            "SELECT token, created_at, created_by, expires_at, used_at, used_by"
+            " FROM invitations ORDER BY created_at DESC, token"
+        ).fetchall()
+        return [Invitation(token=str(r["token"]), created_at=str(r["created_at"]),
+                           created_by=str(r["created_by"]),
+                           expires_at=str(r["expires_at"]),
+                           used_at=r["used_at"], used_by=r["used_by"])
+                for r in rows]
+
+    def find(self, token: str) -> Invitation | None:
+        rows = [i for i in self.all() if i.token == token]
+        return rows[0] if rows else None
+
+    def spend(self, token: str, *, by: str, at: str) -> bool:
+        """Mark one used. False when it was already used or never existed.
+
+        The condition is in the statement rather than in a read followed by a
+        write, so two people opening the same link at the same moment cannot
+        both be admitted.
+        """
+        cur = self._conn.execute(
+            "UPDATE invitations SET used_at = ?, used_by = ?"
+            " WHERE token = ? AND used_at IS NULL",
+            (at, by.strip().lower(), token),
+        )
+        return cur.rowcount > 0
+
+    def revoke(self, token: str) -> bool:
+        """Withdraw an unused link. Spent ones are kept as a record."""
+        cur = self._conn.execute(
+            "DELETE FROM invitations WHERE token = ? AND used_at IS NULL",
+            (token,),
+        )
+        return cur.rowcount > 0
+
+
+def open_invitations(conn: sqlite3.Connection) -> InvitationStore:
+    """An invitation store on an already-open connection."""
+    return InvitationStore(conn)
 
 
 def open_users(conn: sqlite3.Connection) -> UserStore:

@@ -20,7 +20,14 @@ import { HistoryReply, JobReply, SubmitBody } from '../contract/dto';
 export interface RunSource {
   submit(request: SubmitBody): Observable<JobReply>;
   job(id: string): Observable<JobReply>;
-  history(limit?: number): Observable<HistoryReply>;
+  /**
+   * Runs this caller may see, optionally narrowed to one address.
+   *
+   * The address is a convenience for somebody who can already see all of
+   * them, never a way to see more: the edge applies it on top of the same
+   * check, so naming somebody whose runs are not yours returns nothing.
+   */
+  history(limit?: number, requestedBy?: string): Observable<HistoryReply>;
   cancel(id: string): Observable<void>;
 }
 

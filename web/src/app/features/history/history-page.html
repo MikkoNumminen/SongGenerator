@@ -4,6 +4,38 @@
     <p class="lead">Everything this machine has been asked for, newest first.</p>
   </header>
 
+  <!-- Only where there is more than one person's runs to look at. Somebody who
+       only ever sees their own has nothing to switch between. -->
+  @if (askers().length > 1 || showing() !== EVERYONE) {
+    <div class="whose">
+      <span class="label" id="whose">Runs by</span>
+      <div class="segmented segmented--compact segmented--verbatim"
+           role="radiogroup" aria-labelledby="whose">
+        <label class="seg">
+          <input
+            type="radio"
+            name="whose"
+            [checked]="showing() === EVERYONE"
+            (change)="show(EVERYONE)"
+          />
+          <span>everybody</span>
+        </label>
+        @for (who of askers(); track who) {
+          <label class="seg">
+            <input
+              type="radio"
+              name="whose"
+              [checked]="showing() === who"
+              (change)="show(who)"
+            />
+            <span>{{ who }}</span>
+          </label>
+        }
+      </div>
+    </div>
+  }
+
+
   <app-state-panel
     [state]="state()"
     busyLabel="Reading the history..."

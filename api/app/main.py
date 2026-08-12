@@ -33,13 +33,15 @@ from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
-from .auth import AuthError, Principal, google_verifier, verify
+from .auth import (AuthError, Principal, google_verifier, verify,
+                   verify_identity)
 from .banks import catalog
 from .config import Settings, load_settings
 from .jobs import Job, JobRequest, JobRunner
 from .songs import SongError, prepare
 from .store import JobStore, open_store
-from .users import ALL, DEMO, UserStore, open_users
+from .users import (ALL, DEMO, InvitationStore, UserStore,
+                    open_invitations, open_users)
 
 # Levels the pipeline offers. Read from its config at wiring time rather than
 # hardcoded, so a level added there does not need editing here too.
@@ -99,6 +101,10 @@ class BankReply(BaseModel):
 
 #: Where the demo library lives, beside `output/` on the same machine.
 DEMO_DIR = "output-demo"
+
+#: How long an invitation stays usable. Long enough to be read at leisure,
+#: short enough that a link forgotten in a chat window stops working.
+INVITATION_DAYS = 7
 
 
 class BanksReply(BaseModel):
@@ -177,9 +183,33 @@ class UserReply(BaseModel):
     #: Which libraries this address may see. An administrator's is every one
     #: there is, which is why it is reported rather than stored.
     banks: list[str]
+    #: Whether this address sees every run or only the ones it asked for.
+    see_all_runs: bool
 
 
 class BanksGrantRequest(BaseModel):
+    banks: list[str]
+
+
+class RunsVisibilityRequest(BaseModel):
+    see_all_runs: bool
+
+
+class InvitationReply(BaseModel):
+    token: str
+    created_at: str
+    created_by: str
+    expires_at: str
+    used_at: str | None = None
+    used_by: str | None = None
+
+
+class InvitationsReply(BaseModel):
+    invitations: list[InvitationReply]
+
+
+class AcceptedReply(BaseModel):
+    email: str
     banks: list[str]
 
 
@@ -227,6 +257,7 @@ def create_app(
     runner: JobRunner,
     store: JobStore,
     users: UserStore,
+    invitations: InvitationStore,
     banks: dict[str, str],
     standardised_suffix: str,
     levels: tuple[str, ...],
@@ -381,6 +412,16 @@ def create_app(
             raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, str(exc)) from exc
         return _job_payload(job)
 
+    def _sees_every_run(who: Principal) -> bool:
+        """An administrator always. Anybody else only if granted it.
+
+        Off by default and granted deliberately, because a run names a song
+        somebody chose to make, which is a more personal thing than the list
+        of what exists.
+        """
+        return (who.email in settings.admin_emails
+                or users.sees_all_runs(who.email))
+
     def _own(job: Job | None, who: Principal) -> bool:
         """Whether this caller may look at this run.
 
@@ -391,14 +432,30 @@ def create_app(
         produced, which is the same audio the library refuses it.
         """
         return job is not None and (
-            who.email in settings.admin_emails
+            _sees_every_run(who)
             or job.requested_by.strip().lower() == who.email.strip().lower())
 
     @app.get("/jobs")
-    def history(who: Caller, limit: int = 50) -> HistoryReply:
+    def history(who: Caller, limit: int = 50,
+                requested_by: str | None = None) -> HistoryReply:
+        """Runs this caller may see, optionally narrowed to one person.
+
+        The filter is a convenience for somebody who can already see all of
+        them, not a way to see more: it is applied on top of the same check,
+        so naming an address you could not otherwise see returns nothing
+        rather than that person's runs.
+        """
         capped = max(1, min(limit, 200))
-        return HistoryReply(jobs=[_job_payload(j) for j in store.recent(capped)
-                                  if _own(j, who)])
+        wanted = requested_by.strip().lower() if requested_by else None
+        # Asked once, not once per run. _own() reads the grant from the
+        # database, and up to two hundred runs came back from one request.
+        everything = _sees_every_run(who)
+        mine = who.email.strip().lower()
+        return HistoryReply(jobs=[
+            _job_payload(j) for j in store.recent(capped)
+            if (everything or j.requested_by.strip().lower() == mine)
+            and (wanted is None
+                 or j.requested_by.strip().lower() == wanted)])
 
     @app.get("/jobs/{job_id}")
     def one(job_id: str, who: Caller) -> JobReply:
@@ -553,7 +610,11 @@ def create_app(
                 # is told that rather than the row, which would show an admin
                 # holding the demo library alone.
                 banks=every if u.email in settings.admin_emails
-                else sorted(u.banks))
+                else sorted(u.banks),
+                # An administrator sees every run by being one, so the panel
+                # is told that rather than the row.
+                see_all_runs=(u.email in settings.admin_emails
+                              or u.see_all_runs))
                 for u in users.all()],
             admins=sorted(settings.admin_emails),
             grantable=every,
@@ -572,7 +633,8 @@ def create_app(
         users.add(body.email, added_by=who.email, at=now, banks=asked)
         return UserReply(email=body.email, added_at=now, added_by=who.email,
                          is_admin=body.email in settings.admin_emails,
-                         banks=sorted(users.banks_for(body.email)))
+                         banks=sorted(users.banks_for(body.email)),
+                         see_all_runs=users.sees_all_runs(body.email))
 
     def _known(asked: list[str]) -> frozenset[str]:
         """Only names this machine can actually offer.
@@ -584,6 +646,105 @@ def create_app(
         every = set(grantable_names())
         kept = {b.strip() for b in asked if b.strip() in every}
         return frozenset(kept) or frozenset({DEMO})
+
+    def _invitation_payload(inv) -> InvitationReply:
+        return InvitationReply(token=inv.token, created_at=inv.created_at,
+                               created_by=inv.created_by,
+                               expires_at=inv.expires_at,
+                               used_at=inv.used_at, used_by=inv.used_by)
+
+    @app.get("/invitations")
+    def list_invitations(_: Admin) -> InvitationsReply:
+        return InvitationsReply(
+            invitations=[_invitation_payload(i) for i in invitations.all()])
+
+    @app.post("/invitations", status_code=status.HTTP_201_CREATED)
+    def invite(who: Admin) -> InvitationReply:
+        """A link that admits exactly one account, to the demo library.
+
+        What it grants is not a parameter. A link that could be made to grant
+        more would be a link worth stealing.
+        """
+        from datetime import datetime, timedelta
+
+        now = datetime.now(UTC)
+        made = invitations.create(
+            created_by=who.email,
+            at=now.isoformat(timespec="seconds"),
+            expires_at=(now + timedelta(days=INVITATION_DAYS))
+            .isoformat(timespec="seconds"))
+        return _invitation_payload(made)
+
+    @app.delete("/invitations/{token}")
+    def withdraw(token: str, _: Admin) -> InvitationsReply:
+        if not invitations.revoke(token):
+            raise HTTPException(status.HTTP_404_NOT_FOUND,
+                                "no unused invitation with that link")
+        return InvitationsReply(
+            invitations=[_invitation_payload(i) for i in invitations.all()])
+
+    @app.post("/invitations/{token}/accept")
+    def accept(token: str, request: Request) -> AcceptedReply:
+        """Redeem an invitation.
+
+        The only route that admits somebody not already on the allowlist, so
+        every other check is kept and only that one is skipped. A real Google
+        token is still required and still checked for issuer, audience and a
+        verified address: the invitation says a stranger may join, not that
+        anybody may claim to be anyone.
+
+        The address admitted is the one Google verified, never one the caller
+        supplies, so a link cannot be redeemed on somebody else's behalf.
+        """
+        from datetime import datetime
+
+        header = request.headers.get("Authorization", "")
+        bearer = header[7:].strip() if header.lower().startswith("bearer ") else ""
+        try:
+            newcomer = verify_identity(bearer, settings.google_client_id, verifier)
+        except AuthError as exc:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(exc)) from exc
+
+        found = invitations.find(token)
+        now = datetime.now(UTC)
+        # One refusal for every reason, so a caller cannot learn which links
+        # exist from the wording of the answer.
+        if (found is None or found.spent()
+                or found.expires_at < now.isoformat(timespec="seconds")):
+            raise HTTPException(status.HTTP_404_NOT_FOUND,
+                                "that invitation is not usable")
+
+        stamp = now.isoformat(timespec="seconds")
+        # Somebody already allowed in gains nothing from a link, so spending
+        # one on them burns it for nobody. The obvious way to find that out is
+        # to open your own link to see whether it works, which used to be the
+        # thing that destroyed it.
+        if newcomer.email in (users.emails() | settings.admin_emails):
+            return AcceptedReply(email=newcomer.email,
+                                 banks=sorted(granted_to(newcomer)))
+
+        # Spent first. If the grant then fails, an unusable link is a smaller
+        # problem than a link that can be spent twice.
+        if not invitations.spend(token, by=newcomer.email, at=stamp):
+            raise HTTPException(status.HTTP_404_NOT_FOUND,
+                                "that invitation is not usable")
+        users.add(newcomer.email, added_by=f"invitation from {found.created_by}",
+                  at=stamp, banks={DEMO})
+        return AcceptedReply(email=newcomer.email,
+                             banks=sorted(users.banks_for(newcomer.email)))
+
+    @app.put("/users/{email}/runs")
+    def set_runs_visibility(email: str, body: RunsVisibilityRequest,
+                            _: Admin) -> UsersReply:
+        target = email.strip().lower()
+        if target in settings.admin_emails:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                "that address is an administrator and already sees every run")
+        if not users.set_sees_all_runs(target, body.see_all_runs):
+            raise HTTPException(status.HTTP_404_NOT_FOUND,
+                                "that address was not on the list")
+        return _users_reply()
 
     @app.put("/users/{email}/banks")
     def set_banks(email: str, body: BanksGrantRequest, _: Admin) -> UsersReply:
@@ -659,6 +820,7 @@ def build() -> FastAPI:
     # without anybody being told to do something.
     users = open_users(store.connection)
     users.seed(settings.allowed_emails, at=now)
+    invitations = open_invitations(store.connection)
 
     runner = JobRunner(on_update=store.save)
 
@@ -671,6 +833,7 @@ def build() -> FastAPI:
         runner=runner,
         store=store,
         users=users,
+        invitations=invitations,
         banks=dict(pipeline_config.BANKS),
         standardised_suffix=pipeline_config.STD_SUFFIX,
         levels=tuple(pipeline_config.PLAY_LEVELS),

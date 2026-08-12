@@ -101,6 +101,29 @@ never see. Resolve it on a real vocal.
 
 ## Open items
 
+- **A real waveform on the track being played.**
+
+  The idea that started this was a whole look built around waveforms: every
+  row in the library drawn as the shape of its own audio, colour taken from
+  the sound rather than from a palette. It was dropped rather than attempted,
+  and the reason is worth keeping.
+
+  The edge reports a rendering's size, not its shape. Drawing a real waveform
+  needs peak data that nothing currently produces, so a list of it would mean
+  either decoding megabytes per row in the browser, which makes the list slower
+  exactly where speed was just bought, or inventing squiggles, which is
+  decoration pretending to be measurement.
+
+  The version that would earn its keep is narrow: one waveform, for the take
+  currently playing, drawn from peaks written beside the mp3 at render time.
+  That is a small addition to the render step, a few hundred bytes per
+  rendering, and a backfill pass over what already exists. It also gives a
+  playhead something to move along, which is the part a person would actually
+  use.
+
+  Not scheduled. Written down because the reasoning is the useful part: the
+  cost is generating data that does not exist yet, not drawing it.
+
 - **Make vocals with AudiobookMaker.**
 
   A bank needs clean, isolated, pitch-trackable words, and every source cut so

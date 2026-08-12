@@ -43,17 +43,17 @@ class Principal:
     name: str | None = None
 
 
-def decide(claims: dict[str, object], allowed: frozenset[str],
-           client_id: str) -> Principal:
-    """Turn verified claims into a principal, or refuse and say why.
+def identify(claims: dict[str, object], client_id: str) -> Principal:
+    """Who this token says they are, with no view on whether they may be here.
 
-    Pure. Everything here is a check on a dictionary, so the rules that decide
-    who gets in can be read and tested without a network or a Google account.
+    Split out from `decide` for the one case that needs the identity without
+    the policy: somebody redeeming an invitation is by definition not on the
+    allowlist yet, and the whole point of the invitation is to put them there.
+    Every check on the token itself still applies; the only thing skipped is
+    the question the invitation is the answer to.
     """
     if not client_id:
         raise AuthError("this edge has no Google client configured, so nobody can sign in")
-    if not allowed:
-        raise AuthError("this edge has an empty allowlist, so nobody can sign in")
 
     issuer = str(claims.get("iss", ""))
     if issuer not in _ISSUERS:
@@ -75,11 +75,23 @@ def decide(claims: dict[str, object], allowed: frozenset[str],
     if claims.get("email_verified") is not True:
         raise AuthError("that Google account has not verified its email address")
 
-    if email not in allowed:
-        raise AuthError("that account is not on this edge's allowlist")
-
     name = claims.get("name")
     return Principal(email=email, name=str(name) if name else None)
+
+
+def decide(claims: dict[str, object], allowed: frozenset[str],
+           client_id: str) -> Principal:
+    """Turn verified claims into a principal, or refuse and say why.
+
+    Pure. Everything here is a check on a dictionary, so the rules that decide
+    who gets in can be read and tested without a network or a Google account.
+    """
+    if not allowed:
+        raise AuthError("this edge has an empty allowlist, so nobody can sign in")
+    who = identify(claims, client_id)
+    if who.email not in allowed:
+        raise AuthError("that account is not on this edge's allowlist")
+    return who
 
 
 def verify(token: str, allowed: frozenset[str], client_id: str,
@@ -98,6 +110,20 @@ def verify(token: str, allowed: frozenset[str], client_id: str,
     except Exception as exc:  # the verifier's own failures, whatever library
         raise AuthError(f"that token could not be verified ({exc})") from exc
     return decide(claims, allowed, client_id)
+
+
+def verify_identity(token: str, client_id: str,
+                    verifier: Callable[[str, str], dict[str, object]]) -> Principal:
+    """`verify`, without the allowlist. For redeeming an invitation."""
+    if not token:
+        raise AuthError("no credentials were presented")
+    try:
+        claims = verifier(token, client_id)
+    except AuthError:
+        raise
+    except Exception as exc:
+        raise AuthError(f"that token could not be verified ({exc})") from exc
+    return identify(claims, client_id)
 
 
 def google_verifier(token: str, client_id: str) -> dict[str, object]:

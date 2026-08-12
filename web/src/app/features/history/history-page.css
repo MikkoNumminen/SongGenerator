@@ -130,3 +130,12 @@ tbody tr:hover {
     max-width: none;
   }
 }
+
+
+/* ---- whose runs ---- */
+
+.whose {
+  display: grid;
+  gap: 0.35rem;
+  justify-items: start;
+}

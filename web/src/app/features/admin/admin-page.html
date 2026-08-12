@@ -64,6 +64,60 @@
       }
     </div>
 
+    <div class="card rise">
+      <div class="invite">
+        <div class="invite__text">
+          <h2>Invite by link</h2>
+          <p class="hint">
+            One link admits one Google account, to the demo library and nothing
+            else. It stops working once it has been used, and after a week.
+          </p>
+        </div>
+        <button type="button" [disabled]="working()" (click)="invite()">
+          {{ working() ? 'Working...' : 'Create a link' }}
+        </button>
+      </div>
+
+      @if (freshLink(); as link) {
+        <div class="link">
+          <!-- Shown rather than only copied: the clipboard can refuse, and a
+               link somebody cannot see is a link they cannot send. -->
+          <code class="link__value">{{ link }}</code>
+          <button type="button" class="link__copy" (click)="copyLink()">
+            {{ copied() ? 'Copied' : 'Copy' }}
+          </button>
+        </div>
+      }
+
+      @if (invitations().length) {
+        <ul class="links">
+          @for (invitation of invitations(); track invitation.token) {
+            <li class="links__row">
+              @if (invitation.used_at) {
+                <span class="tag">used</span>
+                <span class="mono">{{ invitation.used_by }}</span>
+                <span class="links__when mono">{{ invitation.used_at }}</span>
+              } @else {
+                <span class="tag tag--open">unused</span>
+                <span class="mono links__token">{{ invitation.token }}</span>
+                <span class="links__when mono">
+                  until {{ invitation.expires_at }}
+                </span>
+                <button
+                  type="button"
+                  class="revoke"
+                  [disabled]="working()"
+                  (click)="withdraw(invitation.token)"
+                >
+                  Withdraw
+                </button>
+              }
+            </li>
+          }
+        </ul>
+      }
+    </div>
+
     <div class="card table-card rise">
       <table>
         <caption class="visually-hidden">
@@ -73,6 +127,7 @@
           <tr>
             <th scope="col">Account</th>
             <th scope="col">May hear</th>
+            <th scope="col">Runs</th>
             <th scope="col">Granted</th>
             <th scope="col">By</th>
             <th scope="col"><span class="visually-hidden">Actions</span></th>
@@ -107,6 +162,21 @@
                   }
                 }
               </td>
+              <td data-label="Runs" class="hears">
+                @if (user.is_admin) {
+                  <span class="tag">all</span>
+                } @else {
+                  <label class="grant-box">
+                    <input
+                      type="checkbox"
+                      [checked]="user.see_all_runs"
+                      (change)="toggleRuns(user)"
+                      [disabled]="working()"
+                    />
+                    <span>everybody's</span>
+                  </label>
+                }
+              </td>
               <td data-label="Granted" class="mono">{{ user.added_at }}</td>
               <td data-label="By" class="mono">{{ user.added_by }}</td>
               <td data-label="" class="actions">
@@ -130,7 +200,7 @@
             </tr>
           } @empty {
             <tr>
-              <td colspan="5" class="none">
+              <td colspan="6" class="none">
                 Nobody has been granted access. The administrators below can
                 still sign in.
               </td>

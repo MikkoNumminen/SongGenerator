@@ -9,6 +9,11 @@
 // A hand-edit here is a lie about what the server sends, and it will be
 // overwritten. Change the Python model instead.
 
+export interface AcceptedReply {
+  banks: Array<string>;
+  email: string;
+}
+
 /**
  * One bank, as `banks.BankInfo` reports it plus the derived verdict.
  */
@@ -72,6 +77,19 @@ export interface HistoryReply {
   jobs: Array<JobReply>;
 }
 
+export interface InvitationReply {
+  created_at: string;
+  created_by: string;
+  expires_at: string;
+  token: string;
+  used_at?: string | null;
+  used_by?: string | null;
+}
+
+export interface InvitationsReply {
+  invitations: Array<InvitationReply>;
+}
+
 /**
  * A run as reported. Mirrors `jobs.Job` without the arrangement.
  *
@@ -101,6 +119,10 @@ export interface JobReply {
 
 export interface LibraryReply {
   tracks: Array<TrackReply>;
+}
+
+export interface RunsVisibilityRequest {
+  see_all_runs: boolean;
 }
 
 /**
@@ -136,6 +158,7 @@ export interface UserReply {
   banks: Array<string>;
   email: string;
   is_admin: boolean;
+  see_all_runs: boolean;
 }
 
 export interface UsersReply {
