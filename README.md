@@ -16,10 +16,9 @@ the local GPU, so the player answers only while that machine is on.
 .\.venv\Scripts\song-generator.exe input\song.mp4
 ```
 
-One command writes fourteen versions into `output/<song>/<bank>/`. Two arrangements
-of the words, one tidy and one that mixes them up harder, and each rendered
-from words that ignore the tune completely through to words that sing it as
-closely as the song allows. Pick by ear; the right one varies by song.
+One command writes two versions into `output/<song>/<bank>/`. Two arrangements
+of the words, one tidy and one that mixes them up harder, both singing the tune
+as closely as the song allows. Pick by ear; which is funnier varies by song.
 
 ## How it works
 
@@ -128,8 +127,8 @@ have do not.
 ## The other dial
 
 **Playfulness**, how freely the words are rearranged. Separate from mimicry,
-and both are rendered every run: two arrangements across seven mimicry
-settings, fourteen files, pick by ear.
+and both levels are rendered every run: two arrangements, two files, pick by
+ear. `--ladder` adds the lower mimicry rungs if you want to hear them.
 
 `conservative` keeps close to what was recorded. `wild` invents more orders,
 repeats itself more, and leans harder on the shout. Neither is a quality
@@ -216,7 +215,7 @@ payoff rather than becoming the texture. In the example vocabulary that is
 ## Status
 
 All four build stages are done: separation and mode detection, melody and timing
-extraction, word mapping, and formant-corrected pitch shifting. 624 tests.
+extraction, word mapping, and formant-corrected pitch shifting. 642 tests.
 
 The HTTP edge and the Angular front end are built and carry their own suites.
 Neither is deployed: that needs a Google client id and somewhere to host static

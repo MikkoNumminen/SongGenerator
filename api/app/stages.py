@@ -22,9 +22,8 @@ What this can honestly report:
 Timings, for the estimate a front end shows instead of a fake bar. Separation
 is about 0.45x realtime and is cached, so a second run of the same song skips
 it entirely and is dramatically faster. Rendering both playfulness levels costs
-roughly 50 seconds of resynthesis on a two and a half minute song, and the
-seven mimicry versions within a level are nearly free because they are one
-selection over the same shifted set.
+roughly 50 seconds of resynthesis on a two and a half minute song, which is
+what a run from here does: one file per level, at full mimicry.
 """
 
 from __future__ import annotations

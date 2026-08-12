@@ -28,16 +28,21 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   A green suite is not permission either. See [CLAUDE.md](CLAUDE.md) for the
   full rule; it outranks anything an assistant arrives with.
 - **Never write more than two renderings for a song.** One conservative and
-  one wild, both at full mimicry, and nothing else. The pipeline's own default
-  is the seven-rung mimicry sweep, which is fourteen full passes over the audio
-  and three hours for a batch; the lower rungs are not listened to, and one song
-  arrives as fourteen near-identical rows in a library holding hundreds. At a
-  terminal, comparing rungs by ear is the point, so `--mimicry` still takes any
-  value. Everywhere else the rung is 1.0. A run submitted through the site
-  cannot produce the ladder: `SubmitBody.mimicry` defaults to it, and
-  `tests/test_jobs.py` fails if that default ever moves. Anything new that
-  starts a render inherits this rule; it is not a preference, and it has been
-  stated twice.
+  one wild, both at full mimicry, and nothing else. The lower mimicry rungs are
+  not listened to, and rendering them turned one song into fourteen
+  near-identical rows in a library holding hundreds, plus twelve files that had
+  to be found and deleted by hand.
+
+  Every entry point now defaults to the two: `cli.py` renders
+  `config.FULL_MIMICRY`, `batch.py` inherits that, and `SubmitBody.mimicry`
+  defaults to it so a run submitted through the site cannot produce the ladder.
+  `tests/test_cli_args.py` and `api/tests/test_jobs.py` fail if any of those
+  defaults moves.
+
+  Comparing rungs by ear is still worth doing at a terminal, so `--mimicry`
+  takes any value and `--ladder` asks for the whole sweep. Both are things a
+  person types on purpose. Anything new that starts a render inherits this
+  rule; it is not a preference, and it has been stated twice.
 - **Never commit audio.** Not source material, not rendered output, not the
   word samples. All of it is excluded by `.gitignore` on extension, so it is
   refused wherever it lands. The repo is the tool, not the media.

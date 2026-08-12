@@ -954,10 +954,15 @@ SHIFT_MIX = 0.35
 # needs to get there. Set MIMICRY to None to drive SHIFT_MIX directly instead.
 MIMICRY = 0.45
 
-# Rendered on every run unless a single --mimicry is asked for. Resynthesis is
-# done once and shared across all of them, so the whole set costs barely more
-# than one, and picking by ear beats guessing a number up front. The right
-# value varies by song anyway.
+# What a run renders at, and the only rung anything writes unless the whole
+# ladder is asked for by name. Both levels at full mimicry, two files, because
+# that is what gets listened to: the lesser rungs were a sweep nobody picked
+# from, and they cost a folder of near-duplicates per song to keep.
+FULL_MIMICRY = 1.0
+
+# The ladder, rendered only for --ladder. Resynthesis is done once and shared
+# across all of them, so the whole set costs barely more than one, which is why
+# it was once the default. It is opt-in now; see FULL_MIMICRY.
 MIMICRY_VARIANTS = (0.0, 0.15, 0.3, 0.45, 0.6, 0.75, 1.0)
 
 # What a folded syllable is worth against one that landed exactly. It carries

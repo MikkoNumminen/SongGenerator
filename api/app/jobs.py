@@ -47,10 +47,10 @@ class JobRequest:
     requested_by: str
     level: str | None = None          # None means every level the config has
     # The rung where the melody survives whole, and the only one anything here
-    # renders. Defaulted rather than left to each caller: the sweep is seven
-    # full passes over the audio per level, and a route that forgot to say so
-    # is how one song became fourteen files. Passing None still means the
-    # sweep, for a caller that genuinely wants it.
+    # renders. Defaulted rather than left to each caller: a route that forgot
+    # to say so is how one song became fourteen files. Passing None omits the
+    # flag and takes the pipeline's own default, which is now this same rung;
+    # the sweep is reachable only by typing --ladder at a terminal.
     mimicry: float | None = FULL_RUNG
     engine: str | None = None
     arrangement: str | None = None    # .arr text to replay, if any

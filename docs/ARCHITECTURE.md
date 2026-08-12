@@ -53,7 +53,7 @@ song.mp4
 
 | Module | Does | Key exports |
 |---|---|---|
-| `cli.py` | Wires everything; one run writes both levels across the mimicry sweep | `main` |
+| `cli.py` | Wires everything; one run writes both levels at full mimicry | `main` |
 | `audio_io.py` | The only place sample rate and array shape are established | `decode`, `encode_mp3`, `read_wav` |
 | `separate.py` | Demucs or Mel-Band Roformer behind one interface, cached | `separate`, `Stems` |
 | `detect.py` | Mode A vs Mode B, with the numbers behind the verdict | `detect_vocal`, `VocalReport` |
@@ -147,11 +147,11 @@ the singer's own transition between two words and a crossfade does not. The
 slices are what let the tool say something that was never recorded.
 
 A run renders BOTH playfulness levels, each producing one arrangement of its
-own, and each arrangement is then rendered across the whole mimicry ladder:
-fourteen files. Playfulness and mimicry are different questions and
-deliberately do not multiply into each other, but which level is funnier is a
-listening decision, so shipping one of them and offering the other would leave
-the decision needing another command.
+own, and each at full mimicry: two files. Which level is funnier is a listening
+decision, so shipping one of them and offering the other would leave the
+decision needing another command. The mimicry ladder is a separate question and
+deliberately does not multiply into this one; `--ladder` asks for it and turns
+those two files into fourteen.
 
 Which words get sung is not left to duration fit alone. The bank's words have
 roles with shares of the song attached, weighted per level: a handful of core

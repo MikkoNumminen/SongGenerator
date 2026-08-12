@@ -153,6 +153,63 @@ class TestOutputGoesInItsOwnFolder:
         assert got.name == "song.mp3"
 
 
+class TestARunWritesTwoFiles:
+    """The ladder is asked for by name, never arrived at by default.
+
+    A run used to render all seven mimicry rungs at both levels, so one song
+    became fourteen files per bank. Two of them were listened to; the rest
+    were deleted by hand afterwards, once they had been noticed. The default
+    moving back is the failure these guard.
+    """
+
+    def test_the_default_walks_no_ladder(self):
+        assert cli.mimicry_targets(parse()) == [None]
+
+    def test_the_default_rung_is_the_top_of_the_ladder(self):
+        """Full mimicry, not merely some single value: the two files are the
+        ones that sing the tune as closely as the song allows."""
+        assert cli.single_mimicry(parse()) == config.FULL_MIMICRY
+        assert config.FULL_MIMICRY == 1.0
+        assert config.FULL_MIMICRY == max(config.MIMICRY_VARIANTS)
+
+    def test_the_default_is_named_the_way_the_site_names_it(self):
+        """The site renders by passing --mimicry 1, which writes
+        `song.wild.mp3`. A default that walked a one-rung ladder instead would
+        write `song.wild.mim1p00.mp3` for the same audio, and one song would
+        sit in the library twice under two names."""
+        assert cli.mimicry_targets(parse()) == cli.mimicry_targets(parse("--mimicry", "1"))
+        assert cli.single_mimicry(parse()) == cli.single_mimicry(parse("--mimicry", "1"))
+
+    def test_the_ladder_comes_back_when_it_is_asked_for(self):
+        assert cli.mimicry_targets(parse("--ladder")) == \
+            list(config.MIMICRY_VARIANTS)
+
+    def test_one_named_setting_writes_one_file(self):
+        assert cli.mimicry_targets(parse("--mimicry", "0.6")) == [None]
+        assert cli.single_mimicry(parse("--mimicry", "0.6")) == 0.6
+
+    def test_a_run_driving_the_shift_itself_solves_for_no_rung(self):
+        """--mix and --no-shift say what to shift outright, so there is
+        nothing to solve for and full mimicry must not be imposed on top."""
+        assert cli.mimicry_targets(parse("--mix", "0.5")) == [None]
+        assert cli.single_mimicry(parse("--mix", "0.5")) is None
+        assert cli.mimicry_targets(parse("--no-shift")) == [None]
+        assert cli.single_mimicry(parse("--no-shift")) is None
+
+    @pytest.mark.parametrize("argv", [
+        ("--ladder", "--mimicry", "0.6"),
+        ("--ladder", "--mimicry", "1"),
+        ("--ladder", "--no-shift"),
+        ("--ladder", "--mix", "0.5"),
+    ])
+    def test_asking_for_the_ladder_and_one_rung_at_once_is_refused(self, argv):
+        """Resolved silently, whichever lost lost without a word. `--ladder
+        --mimicry 1` wrote the two plain takes over the two already there and
+        reported "2 versions" as though that had been the request."""
+        with pytest.raises(SystemExit):
+            cli.main(["song.mp4", *argv])
+
+
 class TestEveryFilenameCarriesTheLevel:
     """Both write sites, one function, no way to disagree.
 
@@ -181,7 +238,7 @@ class TestEveryFilenameCarriesTheLevel:
         from song_generator.cli import versioned_name
 
         out = Path("output/song/ppbank/song.mp3")
-        got = versioned_name(out, "wild", tag="0p60")
+        got = versioned_name(out, "wild", tag="mim0p60")
         assert got.name == "song.wild.mim0p60.mp3"
 
     def test_an_output_already_naming_the_level_is_not_doubled(self):
@@ -191,8 +248,71 @@ class TestEveryFilenameCarriesTheLevel:
 
         out = Path("output/song/ppbank/song.wild.mp3")
         assert versioned_name(out, "wild").name == "song.wild.mp3"
-        assert versioned_name(out, "wild", tag="0p60").name == \
+        assert versioned_name(out, "wild", tag="mim0p60").name == \
             "song.wild.mim0p60.mp3"
+
+
+class TestOnlyThePlainTakeGetsThePlainName:
+    """A one-off render must not land on the filename of the kept take.
+
+    This used to hold for free: the default walked the ladder and every file
+    it wrote carried a rung, while a one-off carried none. Once the default
+    became two files with no rung in the name, every one-off started writing
+    the default's own names, so `--no-shift` on a song replaced the take
+    somebody had decided to keep.
+    """
+
+    def test_a_plain_run_is_not_tagged(self):
+        assert cli.variant_tag(parse()) is None
+
+    def test_full_mimicry_asked_for_by_name_is_still_the_plain_take(self):
+        """It is the same audio, and the site renders by asking for it."""
+        assert cli.variant_tag(parse("--mimicry", "1")) is None
+
+    def test_a_lesser_rung_says_so(self):
+        assert cli.variant_tag(parse("--mimicry", "0.6")) == "mim0p60"
+        assert cli.variant_tag(parse("--mimicry", "0")) == "mim0p00"
+
+    def test_the_other_two_ways_of_naming_a_shift_say_so_too(self):
+        assert cli.variant_tag(parse("--no-shift")) == "noshift"
+        assert cli.variant_tag(parse("--mix", "0.5")) == "mix0p50"
+
+    def test_a_replay_is_not_the_take_it_was_replayed_from(self):
+        """--arrangement is advertised as the way to edit what gets sung, so
+        the usual replay is a different rendering wearing the same level."""
+        assert cli.variant_tag(parse("--arrangement", "w.arr")) == "replay"
+
+    def test_a_rung_a_hair_below_full_cannot_take_the_ladder_s_top_name(self):
+        """0.999 is not 1.0, but both spell mim1p00, which is the name the
+        ladder gives its own full-mimicry rung."""
+        assert cli.variant_tag(parse("--mimicry", "0.999")) is None
+        assert cli.variant_tag(parse("--mimicry", "0.994")) == "mim0p99"
+
+    def test_no_one_off_shares_a_name_with_the_plain_take(self):
+        from pathlib import Path
+
+        from song_generator.cli import versioned_name
+
+        out = Path("output/song/ppbank/song.mp3")
+        plain = versioned_name(out, "wild", tag=cli.variant_tag(parse()))
+        others = [
+            versioned_name(out, "wild", tag=cli.variant_tag(parse(*argv)))
+            for argv in (("--mimicry", "0.6"), ("--no-shift",), ("--mix", "0.5"))
+        ]
+        assert plain.name == "song.wild.mp3"
+        assert plain not in others
+        assert len(set(others)) == len(others)
+
+    def test_every_rung_of_a_ladder_is_told_apart(self):
+        from pathlib import Path
+
+        from song_generator.cli import rung_word, versioned_name
+
+        out = Path("output/song/ppbank/song.mp3")
+        names = {versioned_name(out, "wild", tag=rung_word(t)).name
+                 for t in config.MIMICRY_VARIANTS}
+        assert len(names) == len(config.MIMICRY_VARIANTS)
+        assert "song.wild.mim1p00.mp3" in names, "the name the ladder has always used"
 
 
 # ---------------------------------------------------------------------------

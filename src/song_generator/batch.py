@@ -46,12 +46,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("songs", nargs="+", help="files or globs, e.g. 'input/*.mp4'")
     p.add_argument("-o", "--out", type=Path, default=Path("output"))
     p.add_argument("--mimicry", type=float, default=None,
-                   help="one file per song at this setting, instead of the full sweep")
+                   help="render at this setting rather than full mimicry. "
+                        "Still both levels, so still two files per song "
+                        "unless --play narrows it")
+    p.add_argument("--ladder", action="store_true",
+                   help="every rung of the mimicry ladder per song. Twenty "
+                        "songs at both levels is 280 files")
     p.add_argument("--bank", default=None)
     p.add_argument("--play", default=None,
-                   help="render only this playfulness level. Twenty songs at "
-                        "both levels is 280 files, which is a lot to listen "
-                        "through [default: both]")
+                   help="render only this playfulness level [default: both]")
     p.add_argument("--seed", type=int, default=None)
     p.add_argument("--continue-on-error", action="store_true", default=True,
                    help="kept for clarity; the batch always continues")
@@ -80,6 +83,8 @@ def main(argv: list[str] | None = None) -> int:
                     "-o", str(args.out / f"{song.stem}.mp3")]
         if args.mimicry is not None:
             argv_one += ["--mimicry", str(args.mimicry)]
+        if args.ladder:
+            argv_one += ["--ladder"]
         if args.bank:
             argv_one += ["--bank", args.bank]
         if args.play:

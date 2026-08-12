@@ -60,9 +60,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument("input", type=Path, help="input song (mp3, or anything ffmpeg reads)")
     p.add_argument("-o", "--output", type=Path, default=None,
-                   help="base name for the output. The level and the mimicry "
-                        "setting are added to it, so one run writes "
-                        "<name>.<level>.mim<N>.mp3 "
+                   help="base name for the output. The level is added to it, "
+                        "so a run writes <name>.<level>.mp3, and anything "
+                        "asked for specially is named too: --mimicry 0.6 "
+                        "writes <name>.<level>.mim0p60.mp3 "
                         "[default: output/<input stem>.song_generator.mp3]")
     p.add_argument("--separator", choices=["demucs", "roformer"], default=config.SEPARATOR,
                    help="source separation backend")
@@ -102,7 +103,11 @@ def build_parser() -> argparse.ArgumentParser:
                    help="place clips at their own recorded pitch (the step 3 sound)")
     p.add_argument("--mimicry", type=float, default=None, metavar="0..1",
                    help="how closely the words track the original singing; the tool "
-                        "solves for the shift this song needs [default: MIMICRY]")
+                        "solves for the shift this song needs [default: 1.0, "
+                        "the melody whole]")
+    p.add_argument("--ladder", action="store_true",
+                   help="render every rung of MIMICRY_VARIANTS rather than the "
+                        "two files a run writes by default")
     p.add_argument("--mix", type=float, default=None, metavar="0..1",
                    help="drive the raw proportion of shifted units instead, "
                         "overriding --mimicry")
@@ -114,8 +119,97 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+def drives_its_own_shift(args: argparse.Namespace) -> bool:
+    """Whether the run was told exactly what to shift, rather than a rung.
+
+    All three of these name the shift themselves, so there is no ladder to
+    walk and the rung does not go into the filename.
+    """
+    return args.no_shift or args.mix is not None or args.mimicry is not None
+
+
+def mimicry_targets(args: argparse.Namespace) -> list[float | None]:
+    """Which mimicry rungs one run walks.
+
+    `[None]` is one render per level, at whatever `single_mimicry` decides,
+    and its filename carries no rung. Anything else is the ladder, where the
+    rung has to go into the name to tell the files apart.
+
+    The ladder used to be the default, which meant every run wrote fourteen
+    near-identical files per song per bank; two of them were listened to and
+    the other twelve had to be found and deleted by hand afterwards. It is
+    asked for by name now.
+
+    Asking for it and naming a single setting at the same time is refused
+    rather than resolved. Letting the narrower one quietly win meant
+    `--ladder --mimicry 1` wrote the two plain takes, over the top of the two
+    already there, and said nothing about having dropped the ladder somebody
+    had just typed.
+    """
+    if args.ladder:
+        return list(config.MIMICRY_VARIANTS)
+    return [None]
+
+
+def single_mimicry(args: argparse.Namespace) -> float | None:
+    """The rung one render sings at, when the ladder was not asked for.
+
+    Full mimicry unless told otherwise, which is the same thing the site asks
+    for by passing `--mimicry 1`. That matters for the filename rather than
+    only the sound: a default that rendered a rung the site does not name
+    would write `song.wild.mim1p00.mp3` where the site writes `song.wild.mp3`,
+    and one song would sit in the library twice under two names.
+
+    None means the shift was named directly, by `--mix` or `--no-shift`, and
+    there is no rung to solve for.
+    """
+    if args.no_shift or args.mix is not None:
+        return None
+    return args.mimicry if args.mimicry is not None else config.FULL_MIMICRY
+
+
+def rung_word(value: float) -> str:
+    """A mimicry rung as it is spelled in a filename. 0.6 becomes mim0p60."""
+    return f"mim{value:.2f}".replace(".", "p")
+
+
+def variant_tag(args: argparse.Namespace) -> str | None:
+    """What this render is called, when it is not the one a plain run makes.
+
+    The plain name belongs to the take a plain run writes. Anything asked for
+    specially says in the filename what was special about it, so an experiment
+    cannot quietly replace the take somebody kept and decided to keep.
+
+    This used to fall out for free: the default walked the mimicry ladder and
+    every one of its files carried a rung, while the one-off renders carried
+    none. Once the default became two files with no rung in the name, every
+    one-off started writing the default's own filenames instead.
+
+    None means this IS the plain take. Full mimicry counts as plain, because
+    it is what a plain run renders and what the site asks for by name.
+
+    A replay is tagged too. `--arrangement` is advertised as the way to edit
+    what gets sung and hear the change, so the usual replay is a different
+    rendering wearing the same level, and it was landing on top of the take
+    somebody had kept and gone to the trouble of editing from.
+
+    The rung is compared as it will be spelled, to two decimals, so nothing
+    can sit one ten-thousandth away from full mimicry and take the name the
+    ladder gives its own top rung.
+    """
+    if args.arrangement:
+        return "replay"
+    if args.no_shift:
+        return "noshift"
+    if args.mix is not None:
+        return f"mix{args.mix:.2f}".replace(".", "p")
+    rung = single_mimicry(args)
+    return None if rung_word(rung) == rung_word(config.FULL_MIMICRY) \
+        else rung_word(rung)
+
+
 def versioned_name(output: Path, label: str, tag: str | None = None) -> Path:
-    """The filename for one rendered version: level, then mimicry rung.
+    """The filename for one rendered version: the level, then what it is.
 
     Every path a render writes goes through here, which is the point: the
     level went into the name at one of two sites and not the other, so two
@@ -124,13 +218,15 @@ def versioned_name(output: Path, label: str, tag: str | None = None) -> Path:
 
     The level always goes in. The guard against doubling it checks the name
     rather than counting anything, so an --output that already names a level
-    is left alone.
+    is left alone. The tag is the whole word, `mim0p60` or `noshift`, rather
+    than digits with a prefix added here, because not every variant of a
+    render is a mimicry rung.
     """
     stem = output.stem
     if label and not stem.endswith(f".{label}"):
         stem = f"{stem}.{label}"
     if tag is not None:
-        stem = f"{stem}.mim{tag}"
+        stem = f"{stem}.{tag}"
     return output.with_name(f"{stem}{output.suffix}")
 
 
@@ -200,13 +296,13 @@ def output_path(explicit: Path | None, song: Path, bank: str) -> Path:
     """Where a run writes, with every song in a folder of its own and every
     bank in a folder inside that.
 
-    A run writes fourteen files and there are a dozen songs, so flat that is
-    nearly two hundred sorted by name, interleaving every song's levels and
-    rungs. The song name stays in the filename as well, so a file dragged out
-    of its folder still says what it is.
+    A run writes two files, `--ladder` writes fourteen, and there are dozens
+    of songs, so flat that is hundreds sorted by name, interleaving every
+    song's levels and rungs. The song name stays in the filename as well, so a
+    file dragged out of its folder still says what it is.
 
     Banks get the same treatment for the same reason, one level down. The
-    same song sung from two banks is twenty-eight files whose names differ in
+    same song sung from two banks writes names that differ in
     nothing at all, so without the folder the second bank's render silently
     replaces the first. The folder is named for what --bank was given, or for
     the directory itself when --words-dir pointed somewhere directly.
@@ -244,7 +340,21 @@ def _rollback(args) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    # Said here rather than resolved silently. --ladder means seven rungs per
+    # level; --mimicry, --mix and --no-shift each name one shift outright.
+    # Asked for together they contradict, and whichever one lost used to lose
+    # without a word: `--ladder --mimicry 1` wrote the two plain takes over
+    # the two already there and reported "2 versions" as though that had been
+    # the request.
+    named = [flag for flag, given in (("--mimicry", args.mimicry is not None),
+                                      ("--mix", args.mix is not None),
+                                      ("--no-shift", args.no_shift)) if given]
+    if args.ladder and named:
+        parser.error(f"--ladder renders every rung, so it cannot be combined "
+                     f"with {named[0]}, which names one")
 
     if args.rollback:
         # Before anything expensive. Rolling back needs neither stems nor a
@@ -393,8 +503,8 @@ def main(argv: list[str] | None = None) -> int:
     else:
         levels = list(config.PLAY_BOTH_LEVELS)
 
-    single = args.no_shift or args.mix is not None or args.mimicry is not None
-    targets = [None] if single else list(config.MIMICRY_VARIANTS)
+    targets = mimicry_targets(args)
+    single = targets == [None]
     written: list[tuple[Path, str, float, int]] = []
 
     for level in levels:
@@ -455,13 +565,15 @@ def main(argv: list[str] | None = None) -> int:
             if single:
                 decide_shifts(word_plan, mix=0.0 if args.no_shift else args.mix,
                               mode=args.mix_mode, seed=args.seed,
-                              target_mimicry=args.mimicry)
-                path = versioned_name(output, label)
+                              target_mimicry=single_mimicry(args))
+                path = versioned_name(output, label, tag=variant_tag(args))
             else:
                 decide_shifts(word_plan, mode=args.mix_mode, seed=args.seed,
                               target_mimicry=target)
-                path = versioned_name(output, label,
-                                      tag=f"{target:.2f}".replace(".", "p"))
+                # Every rung of a ladder is tagged, including the top one:
+                # seven files have to be told apart from each other, and
+                # mim1p00 is what the ladder has always called that file.
+                path = versioned_name(output, label, tag=rung_word(target))
 
             word_bus = render(word_plan, stems.instrumental.shape[1], config.SAMPLE_RATE,
                               shift=not args.no_shift, engine=args.engine, cache=cache)
