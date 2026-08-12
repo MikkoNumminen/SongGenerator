@@ -74,6 +74,16 @@ CREATE TABLE IF NOT EXISTS allowed_emails (
     see_all_runs INTEGER NOT NULL DEFAULT 0
 );
 
+-- Somebody signed in, refused, and asked to be let in.
+--
+-- Keyed on the address so asking twice is still one request. The name is
+-- carried because an address alone is often not enough to recognise a person.
+CREATE TABLE IF NOT EXISTS access_requests (
+    email    TEXT PRIMARY KEY,
+    name     TEXT,
+    asked_at TEXT NOT NULL
+);
+
 -- A one-time way in, handed out as a link.
 --
 -- The token is the secret, so it is the key: knowing it is the whole of the

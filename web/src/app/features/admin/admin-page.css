@@ -247,3 +247,14 @@ tbody tr:last-child td {
   background: var(--ok-wash);
   color: var(--ok-text);
 }
+
+
+.asking__title {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-md);
+}
+
+.asking__name {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}

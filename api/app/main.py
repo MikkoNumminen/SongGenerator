@@ -33,15 +33,15 @@ from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 
-from .auth import (AuthError, Principal, google_verifier, verify,
-                   verify_identity)
+from .auth import (AuthError, NotAllowed, Principal, google_verifier,
+                   verify, verify_identity)
 from .banks import catalog
 from .config import Settings, load_settings
 from .jobs import Job, JobRequest, JobRunner
 from .songs import SongError, prepare
 from .store import JobStore, open_store
-from .users import (ALL, DEMO, InvitationStore, UserStore,
-                    open_invitations, open_users)
+from .users import (ALL, DEMO, InvitationStore, RequestStore, UserStore,
+                    open_invitations, open_requests, open_users)
 
 # Levels the pipeline offers. Read from its config at wiring time rather than
 # hardcoded, so a level added there does not need editing here too.
@@ -213,6 +213,20 @@ class AcceptedReply(BaseModel):
     banks: list[str]
 
 
+class AccessRequestReply(BaseModel):
+    email: str
+    name: str | None = None
+    asked_at: str
+
+
+class AccessRequestsReply(BaseModel):
+    requests: list[AccessRequestReply]
+
+
+class AskedReply(BaseModel):
+    waiting: bool
+
+
 class UsersReply(BaseModel):
     users: list[UserReply]
     #: Everything that can be granted, so the panel can offer the boxes
@@ -258,6 +272,7 @@ def create_app(
     store: JobStore,
     users: UserStore,
     invitations: InvitationStore,
+    requests: RequestStore,
     banks: dict[str, str],
     standardised_suffix: str,
     levels: tuple[str, ...],
@@ -294,6 +309,12 @@ def create_app(
         allowed = users.emails() | settings.admin_emails
         try:
             return verify(token, allowed, settings.google_client_id, verifier)
+        except NotAllowed as exc:
+            # Signed in, and not admitted. 403 rather than 401 because the
+            # browser has nothing to go and fetch: the credentials are fine
+            # and the answer is about the account, which is something the
+            # person can ask to have changed.
+            raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
         except AuthError as exc:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(exc)) from exc
 
@@ -653,6 +674,65 @@ def create_app(
                                expires_at=inv.expires_at,
                                used_at=inv.used_at, used_by=inv.used_by)
 
+    @app.post("/access-requests", status_code=status.HTTP_202_ACCEPTED)
+    def ask_for_access(request: Request) -> AskedReply:
+        """Signed in, refused, and asking.
+
+        Open to any account Google will vouch for, because the people who need
+        it are by definition not on the list. It grants nothing: it puts a name
+        in a queue the owner reads, and asking twice is still one request.
+        """
+        from datetime import datetime
+
+        header = request.headers.get("Authorization", "")
+        bearer = header[7:].strip() if header.lower().startswith("bearer ") else ""
+        try:
+            asker = verify_identity(bearer, settings.google_client_id, verifier)
+        except AuthError as exc:
+            raise HTTPException(status.HTTP_401_UNAUTHORIZED, str(exc)) from exc
+
+        # Somebody already allowed has nothing to ask for.
+        if asker.email in (users.emails() | settings.admin_emails):
+            return AskedReply(waiting=False)
+
+        requests.ask(asker.email, name=asker.name,
+                     at=datetime.now(UTC).isoformat(timespec="seconds"))
+        return AskedReply(waiting=True)
+
+    @app.get("/access-requests")
+    def list_requests(_: Admin) -> AccessRequestsReply:
+        return AccessRequestsReply(requests=[
+            AccessRequestReply(email=r.email, name=r.name, asked_at=r.asked_at)
+            for r in requests.all()])
+
+    @app.post("/access-requests/{email}/approve")
+    def approve(email: str, who: Admin) -> UsersReply:
+        """Let somebody in, with the demo library, and clear their request.
+
+        One route rather than a grant followed by a delete, so a half-finished
+        approval cannot leave somebody admitted and still queued, or queued and
+        already admitted.
+        """
+        from datetime import datetime
+
+        target = email.strip().lower()
+        if not requests.waiting(target):
+            raise HTTPException(status.HTTP_404_NOT_FOUND,
+                                "nobody by that address is waiting")
+        now = datetime.now(UTC).isoformat(timespec="seconds")
+        users.add(target, added_by=who.email, at=now, banks={DEMO})
+        requests.drop(target)
+        return _users_reply()
+
+    @app.delete("/access-requests/{email}")
+    def dismiss(email: str, _: Admin) -> AccessRequestsReply:
+        if not requests.drop(email.strip().lower()):
+            raise HTTPException(status.HTTP_404_NOT_FOUND,
+                                "nobody by that address is waiting")
+        return AccessRequestsReply(requests=[
+            AccessRequestReply(email=r.email, name=r.name, asked_at=r.asked_at)
+            for r in requests.all()])
+
     @app.get("/invitations")
     def list_invitations(_: Admin) -> InvitationsReply:
         return InvitationsReply(
@@ -821,6 +901,7 @@ def build() -> FastAPI:
     users = open_users(store.connection)
     users.seed(settings.allowed_emails, at=now)
     invitations = open_invitations(store.connection)
+    requests = open_requests(store.connection)
 
     runner = JobRunner(on_update=store.save)
 
@@ -834,6 +915,7 @@ def build() -> FastAPI:
         store=store,
         users=users,
         invitations=invitations,
+        requests=requests,
         banks=dict(pipeline_config.BANKS),
         standardised_suffix=pipeline_config.STD_SUFFIX,
         levels=tuple(pipeline_config.PLAY_LEVELS),

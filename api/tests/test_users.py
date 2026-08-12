@@ -17,7 +17,7 @@ from app.config import Settings
 from app.jobs import JobRunner
 from app.main import create_app
 from app.store import open_store
-from app.users import open_invitations, open_users
+from app.users import open_invitations, open_requests, open_users
 from fastapi.testclient import TestClient
 
 CLIENT_ID = "1234.apps.googleusercontent.com"
@@ -50,10 +50,11 @@ def _app(tmp_path: Path, as_who: str, *, admins=frozenset({ADMIN}),
     store = open_store(settings.database_path)
     users = open_users(store.connection)
     invitations = open_invitations(store.connection)
+    requests = open_requests(store.connection)
     users.seed(settings.allowed_emails, at=AT)
     app = create_app(
         settings=settings, runner=JobRunner(on_update=store.save),
-        store=store, users=users, invitations=invitations, banks=banks or BANKS, standardised_suffix=".std",
+        store=store, users=users, invitations=invitations, requests=requests, banks=banks or BANKS, standardised_suffix=".std",
         levels=LEVELS, verifier=_verifier(as_who),
         prepare_song=lambda url: tmp_path / "song.mp4",
     )
@@ -82,7 +83,7 @@ class TestGranting:
         assert admin.delete(f"/users/{GUEST}", headers=AUTH).status_code == 200
 
         guest, _ = _app(tmp_path, GUEST, seeded=frozenset())
-        assert guest.get("/banks", headers=AUTH).status_code == 401
+        assert guest.get("/banks", headers=AUTH).status_code == 403
 
     def test_granting_twice_is_not_an_error(self, tmp_path):
         """Two clicks on a slow connection are not a failure to report."""
@@ -126,7 +127,7 @@ class TestOnlyAnAdminDecides:
         """401, not 403: they have not shown they are anybody."""
         stranger, _ = _app(tmp_path, STRANGER, seeded=frozenset())
 
-        assert stranger.get("/users", headers=AUTH).status_code == 401
+        assert stranger.get("/users", headers=AUTH).status_code == 403
 
 
 class TestTheOwnerCannotBeLockedOut:
@@ -250,7 +251,7 @@ class TestServingATrack:
         answer = client.get(
             "/library/a_song/ppbank/song.conservative.mp3", headers=AUTH)
 
-        assert answer.status_code == 401
+        assert answer.status_code == 403
 
 
 class TestWhatAnAddressMaySee:
@@ -730,3 +731,83 @@ class TestOpeningYourOwnLink:
         row = next(u for u in admin.get("/users", headers=AUTH).json()["users"]
                    if u["email"] == GUEST)
         assert row["banks"] == ["ppbank"]
+
+
+class TestAskingToBeLetIn:
+    """Somebody signed in and refused needs something to do about it. The
+    request grants nothing; it puts a name in a queue the owner reads."""
+
+    def test_a_refused_account_can_ask(self, tmp_path):
+        stranger, _ = _app(tmp_path, STRANGER, seeded=frozenset({ADMIN}))
+
+        answer = stranger.post("/access-requests", headers=AUTH)
+
+        assert answer.status_code == 202
+        assert answer.json() == {"waiting": True}
+
+    def test_asking_twice_is_still_one_request(self, tmp_path):
+        """Otherwise a refused person fills the panel by clicking."""
+        stranger, _ = _app(tmp_path, STRANGER, seeded=frozenset({ADMIN}))
+        stranger.post("/access-requests", headers=AUTH)
+        stranger.post("/access-requests", headers=AUTH)
+
+        admin, _ = _app(tmp_path, ADMIN)
+        waiting = admin.get("/access-requests", headers=AUTH).json()["requests"]
+        assert [r["email"] for r in waiting] == [STRANGER]
+
+    def test_somebody_already_allowed_has_nothing_to_ask_for(self, tmp_path):
+        admin, _ = _app(tmp_path, ADMIN)
+
+        answer = admin.post("/access-requests", headers=AUTH)
+
+        assert answer.json() == {"waiting": False}
+        assert admin.get("/access-requests",
+                         headers=AUTH).json()["requests"] == []
+
+    def test_asking_without_a_google_token_is_refused(self, tmp_path):
+        stranger, _ = _app(tmp_path, STRANGER, seeded=frozenset({ADMIN}))
+
+        assert stranger.post("/access-requests").status_code == 401
+
+    def test_the_queue_is_the_owners_alone(self, tmp_path):
+        admin, _ = _app(tmp_path, ADMIN)
+        admin.post("/users", json={"email": GUEST}, headers=AUTH)
+
+        guest, _ = _app(tmp_path, GUEST)
+
+        assert guest.get("/access-requests", headers=AUTH).status_code == 403
+
+    def test_approving_admits_them_with_the_demo_library(self, tmp_path):
+        stranger, _ = _app(tmp_path, STRANGER, seeded=frozenset({ADMIN}))
+        stranger.post("/access-requests", headers=AUTH)
+        admin, _ = _app(tmp_path, ADMIN)
+
+        admin.post(f"/access-requests/{STRANGER}/approve", headers=AUTH)
+
+        row = next(u for u in admin.get("/users", headers=AUTH).json()["users"]
+                   if u["email"] == STRANGER)
+        assert row["banks"] == ["demo"]
+
+    def test_approving_clears_the_request(self, tmp_path):
+        """One route rather than a grant and a delete, so a half-finished
+        approval cannot leave somebody admitted and still queued."""
+        stranger, _ = _app(tmp_path, STRANGER, seeded=frozenset({ADMIN}))
+        stranger.post("/access-requests", headers=AUTH)
+        admin, _ = _app(tmp_path, ADMIN)
+
+        admin.post(f"/access-requests/{STRANGER}/approve", headers=AUTH)
+
+        assert admin.get("/access-requests",
+                         headers=AUTH).json()["requests"] == []
+
+    def test_dismissing_removes_it_without_admitting_anybody(self, tmp_path):
+        stranger, _ = _app(tmp_path, STRANGER, seeded=frozenset({ADMIN}))
+        stranger.post("/access-requests", headers=AUTH)
+        admin, _ = _app(tmp_path, ADMIN)
+
+        admin.delete(f"/access-requests/{STRANGER}", headers=AUTH)
+
+        assert admin.get("/access-requests",
+                         headers=AUTH).json()["requests"] == []
+        after, _ = _app(tmp_path, STRANGER, seeded=frozenset({ADMIN}))
+        assert after.get("/library", headers=AUTH).status_code == 403

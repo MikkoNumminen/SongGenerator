@@ -14,6 +14,20 @@ export interface AcceptedReply {
   email: string;
 }
 
+export interface AccessRequestReply {
+  asked_at: string;
+  email: string;
+  name?: string | null;
+}
+
+export interface AccessRequestsReply {
+  requests: Array<AccessRequestReply>;
+}
+
+export interface AskedReply {
+  waiting: boolean;
+}
+
 /**
  * One bank, as `banks.BankInfo` reports it plus the derived verdict.
  */

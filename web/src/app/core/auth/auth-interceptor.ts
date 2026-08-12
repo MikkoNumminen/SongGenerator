@@ -1,8 +1,10 @@
 import { HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
+import { tap } from 'rxjs';
 
 import { API_BASE_URL } from '../api/api-config';
 import { AUTH_CONTEXT } from '../ports/auth-context.port';
+import { Membership } from './membership';
 
 /**
  * Attach the bearer token to requests going to the edge, and to nothing else.
@@ -19,6 +21,7 @@ import { AUTH_CONTEXT } from '../ports/auth-context.port';
 export const attachBearerToken: HttpInterceptorFn = (request, next) => {
   const baseUrl = inject(API_BASE_URL);
   const auth = inject(AUTH_CONTEXT, { optional: true });
+  const membership = inject(Membership);
 
   const goingToTheEdge = baseUrl !== '' && request.url.startsWith(baseUrl);
   const isHealth = request.url === `${baseUrl}/health`;
@@ -27,7 +30,25 @@ export const attachBearerToken: HttpInterceptorFn = (request, next) => {
   if (!goingToTheEdge || isHealth || token === null) {
     return next(request);
   }
+  // Whether this account has been let in is learned from the answers to
+  // requests being made anyway, rather than by asking a question of its own.
+  // Every route but /health refuses a stranger, so the first one to come back
+  // settles it.
   return next(
     request.clone({ setHeaders: { Authorization: `Bearer ${token}` } }),
+  ).pipe(
+    tap({
+      next: (event) => {
+        const status = (event as { status?: number }).status;
+        if (typeof status === 'number') {
+          membership.saw(status);
+        }
+      },
+      error: (failure: { status?: number }) => {
+        if (typeof failure.status === 'number') {
+          membership.saw(failure.status);
+        }
+      },
+    }),
   );
 };

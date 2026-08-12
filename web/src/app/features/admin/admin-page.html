@@ -64,6 +64,42 @@
       }
     </div>
 
+    @if (waiting().length) {
+      <div class="card rise">
+        <h2 class="asking__title">Asking to be let in</h2>
+        <ul class="links">
+          @for (person of waiting(); track person.email) {
+            <li class="links__row">
+              <span class="mono">{{ person.email }}</span>
+              @if (person.name) {
+                <span class="asking__name">{{ person.name }}</span>
+              }
+              <span class="links__when mono">{{ person.asked_at }}</span>
+              <button
+                type="button"
+                [disabled]="working()"
+                (click)="approve(person.email)"
+              >
+                Let in
+              </button>
+              <button
+                type="button"
+                class="revoke"
+                [disabled]="working()"
+                (click)="dismiss(person.email)"
+              >
+                Dismiss
+              </button>
+            </li>
+          }
+        </ul>
+        <p class="hint">
+          Letting somebody in gives them the demo library and nothing else,
+          the same as granting an address by hand.
+        </p>
+      </div>
+    }
+
     <div class="card rise">
       <div class="invite">
         <div class="invite__text">

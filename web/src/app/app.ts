@@ -1,7 +1,16 @@
-import { ChangeDetectionStrategy, Component, OnInit, computed, inject } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  OnInit,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 import { IdleSignOut } from './core/auth/idle-sign-out';
+import { Membership } from './core/auth/membership';
+import { ACCESS_REQUESTS } from './core/ports/access-requests.port';
 import { Prime } from './core/data/prime';
 import { BackendHealth } from './core/health/backend-health';
 import { GoogleSignIn } from './core/auth/google-sign-in';
@@ -30,6 +39,34 @@ interface MachineState {
 export class App implements OnInit {
   readonly health = inject(BackendHealth);
   private readonly idle = inject(IdleSignOut);
+  /** Read by the template, so the bar shows only what is usable. */
+  protected readonly member = inject(Membership);
+  private readonly access = inject(ACCESS_REQUESTS);
+
+  /** Set while asking, and once it has been asked, for this session. */
+  protected readonly asking = signal(false);
+  protected readonly asked = signal(false);
+
+  /** Put this account in the queue the owner reads. Grants nothing. */
+  protected askForAccess(): void {
+    if (this.asking()) {
+      return;
+    }
+    this.asking.set(true);
+    this.access.ask().subscribe({
+      next: () => {
+        this.asking.set(false);
+        this.asked.set(true);
+      },
+      // Shown as asked either way. The alternative is an error box on a page
+      // whose whole point is that there is nothing wrong, and the owner can
+      // still be told the ordinary way.
+      error: () => {
+        this.asking.set(false);
+        this.asked.set(true);
+      },
+    });
+  }
   private readonly prime = inject(Prime);
   // Through the port, like every other component. Reaching for GoogleAuth
   // here would tie the shell to the one implementation, which is the thing
