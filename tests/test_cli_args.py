@@ -162,33 +162,46 @@ class TestARunWritesTwoFiles:
     moving back is the failure these guard.
     """
 
-    def test_the_default_is_one_rung_per_level(self):
-        assert cli.mimicry_targets(parse()) == [config.FULL_MIMICRY]
+    def test_the_default_walks_no_ladder(self):
+        assert cli.mimicry_targets(parse()) == [None]
 
-    def test_that_rung_is_the_top_of_the_ladder(self):
+    def test_the_default_rung_is_the_top_of_the_ladder(self):
         """Full mimicry, not merely some single value: the two files are the
         ones that sing the tune as closely as the song allows."""
+        assert cli.single_mimicry(parse()) == config.FULL_MIMICRY
         assert config.FULL_MIMICRY == 1.0
         assert config.FULL_MIMICRY == max(config.MIMICRY_VARIANTS)
+
+    def test_the_default_is_named_the_way_the_site_names_it(self):
+        """The site renders by passing --mimicry 1, which writes
+        `song.wild.mp3`. A default that walked a one-rung ladder instead would
+        write `song.wild.mim1p00.mp3` for the same audio, and one song would
+        sit in the library twice under two names."""
+        assert cli.mimicry_targets(parse()) == cli.mimicry_targets(parse("--mimicry", "1"))
+        assert cli.single_mimicry(parse()) == cli.single_mimicry(parse("--mimicry", "1"))
 
     def test_the_ladder_comes_back_when_it_is_asked_for(self):
         assert cli.mimicry_targets(parse("--ladder")) == \
             list(config.MIMICRY_VARIANTS)
 
     def test_one_named_setting_writes_one_file(self):
-        """--mimicry names the shift itself, so there is no rung to walk and
-        no rung in the filename."""
         assert cli.mimicry_targets(parse("--mimicry", "0.6")) == [None]
+        assert cli.single_mimicry(parse("--mimicry", "0.6")) == 0.6
 
-    def test_a_run_driving_the_mix_is_not_a_ladder_either(self):
+    def test_a_run_driving_the_shift_itself_solves_for_no_rung(self):
+        """--mix and --no-shift say what to shift outright, so there is
+        nothing to solve for and full mimicry must not be imposed on top."""
         assert cli.mimicry_targets(parse("--mix", "0.5")) == [None]
+        assert cli.single_mimicry(parse("--mix", "0.5")) is None
         assert cli.mimicry_targets(parse("--no-shift")) == [None]
+        assert cli.single_mimicry(parse("--no-shift")) is None
 
     def test_naming_a_setting_beats_asking_for_the_ladder(self):
         """Both together is a contradiction. The narrower one wins, because a
         run that wrote fourteen files from a command naming one is the exact
         surprise this whole rule exists to stop."""
         assert cli.mimicry_targets(parse("--ladder", "--mimicry", "0.6")) == [None]
+        assert cli.mimicry_targets(parse("--ladder", "--no-shift")) == [None]
 
 
 class TestEveryFilenameCarriesTheLevel:

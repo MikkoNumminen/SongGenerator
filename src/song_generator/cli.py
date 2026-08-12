@@ -127,22 +127,38 @@ def drives_its_own_shift(args: argparse.Namespace) -> bool:
 
 
 def mimicry_targets(args: argparse.Namespace) -> list[float | None]:
-    """Which mimicry rungs one run writes.
+    """Which mimicry rungs one run walks.
 
-    Two files, one per level, both at full mimicry. The ladder used to be the
-    default, which meant every run wrote fourteen near-identical files per
-    song per bank; two of them were listened to and the other twelve had to be
-    found and deleted by hand afterwards.
+    `[None]` is one render per level, at whatever `single_mimicry` decides,
+    and its filename carries no rung. Anything else is the ladder, where the
+    rung has to go into the name to tell the files apart.
 
-    `--ladder` asks for the sweep back, and `--mimicry` still takes any single
-    value, because comparing rungs by ear at a terminal is the point of having
-    them. Both are typed on purpose. Nothing produces the ladder by default.
+    The ladder used to be the default, which meant every run wrote fourteen
+    near-identical files per song per bank; two of them were listened to and
+    the other twelve had to be found and deleted by hand afterwards. It is
+    asked for by name now, and naming a single setting beats asking for it,
+    because a command that names one rung must not write fourteen files.
     """
-    if drives_its_own_shift(args):
-        return [None]
-    if args.ladder:
+    if args.ladder and not drives_its_own_shift(args):
         return list(config.MIMICRY_VARIANTS)
-    return [config.FULL_MIMICRY]
+    return [None]
+
+
+def single_mimicry(args: argparse.Namespace) -> float | None:
+    """The rung one render sings at, when the ladder was not asked for.
+
+    Full mimicry unless told otherwise, which is the same thing the site asks
+    for by passing `--mimicry 1`. That matters for the filename rather than
+    only the sound: a default that rendered a rung the site does not name
+    would write `song.wild.mim1p00.mp3` where the site writes `song.wild.mp3`,
+    and one song would sit in the library twice under two names.
+
+    None means the shift was named directly, by `--mix` or `--no-shift`, and
+    there is no rung to solve for.
+    """
+    if args.no_shift or args.mix is not None:
+        return None
+    return args.mimicry if args.mimicry is not None else config.FULL_MIMICRY
 
 
 def versioned_name(output: Path, label: str, tag: str | None = None) -> Path:
@@ -424,8 +440,8 @@ def main(argv: list[str] | None = None) -> int:
     else:
         levels = list(config.PLAY_BOTH_LEVELS)
 
-    single = drives_its_own_shift(args)
     targets = mimicry_targets(args)
+    single = targets == [None]
     written: list[tuple[Path, str, float, int]] = []
 
     for level in levels:
@@ -486,7 +502,7 @@ def main(argv: list[str] | None = None) -> int:
             if single:
                 decide_shifts(word_plan, mix=0.0 if args.no_shift else args.mix,
                               mode=args.mix_mode, seed=args.seed,
-                              target_mimicry=args.mimicry)
+                              target_mimicry=single_mimicry(args))
                 path = versioned_name(output, label)
             else:
                 decide_shifts(word_plan, mode=args.mix_mode, seed=args.seed,
