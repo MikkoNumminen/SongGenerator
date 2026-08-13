@@ -728,8 +728,16 @@ def realise(arrangement: Arrangement, slots, units: list[Unit],
     whole = banks.never_split(bank_dir)
     recited = False
     speed = 1.0
+    # Both reciting strategies replay by reciting. "shuffled" differs from
+    # "sequence" only in the order the units were drawn in, and the log
+    # already names them in that order, so replay has nothing to re-draw.
+    # Reading this as "sequence" alone sent a shuffled take down the arranged
+    # path, where clips are fitted to their notes by stretching: the replay of
+    # a take whose whole point is that nothing is stretched came back
+    # stretched.
     if (bank_dir is not None
-            and banks.strategy_for(bank_dir, arrangement.level) == "sequence"):
+            and banks.strategy_for(bank_dir, arrangement.level)
+            in ("sequence", "shuffled")):
         recited = True
         # Bounded exactly as plan_sequence bounds it, so a replayed target
         # is the target the original plan carried.

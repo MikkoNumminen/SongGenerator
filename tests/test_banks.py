@@ -466,6 +466,53 @@ class TestSequenceReplay:
             _slots(), units, bank_dir=bank_dir)
         assert self._fingerprint(replayed) == self._fingerprint(plan)
 
+    def test_a_shuffled_bank_replays_by_reciting(self, tmp_path):
+        """The whole point of shuffling is that nothing is stretched or cut.
+
+        Replay re-derives the strategy from the bank, and it read only
+        "sequence", so a shuffled take fell through to the arranged path and
+        came back fitted to its notes: every clip stretched to its slot, which
+        is exactly what the strategy exists to avoid.
+        """
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "levels": {"conservative": {"strategy": "shuffled"}},
+            "never_split": True,
+        }), encoding="utf-8")
+        units = _raw_spoken(6)
+        plan, arrangement, _ = arrange.build(
+            _slots(), units, "conservative", 11,
+            song="fixture", bank="fixture", bank_dir=tmp_path)
+        replayed = arrange.realise(
+            arrange.parse_text(arrange.render_text(arrangement),
+                               bank_words={w for u in units for w in u.words}),
+            _slots(), units, bank_dir=tmp_path)
+
+        assert self._fingerprint(replayed) == self._fingerprint(plan)
+        # Reciting gives each clip the time it needs; the arranged path would
+        # have cut every target down to its slot span.
+        for p in replayed.placements:
+            assert p.target_s == pytest.approx(p.unit.duration_s, rel=1e-3)
+
+    def test_shuffling_changes_the_order_and_nothing_else(self, tmp_path):
+        """Same clips, same lengths, different running order."""
+        for strategy in ("sequence", "shuffled"):
+            (tmp_path / "bank.json").write_text(json.dumps({
+                "levels": {"conservative": {"strategy": strategy}},
+                "never_split": True,
+            }), encoding="utf-8")
+            units = _raw_spoken(6)
+            plan = arrange.build(_slots(), units, "conservative", 11,
+                                 song="fixture", bank="fixture",
+                                 bank_dir=tmp_path)[0]
+            if strategy == "sequence":
+                straight = [p.unit.name for p in plan.placements]
+                lengths = sorted(round(p.target_s, 4) for p in plan.placements)
+            else:
+                shuffled = [p.unit.name for p in plan.placements]
+                assert sorted(round(p.target_s, 4)
+                              for p in plan.placements) == lengths
+        assert shuffled != straight, "the order was not drawn from the seed"
+
     def test_replay_keeps_the_recitation_off_the_notes(self, tmp_path):
         """The defect, named. A recitation starts each word
         RECITE_WORD_GAP_S after the last one stopped rather than on a note,
