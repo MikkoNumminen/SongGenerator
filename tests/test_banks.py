@@ -1159,7 +1159,7 @@ class TestTheCapReachesTheChoosing:
     the same target.
     """
 
-    def test_plan_words_hands_the_cap_to_every_choice(self, monkeypatch, tmp_path):
+    def test_plan_words_hands_the_cap_to_every_choice(self, monkeypatch):
         from song_generator import mapping
 
         seen = []

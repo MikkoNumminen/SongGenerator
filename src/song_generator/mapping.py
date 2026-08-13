@@ -594,6 +594,12 @@ def _choose(units: list[Unit], remaining: int, span_s: float,
         from .pitchshift import fold_shift
 
         covered = targets[:u.syllables] or targets[:1]
+        # The mean, while fold_unit decides on the worst syllable in the word.
+        # Those disagree, and a word wanting +2/+5/+8 against a cap of 6 is
+        # predicted unfolded and folded anyway. Left alone here deliberately:
+        # changing it re-ranks every candidate and moves every arrangement
+        # this repository has a golden value for, so it is its own change with
+        # its own listening pass. docs/TODO.md carries it.
         want = float(np.mean(covered))
         raw = want - u.midi
 
@@ -602,8 +608,15 @@ def _choose(units: list[Unit], remaining: int, span_s: float,
         # folds at 6 kept picking units the planner believed landed exactly
         # and which were folded on the way out.
         cap = config.SHIFT_CAP_SEMITONES if shift_cap is None else shift_cap
-        cost = abs(fold_shift(raw, cap)) / 12.0
-        if abs(raw) > cap:
+        folded = fold_shift(raw, cap)
+        cost = abs(folded) / 12.0
+        # Charged for folding that happens, not for exceeding the cap. Folding
+        # moves by whole octaves, so below six semitones there is no octave
+        # that reduces the shift and fold_shift returns it untouched: a bank
+        # declaring 4 was charged the penalty on every shift past 4 while
+        # nothing folded, steering the planner away from the units that land
+        # closest. That is this branch's own fix arriving from the other side.
+        if folded != raw:
             # Folding changes the register, so the melody survives only in
             # part. That is a worse outcome than a merely large shift.
             cost += config.FOLD_PENALTY
@@ -670,8 +683,13 @@ def _choose(units: list[Unit], remaining: int, span_s: float,
                 + pitch_cost(u) + variety_cost(u) + role_cost(u))
 
     band = float(play.get("tie_band", 0.35)) if play else 0.35
-    ranked = sorted(pool, key=mismatch)
-    top = [u for u in ranked if mismatch(u) <= mismatch(ranked[0]) + band] or ranked[:1]
+    # Scored once. This ran mismatch three times over the pool and a fourth
+    # over the leader, and mismatch now folds a shift on every call: _choose
+    # runs several times per slot, over every slot, across the coverage
+    # redraws, per level, per song.
+    scored = sorted(((mismatch(u), i, u) for i, u in enumerate(pool)))
+    best = scored[0][0]
+    top = [u for cost, _, u in scored if cost <= best + band] or [scored[0][2]]
     return rng.choice(top)
 
 

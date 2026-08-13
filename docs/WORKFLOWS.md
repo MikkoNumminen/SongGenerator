@@ -304,11 +304,19 @@ depends on a measurement, and the measurement is cheap.
 | **register**, median MIDI | whether the melody is reachable, and by how much |
 | **edge safety**, source level either side of every cut | whether the clips are usable at all |
 
-A generated voice is mostly breath. These banks measure **57 to 86 per cent
-unvoiced**, which is the single fact that governs everything else: an unvoiced
-frame carries no f0, so the vocoder cannot transpose it, and the lower the
-voice the worse it gets. `render_segments` restores those frames from the
-source, which is what makes such a bank usable at all.
+A generated voice is mostly breath, and that is the single fact governing
+everything else: an unvoiced frame carries no f0, so the vocoder cannot
+transpose it, and the lower the voice the worse it gets. `render_segments`
+restores those frames from the source, which is what makes such a bank usable
+at all.
+
+Two figures, and they are not the same measurement. **Per clip**, the phrases
+in these banks run 57 to 86 per cent unvoiced, and the spread between the
+voices is what matters: the lowest one is the highest number and it tears
+first. `doctor` reports a **bank-wide mean over sampled clips**, one number,
+which for `asuntoautoBank` is 42 per cent voiced. Read the doctor line for
+whether a bank is breathy at all, and measure per clip when deciding which
+voice is the problem.
 
 **2. Cut only where the recording is already silent.**
 
@@ -383,6 +391,8 @@ Every fault found here was found by ear first and explained afterwards: which
 words broke, that a second voice broke identically, that the lower voice broke
 sooner. The measurements tell you which explanation is true, not that something
 is wrong. Hand over the candidate folder and listen before building.
+
+---
 
 ## A word breaks, scratches or loses its ending
 

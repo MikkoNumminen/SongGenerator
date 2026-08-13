@@ -101,6 +101,25 @@ never see. Resolve it on a real vocal.
 
 ## Open items
 
+- **The planner predicts folding by a different rule than the renderer uses.**
+
+  `pitch_cost` in `mapping.py` measures a candidate against the MEAN shift
+  across the notes it would cover. `build_segments` hands the word to
+  `fold_unit`, which folds on the LARGEST shift any of its syllables needs. A
+  three-syllable word wanting +2, +5 and +8 against a cap of 6 is predicted
+  unfolded, charged no penalty, chosen, and then folded whole.
+
+  The fix is one line, `max` by absolute value instead of `np.mean`, and it was
+  written and then reverted deliberately. It re-ranks every candidate, so every
+  arrangement this repository has a golden value for moves, and
+  `tests/test_determinism.py` pins two of them. That is a listening decision
+  about every bank rather than a correctness fix to slip into an unrelated
+  branch: the renders would all change, and only an ear can say whether they
+  changed for the better.
+
+  Do it on its own, with the goldens updated in the same commit and a listening
+  pass on the default bank before and after.
+
 - **Tune the wild level for a multi-voice bank.**
 
   `shuffled` exists because the only placement that neither cuts, stretches

@@ -110,41 +110,64 @@ def _report_voice(units) -> None:
     source instead. A generated voice is mostly breath, and the lower the voice
     the more of it there is, which is why the lowest one tears first.
 
-    Sampled rather than measured whole: pyin over a large bank is slow, and the
-    fraction is a property of the voice rather than of any one clip. Skipped
-    silently without librosa, which is an optional extra here.
+    Sampled rather than measured whole: pyin over a large bank is slow, and
+    the fraction is a property of the voice rather than of any one clip. The
+    sample is spread across the bank because clips are grouped by voice.
+
+    Says so when it cannot measure, rather than skipping quietly. librosa is
+    an optional extra, and a missing line here reads exactly like a bank with
+    no breath problem.
     """
     import warnings
+
+    from . import audio_io
 
     try:
         import librosa
     except ImportError:
+        # Said rather than skipped. The runbook tells the reader this line is
+        # the first measurement to take, and silence here is indistinguishable
+        # from a bank with no breath problem.
+        print("\n  voiced fraction: needs librosa (pip install librosa)")
         return
 
-    with_audio = [u for u in units if getattr(u, "audio", None) is not None]
-    if not with_audio:
+    if not units:
         return
+
+    # Spread across the whole bank, not its first six clips. A stride of
+    # len // 6 collapses to 1 for a bank of 7 to 11, and clips are grouped by
+    # voice, so a head-only sample can measure one singer and never reach the
+    # lowest, which is the one that tears first.
+    picks = np.unique(np.linspace(0, len(units) - 1,
+                                  min(6, len(units))).astype(int))
 
     shares = []
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        for u in with_audio[::max(1, len(with_audio) // 6)][:6]:
-            mono = u.audio.mean(axis=0) if u.audio.ndim > 1 else u.audio
+        for i in picks:
+            mono = audio_io.to_mono(units[i].audio)
             if mono.size < 2048:
                 continue
-            _, voiced, _ = librosa.pyin(np.ascontiguousarray(mono),
-                                        sr=config.SAMPLE_RATE, fmin=50,
-                                        fmax=400, frame_length=2048)
+            try:
+                _, voiced, _ = librosa.pyin(np.ascontiguousarray(mono),
+                                            sr=config.SAMPLE_RATE, fmin=50,
+                                            fmax=400, frame_length=2048)
+            except Exception as exc:  # noqa: BLE001
+                # An optional measurement may not take the rest of the report
+                # down with it. Everything below this point still prints.
+                print(f"\n  voiced fraction: unavailable ({exc})")
+                return
             shares.append(float(np.nanmean(voiced)))
     if not shares:
         return
 
-    share = 100.0 * float(np.mean(shares))
-    note = ("  <- mostly breath: keep the clips whole and expect the unvoiced "
-            "restore to carry it") if share < 50 else ""
-    print(f"\n  voiced {share:.0f}% of the sound, sampled over "
-          f"{len(shares)} clips{note}")
-    print('  tuning a new bank: see docs/WORKFLOWS.md, '
+    # Reported without a verdict. A pass/fail on a threshold somebody picked,
+    # applied to a sampled estimate, flips for the same bank when a clip is
+    # added: the trap AGENTS.md names, arriving in the tool that is supposed
+    # to catch it. The runbook says what the number means.
+    print(f"\n  voiced {100.0 * float(np.mean(shares)):.0f}% of the sound, "
+          f"sampled over {len(shares)} of {len(units)} clips")
+    print('  what that governs: docs/WORKFLOWS.md, '
           '"Tune a bank of generated voices"')
 
 
@@ -337,9 +360,9 @@ def main(argv: list[str] | None = None) -> int:
     report_vocabulary()
     units = report_bank(args.bank)
     if args.song:
-        report_song(args.song, units,
-                    Path(config.BANKS[args.bank])
-                    if args.bank in config.BANKS else None)
+        # argparse restricts --bank to the keys of BANKS, so this is always
+        # a real directory; guarding it would have implied otherwise.
+        report_song(args.song, units, Path(config.BANKS[args.bank]))
     else:
         analysed = sorted(Path(config.WORK_DIR).glob("*/analysis.json"))
         if analysed:
