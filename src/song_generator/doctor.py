@@ -179,7 +179,8 @@ def report_bank(bank_name: str) -> list | None:
     return units
 
 
-def report_song(path: Path, units: list | None) -> None:
+def report_song(path: Path, units: list | None,
+                bank_dir: Path | None = None) -> None:
     work = Path(config.WORK_DIR) / path.stem.lower().replace(" ", "_")
     analysis_path = work / "analysis.json"
     print(f"\nSONG {path.name}")
@@ -220,11 +221,11 @@ def report_song(path: Path, units: list | None) -> None:
             print("    calculator cannot appear in this song. Either shorten the climax")
             print("    units or raise MAX_SYLLABLE_S so fewer held notes get split.")
 
-    _report_folding(units, notes)
+    _report_folding(units, notes, bank_dir)
 
 
 
-def _report_folding(units, notes) -> None:
+def _report_folding(units, notes, bank_dir: Path | None = None) -> None:
     """How far this melody sits from where the bank actually lives.
 
     Measured against the bank's median pitch, NOT against the nearest take.
@@ -252,7 +253,14 @@ def _report_folding(units, notes) -> None:
 
     centre = float(np.median(ordinary))
     raw = np.abs(np.array([n["midi"] for n in notes]) - centre)
-    folded = float((raw > config.SHIFT_CAP_SEMITONES).mean())
+    # The bank's own cap. Reporting against the tool's while a bank folds
+    # sooner made this line disagree with the octave-folded line a render
+    # prints, which is the number the WORKFLOWS ladder says to compare it
+    # with.
+    from .banks import shift_cap
+
+    cap = shift_cap(bank_dir)
+    folded = float((raw > cap).mean())
     print(f"\n  predicted shift: median {np.median(raw):.1f} semitones from "
           f"the bank's own register ({note_name(int(round(centre)))}), "
           f"{folded * 100:.0f}% would need octave folding")
@@ -280,7 +288,9 @@ def main(argv: list[str] | None = None) -> int:
     report_vocabulary()
     units = report_bank(args.bank)
     if args.song:
-        report_song(args.song, units)
+        report_song(args.song, units,
+                    Path(config.BANKS[args.bank])
+                    if args.bank in config.BANKS else None)
     else:
         analysed = sorted(Path(config.WORK_DIR).glob("*/analysis.json"))
         if analysed:

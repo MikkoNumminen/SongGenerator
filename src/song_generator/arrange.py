@@ -666,7 +666,8 @@ def build(slots, units: list[Unit], level: str, seed: int,
 
         pool = enrich(units, level, random.Random(this_seed), split=not whole)
         plan = plan_words(slots, pool, seed=this_seed,
-                          play=None if level == "off" else drawing)
+                          play=None if level == "off" else drawing,
+                          shift_cap=banks.shift_cap(bank_dir))
         if whole:
             # Marked after planning rather than threaded through plan_words,
             # which every bank shares. The planner's job is which clip goes
