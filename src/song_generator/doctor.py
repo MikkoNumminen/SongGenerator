@@ -101,6 +101,53 @@ def report_vocabulary() -> None:
         print("  consistent")
 
 
+def _report_voice(units) -> None:
+    """How much of this bank the vocoder can actually transpose.
+
+    The first measurement to take on a new bank, and the one that governs the
+    rest. An unvoiced frame carries no f0, so WORLD cannot move it and rebuilds
+    it from aperiodicity alone; render_segments restores those frames from the
+    source instead. A generated voice is mostly breath, and the lower the voice
+    the more of it there is, which is why the lowest one tears first.
+
+    Sampled rather than measured whole: pyin over a large bank is slow, and the
+    fraction is a property of the voice rather than of any one clip. Skipped
+    silently without librosa, which is an optional extra here.
+    """
+    import warnings
+
+    try:
+        import librosa
+    except ImportError:
+        return
+
+    with_audio = [u for u in units if getattr(u, "audio", None) is not None]
+    if not with_audio:
+        return
+
+    shares = []
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        for u in with_audio[::max(1, len(with_audio) // 6)][:6]:
+            mono = u.audio.mean(axis=0) if u.audio.ndim > 1 else u.audio
+            if mono.size < 2048:
+                continue
+            _, voiced, _ = librosa.pyin(np.ascontiguousarray(mono),
+                                        sr=config.SAMPLE_RATE, fmin=50,
+                                        fmax=400, frame_length=2048)
+            shares.append(float(np.nanmean(voiced)))
+    if not shares:
+        return
+
+    share = 100.0 * float(np.mean(shares))
+    note = ("  <- mostly breath: keep the clips whole and expect the unvoiced "
+            "restore to carry it") if share < 50 else ""
+    print(f"\n  voiced {share:.0f}% of the sound, sampled over "
+          f"{len(shares)} clips{note}")
+    print('  tuning a new bank: see docs/WORKFLOWS.md, '
+          '"Tune a bank of generated voices"')
+
+
 def report_bank(bank_name: str) -> list | None:
     print(f"\nBANK '{bank_name}'")
     try:
@@ -151,6 +198,8 @@ def report_bank(bank_name: str) -> list | None:
         print(f"  {label:<34} {len(p):>3} units  "
               f"{note_name(int(round(p.min())))}-{note_name(int(round(p.max())))}"
               f"  spread {p.max() - p.min():.1f} st")
+
+    _report_voice(units)
 
     print("\n  pitch coverage")
     coverage(units, "whole bank")
