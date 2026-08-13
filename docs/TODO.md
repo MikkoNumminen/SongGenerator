@@ -101,6 +101,42 @@ never see. Resolve it on a real vocal.
 
 ## Open items
 
+- **Tune the wild level for a multi-voice bank.**
+
+  `shuffled` exists because the only placement that neither cuts, stretches
+  nor syllabifies a word is the reciting one, and that one is deterministic:
+  a bank declaring `sequence` for both levels wrote two identical files.
+  Shuffling the running order varies the take while leaving every clip exactly
+  as recorded. That much works.
+
+  What it does not do is know whose voice it is holding. `asuntoautoBank` now
+  carries three singers, and conservative keeps them in blocks only because
+  reciting in bank order happens to group them: the female phrases were built
+  first, then the male, then the reader. Shuffling throws that away, so wild
+  moves between three people at random, which is the gibberish the bank was
+  explicitly asked not to produce.
+
+  Fixing it properly needs the bank to record which voice each clip is, and
+  the shuffle to draw in runs rather than per clip: a few clips of one singer,
+  then a few of the next. `build_bank --raw` has nowhere to put that today,
+  since every unit it writes is called `raw`. The natural home is a field in
+  `words.json` and a matching key in `bank.json`, so a bank can say how long a
+  run should be, the way it already says how far its voice may be shifted.
+
+  A third thing belongs with it: **seasoning**. The reader voice is meant to
+  appear seldom and unpredictably, the way `SHOUT_WORDS` and `CLIMAX_WORDS`
+  season an arranged bank. Reciting has no such notion: every clip gets its
+  turn once per cycle, so rarity can only be bought by keeping fewer copies,
+  and even a single clip returns on a fixed beat as the sequence loops. A
+  per-clip appearance weight, read by the reciting cursor rather than only by
+  the planner, is what that wants.
+
+  Two smaller things belong with it. `arranged` remains unusable for a bank
+  like this, because fitting a clip to a note means stretching it, and a clip
+  squeezed past about 0.6 stops sounding like the word. And a `shuffled` take
+  is only as repeatable as its seed, so a run worth keeping has to be brought
+  back with `--seed` or replayed from its `.arr` log.
+
 - **A real waveform on the track being played.**
 
   The idea that started this was a whole look built around waveforms: every

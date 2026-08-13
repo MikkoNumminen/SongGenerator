@@ -217,7 +217,53 @@ per-component stylesheet budget stating the same rule as a number.
 
 ---
 
-## Current: 8.7
+### Iteration 6, the check that agreed with the mistake: 8.8
+
+A fault took four wrong diagnoses before it was found, and every one of them
+was confirmed by measurement before being committed. That is the interesting
+part, and it is not a story about carelessness.
+
+Word endings were breaking. In order, they were blamed on the placement
+strategy, on the mimicry shift, on the pitch engine, and on the clip cuts, and
+each explanation came with a number that supported it. Three of the four were
+wrong. Lowering the shift cap made the fault quieter, which read as
+confirmation and was not: a smaller shift mangles any discontinuity less,
+whatever caused it. A fix that reduces a symptom has not located it.
+
+The clip-cut diagnosis was wrong in a way worth recording. The check that
+verified the cuts used a silence gate set at floor+12 dB, and so did the tool
+that made them. A decaying vowel sits below that while still being audible, so
+the cuts ran through the ends of words and the check agreed they were clean,
+three times. The verification shared the fault's own assumption, which makes it
+not a verification. Two rules came out of it: test a cut against the source
+recording on both sides rather than against the clip's own body, and cut at the
+middle of a measured silence so both sides are quiet by construction rather
+than by threshold.
+
+What it actually was: these voices are 57 to 86 per cent unvoiced, and WORLD
+rebuilds an unvoiced frame from aperiodicity alone. Long breathy stretches came
+back as a tearing scratch, worst in the lowest voice, which has the most breath
+and the furthest to move. Unvoiced sound carries no pitch, so shifting it
+changes nothing a listener can hear: `render_segments` now puts the original
+samples back wherever the source had no f0. Measured as mel-spectral distance
+from the source, the male clips went from 1.8 to 1.0 and the female from 3.1 to
+2.3.
+
+The owner found it. Every observation that moved this forward came from
+listening: which words failed, that a new voice failed identically, that it
+broke earlier in the lower voice. Nothing in the repository was capable of
+noticing any of it, which is dimension 11 measuring exactly what it says.
+
+What went in, so the next one is cheaper: a diagnostic ladder in
+`docs/WORKFLOWS.md` that rules out placement, cuts, shift and voice in that
+order and says which numbers decide each; the two traps above in `AGENTS.md`;
+and tests that fail without the restore. Audible verification moves 6 to 8, on
+the strength of the ladder and the measurements behind it rather than any new
+listening the repository can do by itself. It still cannot hear.
+
+---
+
+## Current: 8.8
 
 | # | Dimension | 0 | now |
 |---|---|---|---|
@@ -231,10 +277,10 @@ per-component stylesheet budget stating the same rule as a number.
 | 8 | Actionable errors | 7 | 9 |
 | 9 | Domain glossary | 1 | 10 |
 | 10 | Runbooks | 3 | 10 |
-| 11 | Audible verification | 0 | 6 |
+| 11 | Audible verification | 0 | 8 |
 | 12 | Rendered verification | 0 | 2 |
 
-**Mean: 8.7**, against **4.2** at baseline scored the same way.
+**Mean: 8.8**, against **4.2** at baseline scored the same way.
 
 Both of those numbers are over twelve dimensions, and every earlier score in
 this log is a mean over however many dimensions existed when it was written, so

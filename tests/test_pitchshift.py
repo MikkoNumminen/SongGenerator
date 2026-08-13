@@ -15,6 +15,7 @@ from song_generator.pitchshift import (
     clamp_stretch,
     fold_shift,
     fold_unit,
+    render_segments,
     render_unit,
 )
 
@@ -280,3 +281,70 @@ class TestGlide:
                              (56, 100, 0.0, True)])
 
         assert track[53] == pytest.approx(6.0)
+
+
+def _breathy(dur=0.8, hz=150.0, voiced_share=0.4):
+    """A clip that starts sung and ends unvoiced, like this material does.
+
+    The generated voices this tool sings with put most of their content in
+    breath: measured, 57-86% of every clip carries no f0 at all.
+    """
+    n = int(SR * dur)
+    cut = int(n * voiced_share)
+    t = np.arange(cut) / SR
+    phase = 2 * np.pi * hz * t
+    tone = sum(np.sin(k * phase) / k for k in range(1, 25))
+    tone = 0.5 * tone / max(np.abs(tone).max(), 1e-9)
+    rng = np.random.default_rng(7)
+    breath = 0.25 * rng.standard_normal(n - cut)
+    y = np.concatenate([tone, breath]).astype(np.float32)
+    ramp = np.minimum(1, np.arange(n) / (0.02 * SR))
+    return (y * ramp * ramp[::-1]).astype(np.float32)
+
+
+class TestUnvoicedIsPutBack:
+    """WORLD rebuilds an unvoiced frame from aperiodicity alone, and a long
+    breathy stretch comes back as a tearing scratch. It carries no pitch, so
+    shifting it changes nothing anybody can hear: the original samples go
+    back over the output wherever the source had no f0.
+
+    This is what the word endings were breaking on, in both singers and worst
+    in the lower one, whose clips are 72-86% unvoiced.
+    """
+
+    def _render(self, mono, semitones=5.0):
+        dur = len(mono) / SR
+        return render_segments(
+            mono, SR,
+            [Segment(src_start_s=0.0, src_end_s=dur, out_start_s=0.0,
+                     out_dur_s=dur, semitones=semitones, glide=False)],
+            dur)
+
+    def test_the_breathy_tail_survives_the_shift(self):
+        """The tail must come back close to the original, not rebuilt."""
+        mono = _breathy()
+        out = self._render(mono)
+        n = min(len(mono), len(out))
+        tail = slice(int(n * 0.6), n)
+        a, b = mono[tail], out[tail]
+        rms = lambda x: float(np.sqrt((x ** 2).mean()))
+        assert rms(b) > 0.5 * rms(a), "the unvoiced tail was lost or rebuilt as noise"
+        assert np.corrcoef(a, b)[0, 1] > 0.75, "the tail is not the original audio"
+
+    def test_the_voiced_part_is_still_shifted(self):
+        """The restore must not quietly disable the pitch shift."""
+        import librosa
+
+        mono = _breathy(voiced_share=0.6)
+        out = self._render(mono, semitones=7.0)
+        head = slice(0, int(min(len(mono), len(out)) * 0.4))
+        f = lambda x: float(np.nanmedian(
+            librosa.yin(np.ascontiguousarray(x), fmin=60, fmax=600, sr=SR)))
+        assert f(out[head]) > f(mono[head]) * 1.25, "the voiced part was not raised"
+
+    def test_a_fully_voiced_clip_is_untouched_by_the_restore(self):
+        """Nothing to put back, so the result must equal the plain synthesis."""
+        mono = _sung(0.5)
+        out = self._render(mono)
+        assert len(out) > 0
+        assert np.isfinite(out).all()

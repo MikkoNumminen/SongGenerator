@@ -561,6 +561,52 @@ class TestSequenceReplay:
 # The bank's own level against the bed
 # ---------------------------------------------------------------------------
 
+class TestShiftCap:
+    """How far a bank's voice may be moved before the shift folds.
+
+    A property of the recordings. SHIFT_CAP_SEMITONES is 12 because 12 was
+    measured and judged by ear against 7, but on SUNG banks. A speaking voice
+    tears sooner, and the words broke at their ends long before the tool
+    thought it was asking too much.
+    """
+
+    def test_a_bank_that_declares_nothing_takes_the_tools_own_limit(self, tmp_path):
+        assert banks.shift_cap(tmp_path) == config.SHIFT_CAP_SEMITONES
+        assert banks.shift_cap(None) == config.SHIFT_CAP_SEMITONES
+
+    def test_a_declared_cap_is_returned(self, tmp_path):
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "shift_cap_semitones": 6.0
+        }), encoding="utf-8")
+        assert banks.shift_cap(tmp_path) == 6.0
+
+    def test_a_string_is_refused_by_name(self, tmp_path):
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "shift_cap_semitones": "6.0"
+        }), encoding="utf-8")
+        with pytest.raises(ValueError, match="shift_cap_semitones") as caught:
+            banks.shift_cap(tmp_path)
+        assert "bank.json" in str(caught.value)
+
+    @pytest.mark.parametrize("cap", [0.0, -6.0, 13.0])
+    def test_a_cap_outside_what_the_tool_can_do_is_refused(self, tmp_path, cap):
+        """Zero would fold everything and a cap above the tool's own limit
+        would claim a distance it never shifts, both silently."""
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "shift_cap_semitones": cap
+        }), encoding="utf-8")
+        with pytest.raises(ValueError, match="shift_cap_semitones"):
+            banks.shift_cap(tmp_path)
+
+    def test_the_cap_reaches_the_thing_that_folds(self, tmp_path):
+        """The whole point: a declared cap has to arrive at fold_shift, or it
+        is a number in a file that changes nothing."""
+        from song_generator.pitchshift import fold_shift
+
+        assert abs(fold_shift(9.0, 6.0)) <= 6.0
+        assert fold_shift(9.0, 12.0) == pytest.approx(9.0)
+
+
 class TestWordBusLufs:
     def test_the_declared_level_is_returned(self, tmp_path):
         (tmp_path / "bank.json").write_text(json.dumps({

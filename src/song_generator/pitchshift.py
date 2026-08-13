@@ -268,6 +268,36 @@ def render_segments(mono: np.ndarray, sr: int, segments: list[Segment],
         mask = np.concatenate([mask, np.zeros(len(y) - len(mask), dtype=bool)])
     y = y[:len(mask)] * mask[:len(y)]
 
+    # Put the original samples back wherever the source had no pitch.
+    #
+    # An unvoiced frame carries no f0, so shifting it changes nothing a
+    # listener can hear and everything WORLD can get wrong: with no harmonic
+    # structure to move it rebuilds the frame from aperiodicity alone, and a
+    # long unvoiced stretch comes back as a tearing scratch. This voice sings
+    # a great deal of its content breathy, up to a second at a time and only
+    # a few dB below the voiced parts, so those stretches were most of what
+    # was breaking, in both singers and worst in the lower one.
+    #
+    # Only where the mapping is one-to-one in time, which is every render
+    # that does not stretch. Where a syllable is being re-timed the source
+    # samples no longer line up and there is nothing to put back.
+    aligned = np.abs(np.arange(n_out) - src_index) <= 1
+    restore = (f0[src_index] <= 0.0) & aligned & gate
+    if restore.any():
+        hop = int(round(step_s * sr))
+        keep = np.repeat(restore, hop)
+        keep = (np.concatenate([keep, np.zeros(len(y) - len(keep), dtype=bool)])
+                if len(keep) < len(y) else keep[:len(y)])
+        original = np.zeros(len(y), dtype=np.float32)
+        shared = min(len(mono), len(y))
+        original[:shared] = mono[:shared]
+        # Ramped over 5 ms so the joins cannot click.
+        ramp = max(1, int(0.005 * sr))
+        weight = np.convolve(keep.astype(np.float32),
+                             np.ones(ramp, dtype=np.float32) / ramp, mode="same")
+        weight = np.clip(weight, 0.0, 1.0)
+        y = y * (1.0 - weight) + original * weight
+
     return np.asarray(y, dtype=np.float32)
 
 

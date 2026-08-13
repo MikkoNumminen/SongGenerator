@@ -555,6 +555,12 @@ def main(argv: list[str] | None = None) -> int:
         if missing and not args.json:
             print(f"  MISSING   {label} never says: {', '.join(missing)}")
         word_plan.merged, word_plan.split = merged, split
+        # Stamped here rather than read from config where the shift is
+        # decided: how far a voice survives being moved is a property of the
+        # recordings, and batch renders several banks in one process.
+        cap = banks.shift_cap(words_dir)
+        for placement in word_plan.placements:
+            placement.shift_cap = cap
 
         # The resynthesis is shared across the mimicry sweep: which units a
         # variant shifts is only a selection over the same shifted set.

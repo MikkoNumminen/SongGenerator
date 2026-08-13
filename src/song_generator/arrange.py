@@ -592,7 +592,7 @@ def build(slots, units: list[Unit], level: str, seed: int,
     # The bank_dir test is not redundant: a strategy other than "arranged" can
     # only come from a bank that declared one, so this says in code what the
     # line above says in logic.
-    if strategy == "sequence" and bank_dir is not None:
+    if strategy in ("sequence", "shuffled") and bank_dir is not None:
         # Nothing to redraw: the sequence has no draws in it, and there are
         # no required words because the order IS the content. One plan, and
         # it is the plan. Described the same way as any other, so the .arr
@@ -601,8 +601,16 @@ def build(slots, units: list[Unit], level: str, seed: int,
         # reads is a fact about that recording, and a busy melody would
         # otherwise decide it.
         speed = float(banks.overrides_for(bank_dir, level).get("reading_speed", 1.0))
-        plan = plan_sequence(slots, units, reading_speed=speed,
-                             split=not banks.never_split(bank_dir))
+        order = units
+        if strategy == "shuffled":
+            # Drawn once from this run's seed, so the take is repeatable and
+            # the .arr log replays it. The clips themselves are untouched:
+            # recite still gives each one the time it needs at this pace.
+            order = list(units)
+            random.Random(seed).shuffle(order)
+        plan = plan_sequence(slots, order, reading_speed=speed,
+                             split=not banks.never_split(bank_dir),
+                             keep_order=strategy == "shuffled")
         return plan, describe(plan, song, bank, level, seed), 1
 
     whole = banks.never_split(bank_dir)
