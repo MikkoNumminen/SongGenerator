@@ -1295,7 +1295,8 @@ def build_segments(p: Placement) -> tuple[list, float]:
         # One octave for the whole word rather than one per syllable, so the
         # intervals inside it are the ones the melody asked for. A shout keeps
         # its own pitch, so it neither votes on the octave nor takes it.
-        folded = iter(fold_unit([w for *_, raw, w in pieces if not raw]))
+        folded = iter(fold_unit([w for *_, raw, w in pieces if not raw],
+                                p.shift_cap))
 
         for i, (src_a, src_b, slot, raw, _) in enumerate(pieces):
             shift = 0.0 if raw else next(folded)
@@ -1351,7 +1352,7 @@ def build_segments(p: Placement) -> tuple[list, float]:
         source = p.unit.source_midi(i)
         wanted.append(None if raw_flags[i] or landing is None or source is None
                       else landing.midi - source)
-    folded = iter(fold_unit([w for w in wanted if w is not None]))
+    folded = iter(fold_unit([w for w in wanted if w is not None], p.shift_cap))
 
     cursor = 0.0
     for i, (src_a, src_b) in enumerate(spans):
@@ -1569,7 +1570,7 @@ def report(plan: Plan, units: list[Unit]) -> str:
             f"max {np.abs(raw).max():.1f}")
         add(f"    after folding     median {np.median(np.abs(shifts)):.1f} semitones, "
             f"max {np.abs(shifts).max():.1f} "
-            f"(cap {cap:.0f})")
+            f"(cap {cap:g})")
         folded = int((np.abs(raw) > cap).sum())
         add(f"    octave-folded     {folded} of {len(raw)} syllables "
             f"({folded / len(raw) * 100:.0f}%) were too far to shift directly")

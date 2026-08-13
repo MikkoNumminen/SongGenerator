@@ -210,6 +210,14 @@ def render_segments(mono: np.ndarray, sr: int, segments: list[Segment],
     # the slide sitting sharp for most of its length.
     semis = np.zeros(n_out, dtype=float)
     gate = np.zeros(n_out, dtype=bool)
+    # Where each output frame's source sample sits, and whether this segment
+    # is being played at its own length. Only an unstretched segment has an
+    # original to put back: once a syllable is re-timed the samples no longer
+    # line up, and comparing frame indices is not the same question, because
+    # they agree for the head of any stretched segment that starts where its
+    # source does.
+    restorable = np.zeros(n_out, dtype=bool)
+    src_sample = np.zeros(n_out, dtype=float)
     placed: list[tuple[int, int, float, bool]] = []
 
     for seg in segments:
@@ -229,6 +237,9 @@ def render_segments(mono: np.ndarray, sr: int, segments: list[Segment],
         src_index[j0:j1] = idx
         semis[j0:j1] = seg.semitones
         gate[j0:j1] = True
+        if abs(stretch - 1.0) <= config.UNVOICED_RESTORE_TOLERANCE:
+            restorable[j0:j1] = True
+            src_sample[j0:j1] = (seg.src_start_s + local) * sr
 
         # Hold the vowel out to the next syllable. TIME_STRETCH_RANGE caps how
         # far a syllable may be stretched, and a short one cannot always reach
@@ -273,30 +284,29 @@ def render_segments(mono: np.ndarray, sr: int, segments: list[Segment],
     # An unvoiced frame carries no f0, so shifting it changes nothing a
     # listener can hear and everything WORLD can get wrong: with no harmonic
     # structure to move it rebuilds the frame from aperiodicity alone, and a
-    # long unvoiced stretch comes back as a tearing scratch. This voice sings
-    # a great deal of its content breathy, up to a second at a time and only
-    # a few dB below the voiced parts, so those stretches were most of what
-    # was breaking, in both singers and worst in the lower one.
+    # long unvoiced stretch comes back as a tearing scratch. The voices this
+    # sings with are 57 to 86 per cent unvoiced, so those stretches were most
+    # of what was breaking, worst in the lowest voice.
     #
-    # Only where the mapping is one-to-one in time, which is every render
-    # that does not stretch. Where a syllable is being re-timed the source
-    # samples no longer line up and there is nothing to put back.
-    aligned = np.abs(np.arange(n_out) - src_index) <= 1
-    restore = (f0[src_index] <= 0.0) & aligned & gate
+    # Positions are carried in samples rather than by repeating a frame flag,
+    # because a frame is 220.5 samples at 44.1 kHz and a whole-sample grid
+    # drifts half a sample per frame: eight milliseconds by the end of a long
+    # clip, which put the join in the middle of the wrong sound.
+    restore = (f0[src_index] <= 0.0) & restorable & gate
     if restore.any():
-        hop = int(round(step_s * sr))
-        keep = np.repeat(restore, hop)
-        keep = (np.concatenate([keep, np.zeros(len(y) - len(keep), dtype=bool)])
-                if len(keep) < len(y) else keep[:len(y)])
-        original = np.zeros(len(y), dtype=np.float32)
-        shared = min(len(mono), len(y))
-        original[:shared] = mono[:shared]
-        # Ramped over 5 ms so the joins cannot click.
-        ramp = max(1, int(0.005 * sr))
-        weight = np.convolve(keep.astype(np.float32),
-                             np.ones(ramp, dtype=np.float32) / ramp, mode="same")
-        weight = np.clip(weight, 0.0, 1.0)
-        y = y * (1.0 - weight) + original * weight
+        at = np.arange(len(y), dtype=float)
+        centres = np.arange(n_out, dtype=float) * step_s * sr
+        # Interpolating the 0/1 flags gives the crossfade for free, one frame
+        # wide, and cannot drift because both sides are read at the same
+        # exact positions.
+        weight = np.interp(at, centres, restore.astype(float))
+        source_at = np.interp(at, centres, src_sample)
+        original = np.interp(source_at, np.arange(len(mono), dtype=float), mono)
+        # Equal power, not equal amplitude. Either side of a join is broadband
+        # noise and the two are uncorrelated, so a linear fade loses 3 dB at
+        # the midpoint: a dip at every boundary, and on this material there
+        # are many per word.
+        y = y * np.sqrt(1.0 - weight) + original * np.sqrt(weight)
 
     return np.asarray(y, dtype=np.float32)
 

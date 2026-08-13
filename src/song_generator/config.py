@@ -857,6 +857,16 @@ FORMANT_SCALE = 1.0
 # Beyond 12 is untested by ear. 15 measures worse again and buys little.
 SHIFT_CAP_SEMITONES = 12.0
 
+# How close a segment's stretch must be to 1.0 before its unvoiced frames may
+# be replaced with the original samples. See pitchshift.render_segments.
+#
+# The restore only makes sense where an aligned original exists. A re-timed
+# syllable has none: its samples no longer sit where the output does, and
+# splicing them in repeats a few milliseconds of source at the join. Not zero,
+# because the stretch is a ratio of two measured durations and lands a hair
+# off 1.0 on a render that is not stretching anything.
+UNVOICED_RESTORE_TOLERANCE = 0.02
+
 # Whether a word's syllables run into each other instead of each stopping when
 # its own note ends.
 #

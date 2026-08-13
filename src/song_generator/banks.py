@@ -246,15 +246,33 @@ def _declared(bank_dir: Path) -> dict:
         )
 
     cap = settings.get("shift_cap_semitones")
-    if cap is not None and (not _a_number(cap) or not 1.0 <= cap <= 12.0):
+    ceiling = float(config.SHIFT_CAP_SEMITONES)
+    if cap is not None and (not _a_number(cap) or not 1.0 <= cap <= ceiling):
         raise ValueError(
-            f"shift_cap_semitones in {path} must be a number between 1 and 12,"
-            f" got {cap!r}.\n"
+            f"shift_cap_semitones in {path} must be a number between 1 and"
+            f" {ceiling:g}, got {cap!r}.\n"
             "    It is how far this bank's voice may be moved before the shift"
-            " is folded by whole octaves instead. Twelve is the tool's own"
-            " limit and the default; a bank that tears before then says so"
-            " here. Write 6.0, not \"6.0\"."
+            " is folded by whole octaves instead. The bound is"
+            " SHIFT_CAP_SEMITONES, the tool's own limit and the default, read"
+            " from config rather than repeated here so the two cannot"
+            " disagree. A bank that tears before then says so."
+            " Write 6.0, not \"6.0\"."
         )
+
+    # A strategy that promises whole clips needs a bank that keeps them whole.
+    for level, declared in levels.items():
+        if (_an_object(declared) and declared.get("strategy") == "shuffled"
+                and not settings.get("never_split", False)):
+            raise ValueError(
+                f"level {level!r} in {path} declares \"shuffled\" without"
+                " \"never_split\": true.\n"
+                "    shuffled exists because reciting is the only placement"
+                " that neither cuts, stretches nor syllabifies a word, and"
+                " that guarantee is never_split's to give. Without it the"
+                " clips are cut at their syllables and scaled to their slots,"
+                " which is the output the strategy was added to avoid, and"
+                " nothing would say so."
+            )
 
     keep_whole = settings.get("never_split", False)
     if not _a_boolean(keep_whole):

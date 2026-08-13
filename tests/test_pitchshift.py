@@ -342,9 +342,36 @@ class TestUnvoicedIsPutBack:
             librosa.yin(np.ascontiguousarray(x), fmin=60, fmax=600, sr=SR)))
         assert f(out[head]) > f(mono[head]) * 1.25, "the voiced part was not raised"
 
-    def test_a_fully_voiced_clip_is_untouched_by_the_restore(self):
-        """Nothing to put back, so the result must equal the plain synthesis."""
+    def test_a_fully_voiced_clip_is_not_replaced_by_its_own_source(self):
+        """Nothing to put back, so the shift must survive intact.
+
+        The earlier version of this asserted only that the output was finite
+        and non-empty, which its own docstring did not claim and which cannot
+        fail for the defect it named.
+        """
+        import librosa
+
         mono = _sung(0.5)
-        out = self._render(mono)
-        assert len(out) > 0
-        assert np.isfinite(out).all()
+        out = self._render(mono, semitones=7.0)
+        n = min(len(mono), len(out))
+        f = lambda x: float(np.nanmedian(  # noqa: E731
+            librosa.yin(np.ascontiguousarray(x), fmin=60, fmax=900, sr=SR)))
+        assert f(out[:n]) > f(mono[:n]) * 1.3, "the clip came back at its own pitch"
+        assert np.corrcoef(mono[:n], out[:n])[0, 1] < 0.9, "the source was spliced in"
+
+    def test_a_stretched_render_gets_no_restore(self):
+        """The original only lines up where nothing is re-timed.
+
+        Comparing frame indices said "aligned" for the head of any stretched
+        segment starting where its source does, so unstretched original was
+        spliced over the front of a re-timed render.
+        """
+        mono = _breathy(voiced_share=0.25)
+        dur = len(mono) / SR
+        stretched = render_segments(
+            mono, SR,
+            [Segment(src_start_s=0.0, src_end_s=dur, out_start_s=0.0,
+                     out_dur_s=dur * 1.2, semitones=5.0, glide=False)],
+            dur * 1.2)
+        head = slice(0, 2000)
+        assert not np.allclose(stretched[head], mono[head], atol=2e-3)

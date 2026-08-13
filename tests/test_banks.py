@@ -466,6 +466,58 @@ class TestSequenceReplay:
             _slots(), units, bank_dir=bank_dir)
         assert self._fingerprint(replayed) == self._fingerprint(plan)
 
+    def test_both_levels_shuffled_do_not_draw_the_same_order(self, tmp_path):
+        """--seed hands one seed to every level, so drawing from it alone gave
+        two identical files: the exact failure shuffled exists to fix,
+        reappearing the moment somebody asked for a repeatable take."""
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "levels": {"conservative": {"strategy": "shuffled"},
+                       "wild": {"strategy": "shuffled"}},
+            "never_split": True,
+        }), encoding="utf-8")
+        units = _raw_spoken(8)
+        orders = []
+        for level in ("conservative", "wild"):
+            plan = arrange.build(_slots(), units, level, 11, song="f", bank="f",
+                                 bank_dir=tmp_path)[0]
+            orders.append([p.unit.name for p in plan.placements])
+        assert orders[0] != orders[1]
+
+    def test_the_same_seed_and_level_draw_the_same_order(self, tmp_path):
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "levels": {"wild": {"strategy": "shuffled"}}, "never_split": True,
+        }), encoding="utf-8")
+        units = _raw_spoken(8)
+        twice = [[p.unit.name for p in arrange.build(
+            _slots(), units, "wild", 11, song="f", bank="f",
+            bank_dir=tmp_path)[0].placements] for _ in range(2)]
+        assert twice[0] == twice[1]
+
+    def test_the_draw_does_not_depend_on_the_order_the_bank_loaded_in(self, tmp_path):
+        """Shuffling load_bank's order made words.json key order an input, so
+        the same seed gave a different take once a clip was added anywhere."""
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "levels": {"wild": {"strategy": "shuffled"}}, "never_split": True,
+        }), encoding="utf-8")
+        units = _raw_spoken(8)
+        straight = [p.unit.name for p in arrange.build(
+            _slots(), units, "wild", 11, song="f", bank="f",
+            bank_dir=tmp_path)[0].placements]
+        reversed_load = [p.unit.name for p in arrange.build(
+            _slots(), list(reversed(units)), "wild", 11, song="f", bank="f",
+            bank_dir=tmp_path)[0].placements]
+        assert straight == reversed_load
+
+    def test_shuffled_without_never_split_is_refused(self, tmp_path):
+        """The strategy promises whole clips and cannot keep that promise on
+        its own: without never_split the clips are cut at their syllables and
+        scaled to their slots, silently."""
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "levels": {"wild": {"strategy": "shuffled"}},
+        }), encoding="utf-8")
+        with pytest.raises(ValueError, match="never_split"):
+            banks.strategy_for(tmp_path, "wild")
+
     def test_a_shuffled_bank_replays_by_reciting(self, tmp_path):
         """The whole point of shuffling is that nothing is stretched or cut.
 
