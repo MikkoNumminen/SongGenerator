@@ -18,7 +18,7 @@ recordings, as a file in the bank directory:
       "never_split": true
     }
 
-Two strategies exist:
+Three strategies exist:
 
   arranged   the planner chooses units by role, fit and variety, from a seed,
              redrawn until every required word is covered. What every bank
@@ -26,6 +26,9 @@ Two strategies exist:
   sequence   the units replayed in the order they were recorded, looping when
              they run out. No seed, no draws, no coverage. See
              mapping.plan_sequence.
+  shuffled   the same reciting, in an order drawn from the seed. Nothing is
+             cut, stretched or syllabified, because the placement is the
+             reciting one; only the running order changes.
 
 "overrides" sit on top of the level's parameters from PLAY_LEVELS, so a bank
 can lean a level without redefining it. Only the knobs the level itself
@@ -58,7 +61,13 @@ from . import config
 
 # Every strategy a bank may declare. Listed once, here, so the refusal below
 # can name what would have been accepted.
-STRATEGIES = ("arranged", "sequence")
+# "shuffled" is "sequence" with the running order drawn from the seed instead
+# of taken from the recording. It exists because the only mode that neither
+# cuts, stretches nor syllabifies a word is the reciting one, and that mode is
+# deterministic: a bank declaring it for both levels wrote two identical files.
+# Shuffling the order varies the take while leaving every clip exactly as it
+# was recorded, at its own length.
+STRATEGIES = ("arranged", "sequence", "shuffled")
 
 SETTINGS_FILE = "bank.json"
 
@@ -236,6 +245,35 @@ def _declared(bank_dir: Path) -> dict:
             "    Write -11.0, not \"-11.0\"."
         )
 
+    cap = settings.get("shift_cap_semitones")
+    ceiling = float(config.SHIFT_CAP_SEMITONES)
+    if cap is not None and (not _a_number(cap) or not 1.0 <= cap <= ceiling):
+        raise ValueError(
+            f"shift_cap_semitones in {path} must be a number between 1 and"
+            f" {ceiling:g}, got {cap!r}.\n"
+            "    It is how far this bank's voice may be moved before the shift"
+            " is folded by whole octaves instead. The bound is"
+            " SHIFT_CAP_SEMITONES, the tool's own limit and the default, read"
+            " from config rather than repeated here so the two cannot"
+            " disagree. A bank that tears before then says so."
+            " Write 6.0, not \"6.0\"."
+        )
+
+    # A strategy that promises whole clips needs a bank that keeps them whole.
+    for level, declared in levels.items():
+        if (_an_object(declared) and declared.get("strategy") == "shuffled"
+                and not settings.get("never_split", False)):
+            raise ValueError(
+                f"level {level!r} in {path} declares \"shuffled\" without"
+                " \"never_split\": true.\n"
+                "    shuffled exists because reciting is the only placement"
+                " that neither cuts, stretches nor syllabifies a word, and"
+                " that guarantee is never_split's to give. Without it the"
+                " clips are cut at their syllables and scaled to their slots,"
+                " which is the output the strategy was added to avoid, and"
+                " nothing would say so."
+            )
+
     keep_whole = settings.get("never_split", False)
     if not _a_boolean(keep_whole):
         raise ValueError(
@@ -277,6 +315,27 @@ def mix_for(bank_dir: Path | None) -> dict:
     if bank_dir is None:
         return {}
     return dict(_declared(bank_dir).get("mix", {}))
+
+
+def shift_cap(bank_dir: Path | None) -> float:
+    """How far this bank's voice may be moved before the shift is folded.
+
+    A property of the recordings rather than of the tool. `SHIFT_CAP_SEMITONES`
+    is 12 because 12 was measured and then judged by ear to sound better than
+    7, but that was judged on SUNG banks, where the vocoder is resynthesising
+    a voice already holding a note. A speaking voice tears sooner: this bank
+    spans five semitones and was being dragged ten upward, and the words broke
+    at the ends long before the tool thought it was asking too much.
+
+    Lower it and more syllables fold to another octave instead, so the melody
+    survives in part rather than in full. That is the trade, and it is worth
+    taking when the alternative is a shift that tears: a word in the wrong
+    octave is still the word.
+    """
+    if bank_dir is None:
+        return config.SHIFT_CAP_SEMITONES
+    declared = _declared(bank_dir).get("shift_cap_semitones")
+    return config.SHIFT_CAP_SEMITONES if declared is None else float(declared)
 
 
 def never_split(bank_dir: Path | None) -> bool:

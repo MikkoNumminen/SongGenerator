@@ -288,6 +288,66 @@ reflect what is on disk, and an ordinary run says nothing about it.
 
 ---
 
+## A word breaks, scratches or loses its ending
+
+The most expensive fault this tool has had, and it was misdiagnosed four times
+because every explanation sounded right. Walk these in order. Each step rules
+out a whole class, and the render report names most of the numbers.
+
+**1. Is it placement?** Read `truncated` and `time fit` in the report.
+
+- `truncated` above zero with an `arranged` bank: the planner is cutting clips
+  to fit their slots. That counter also fires on any reading speed above 1.0,
+  where nothing is cut, so check `time fit` before believing it.
+- `time fit` far from 1.00: the clip is being stretched or squeezed. Below
+  about 0.6 a word stops sounding like the word. `sequence` never stretches;
+  `arranged` fits every clip to its note.
+
+**2. Is it the cut?** Test **against the source, on both sides of every cut**,
+never inside the clip:
+
+```powershell
+# For each cut, measure the source in the 50ms before the start and after the
+# end. Both must sit near the noise floor. A loud reading means the cut landed
+# mid-word, whatever the clip looks like on its own.
+```
+
+Do not judge a start by comparing a clip's first frames to its own body: a
+correct clip *begins* on a word, so that test flags every good clip and clears
+none. That mistake threw away five good clips here.
+
+Do not pick the silence threshold to suit the answer. A gate at floor+12 dB
+called a decaying vowel silence, the check then agreed with the cuts three
+times running, and the endings were chopped the whole time. Cut at the
+**middle of a measured silence** and both sides are quiet by construction.
+
+**3. Is it the shift?** Check `after folding` and `octave-folded`. Lowering
+`shift_cap_semitones` for the bank will make a shift-caused fault quieter. Be
+careful: that also makes an *unrelated* fault quieter, because a smaller shift
+mangles any discontinuity less. Improvement here is a hint, not a diagnosis.
+
+**4. Is it the voice?** Measure the **voiced fraction**. Anything much under
+half means most of the clip carries no f0, and WORLD rebuilds those frames
+from aperiodicity alone. The generated voices used here run 57 to 86 per cent
+unvoiced, which is why their endings tore while the middles were fine, and why
+the lower voice failed first: it has the most breath and the furthest to move.
+
+That last one is handled in `pitchshift.render_segments`, which puts the
+original samples back wherever the source had no pitch. Shifting unvoiced
+sound changes nothing anybody can hear, so there is nothing to lose by it.
+It applies only where the render is not stretching, since a re-timed clip has
+no aligned original to restore.
+
+**What not to do.** Switching engines is the wrong first move. Rubber Band
+needs no f0 and so never tears, which makes it look like the fix, but it does
+roughly twice the spectral damage to a low breathy voice. Measured on these
+banks, mel-spectral distance from the source at a five semitone shift:
+
+| clip | unvoiced | WORLD | Rubber Band | WORLD + restore |
+|---|---|---|---|---|
+| female phrase | 57% | 3.1 | 3.6 | **2.3** |
+| male phrase | 72% | 1.8 | 3.3 | **1.0** |
+
 ## Work out why something sounds wrong
 
 ```powershell

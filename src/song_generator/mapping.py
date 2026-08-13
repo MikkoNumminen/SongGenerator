@@ -142,6 +142,12 @@ class Placement:
     # be guessed from another field's value, which is how a whole clip once
     # rendered at natural length over a half-second span.
     target_s: float | None = None
+    # How far this clip may be shifted before the shift folds by octaves.
+    # None is config.SHIFT_CAP_SEMITONES. Carried per placement rather than
+    # read from config where it is used, because it is a property of the bank
+    # the clip came from: a spoken voice tears at a distance a sung one
+    # survives, and a batch renders several banks in one process.
+    shift_cap: float | None = None
 
     def raw_distance(self) -> float:
         """Furthest any of this unit's syllables would have to move, unfolded."""
@@ -945,7 +951,8 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None,
 
 
 def plan_sequence(slots: list[Slot], units: list[Unit],
-                  reading_speed: float = 1.0, split: bool = True) -> Plan:
+                  reading_speed: float = 1.0, split: bool = True,
+                  keep_order: bool = False) -> Plan:
     """Replay the bank in the order it was recorded. plan_words chooses;
     this recites.
 
@@ -978,7 +985,11 @@ def plan_sequence(slots: list[Slot], units: list[Unit],
     """
     from .banks import deliverable_speed
 
-    ordered = sorted(units, key=lambda u: (u.variant, u.name))
+    # keep_order is the shuffled strategy handing over an order it drew from
+    # the seed. Sorting it back into the recording's order would undo exactly
+    # what was asked for.
+    ordered = (list(units) if keep_order
+               else sorted(units, key=lambda u: (u.variant, u.name)))
     if not ordered:
         return Plan(slots_total=len(slots))
 
@@ -1118,7 +1129,8 @@ def unit_fit(p: Placement) -> float:
         if source is None:
             continue
         raw = abs(slot.midi - source)
-        fits.append(1.0 if raw <= config.SHIFT_CAP_SEMITONES else config.FOLDED_FIT)
+        cap = p.shift_cap if p.shift_cap is not None else config.SHIFT_CAP_SEMITONES
+        fits.append(1.0 if raw <= cap else config.FOLDED_FIT)
     return float(np.mean(fits)) if fits else 0.0
 
 
@@ -1244,7 +1256,8 @@ def build_segments(p: Placement) -> tuple[list, float]:
     if not p.split:
         source = p.unit.midi
         first = p.slots[0] if p.slots else None
-        shift = 0.0 if (source is None or first is None) else fold_shift(first.midi - source)
+        shift = (0.0 if (source is None or first is None)
+                 else fold_shift(first.midi - source, p.shift_cap))
         p.shifts = [shift]
         natural = p.unit.duration_s or 1e-3
         target = p.target_s if p.target_s is not None else natural
@@ -1282,7 +1295,8 @@ def build_segments(p: Placement) -> tuple[list, float]:
         # One octave for the whole word rather than one per syllable, so the
         # intervals inside it are the ones the melody asked for. A shout keeps
         # its own pitch, so it neither votes on the octave nor takes it.
-        folded = iter(fold_unit([w for *_, raw, w in pieces if not raw]))
+        folded = iter(fold_unit([w for *_, raw, w in pieces if not raw],
+                                p.shift_cap))
 
         for i, (src_a, src_b, slot, raw, _) in enumerate(pieces):
             shift = 0.0 if raw else next(folded)
@@ -1338,7 +1352,7 @@ def build_segments(p: Placement) -> tuple[list, float]:
         source = p.unit.source_midi(i)
         wanted.append(None if raw_flags[i] or landing is None or source is None
                       else landing.midi - source)
-    folded = iter(fold_unit([w for w in wanted if w is not None]))
+    folded = iter(fold_unit([w for w in wanted if w is not None], p.shift_cap))
 
     cursor = 0.0
     for i, (src_a, src_b) in enumerate(spans):
@@ -1508,6 +1522,11 @@ def report(plan: Plan, units: list[Unit]) -> str:
         used[p.unit.label] = used.get(p.unit.label, 0) + 1
 
     stretches = np.array([p.stretch_needed for p in plan.placements])
+    # Read off the placements, because the bank may declare its own. Printing
+    # the config default beside a max the bank capped lower said two numbers
+    # that disagreed and blamed neither.
+    caps = {p.shift_cap for p in plan.placements if p.shift_cap is not None}
+    cap = caps.pop() if len(caps) == 1 else config.SHIFT_CAP_SEMITONES
     truncated = sum(1 for p in plan.placements if p.play_s < p.unit.duration_s - 1e-3)
 
     add(f"    bank              {len(units)} units")
@@ -1551,8 +1570,8 @@ def report(plan: Plan, units: list[Unit]) -> str:
             f"max {np.abs(raw).max():.1f}")
         add(f"    after folding     median {np.median(np.abs(shifts)):.1f} semitones, "
             f"max {np.abs(shifts).max():.1f} "
-            f"(cap {config.SHIFT_CAP_SEMITONES:.0f})")
-        folded = int((np.abs(raw) > config.SHIFT_CAP_SEMITONES).sum())
+            f"(cap {cap:g})")
+        folded = int((np.abs(raw) > cap).sum())
         add(f"    octave-folded     {folded} of {len(raw)} syllables "
             f"({folded / len(raw) * 100:.0f}%) were too far to shift directly")
         add(f"    engine            {config.SHIFT_ENGINE}, "

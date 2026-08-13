@@ -466,6 +466,105 @@ class TestSequenceReplay:
             _slots(), units, bank_dir=bank_dir)
         assert self._fingerprint(replayed) == self._fingerprint(plan)
 
+    def test_both_levels_shuffled_do_not_draw_the_same_order(self, tmp_path):
+        """--seed hands one seed to every level, so drawing from it alone gave
+        two identical files: the exact failure shuffled exists to fix,
+        reappearing the moment somebody asked for a repeatable take."""
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "levels": {"conservative": {"strategy": "shuffled"},
+                       "wild": {"strategy": "shuffled"}},
+            "never_split": True,
+        }), encoding="utf-8")
+        units = _raw_spoken(8)
+        orders = []
+        for level in ("conservative", "wild"):
+            plan = arrange.build(_slots(), units, level, 11, song="f", bank="f",
+                                 bank_dir=tmp_path)[0]
+            orders.append([p.unit.name for p in plan.placements])
+        assert orders[0] != orders[1]
+
+    def test_the_same_seed_and_level_draw_the_same_order(self, tmp_path):
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "levels": {"wild": {"strategy": "shuffled"}}, "never_split": True,
+        }), encoding="utf-8")
+        units = _raw_spoken(8)
+        twice = [[p.unit.name for p in arrange.build(
+            _slots(), units, "wild", 11, song="f", bank="f",
+            bank_dir=tmp_path)[0].placements] for _ in range(2)]
+        assert twice[0] == twice[1]
+
+    def test_the_draw_does_not_depend_on_the_order_the_bank_loaded_in(self, tmp_path):
+        """Shuffling load_bank's order made words.json key order an input, so
+        the same seed gave a different take once a clip was added anywhere."""
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "levels": {"wild": {"strategy": "shuffled"}}, "never_split": True,
+        }), encoding="utf-8")
+        units = _raw_spoken(8)
+        straight = [p.unit.name for p in arrange.build(
+            _slots(), units, "wild", 11, song="f", bank="f",
+            bank_dir=tmp_path)[0].placements]
+        reversed_load = [p.unit.name for p in arrange.build(
+            _slots(), list(reversed(units)), "wild", 11, song="f", bank="f",
+            bank_dir=tmp_path)[0].placements]
+        assert straight == reversed_load
+
+    def test_shuffled_without_never_split_is_refused(self, tmp_path):
+        """The strategy promises whole clips and cannot keep that promise on
+        its own: without never_split the clips are cut at their syllables and
+        scaled to their slots, silently."""
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "levels": {"wild": {"strategy": "shuffled"}},
+        }), encoding="utf-8")
+        with pytest.raises(ValueError, match="never_split"):
+            banks.strategy_for(tmp_path, "wild")
+
+    def test_a_shuffled_bank_replays_by_reciting(self, tmp_path):
+        """The whole point of shuffling is that nothing is stretched or cut.
+
+        Replay re-derives the strategy from the bank, and it read only
+        "sequence", so a shuffled take fell through to the arranged path and
+        came back fitted to its notes: every clip stretched to its slot, which
+        is exactly what the strategy exists to avoid.
+        """
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "levels": {"conservative": {"strategy": "shuffled"}},
+            "never_split": True,
+        }), encoding="utf-8")
+        units = _raw_spoken(6)
+        plan, arrangement, _ = arrange.build(
+            _slots(), units, "conservative", 11,
+            song="fixture", bank="fixture", bank_dir=tmp_path)
+        replayed = arrange.realise(
+            arrange.parse_text(arrange.render_text(arrangement),
+                               bank_words={w for u in units for w in u.words}),
+            _slots(), units, bank_dir=tmp_path)
+
+        assert self._fingerprint(replayed) == self._fingerprint(plan)
+        # Reciting gives each clip the time it needs; the arranged path would
+        # have cut every target down to its slot span.
+        for p in replayed.placements:
+            assert p.target_s == pytest.approx(p.unit.duration_s, rel=1e-3)
+
+    def test_shuffling_changes_the_order_and_nothing_else(self, tmp_path):
+        """Same clips, same lengths, different running order."""
+        for strategy in ("sequence", "shuffled"):
+            (tmp_path / "bank.json").write_text(json.dumps({
+                "levels": {"conservative": {"strategy": strategy}},
+                "never_split": True,
+            }), encoding="utf-8")
+            units = _raw_spoken(6)
+            plan = arrange.build(_slots(), units, "conservative", 11,
+                                 song="fixture", bank="fixture",
+                                 bank_dir=tmp_path)[0]
+            if strategy == "sequence":
+                straight = [p.unit.name for p in plan.placements]
+                lengths = sorted(round(p.target_s, 4) for p in plan.placements)
+            else:
+                shuffled = [p.unit.name for p in plan.placements]
+                assert sorted(round(p.target_s, 4)
+                              for p in plan.placements) == lengths
+        assert shuffled != straight, "the order was not drawn from the seed"
+
     def test_replay_keeps_the_recitation_off_the_notes(self, tmp_path):
         """The defect, named. A recitation starts each word
         RECITE_WORD_GAP_S after the last one stopped rather than on a note,
@@ -560,6 +659,52 @@ class TestSequenceReplay:
 # ---------------------------------------------------------------------------
 # The bank's own level against the bed
 # ---------------------------------------------------------------------------
+
+class TestShiftCap:
+    """How far a bank's voice may be moved before the shift folds.
+
+    A property of the recordings. SHIFT_CAP_SEMITONES is 12 because 12 was
+    measured and judged by ear against 7, but on SUNG banks. A speaking voice
+    tears sooner, and the words broke at their ends long before the tool
+    thought it was asking too much.
+    """
+
+    def test_a_bank_that_declares_nothing_takes_the_tools_own_limit(self, tmp_path):
+        assert banks.shift_cap(tmp_path) == config.SHIFT_CAP_SEMITONES
+        assert banks.shift_cap(None) == config.SHIFT_CAP_SEMITONES
+
+    def test_a_declared_cap_is_returned(self, tmp_path):
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "shift_cap_semitones": 6.0
+        }), encoding="utf-8")
+        assert banks.shift_cap(tmp_path) == 6.0
+
+    def test_a_string_is_refused_by_name(self, tmp_path):
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "shift_cap_semitones": "6.0"
+        }), encoding="utf-8")
+        with pytest.raises(ValueError, match="shift_cap_semitones") as caught:
+            banks.shift_cap(tmp_path)
+        assert "bank.json" in str(caught.value)
+
+    @pytest.mark.parametrize("cap", [0.0, -6.0, 13.0])
+    def test_a_cap_outside_what_the_tool_can_do_is_refused(self, tmp_path, cap):
+        """Zero would fold everything and a cap above the tool's own limit
+        would claim a distance it never shifts, both silently."""
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "shift_cap_semitones": cap
+        }), encoding="utf-8")
+        with pytest.raises(ValueError, match="shift_cap_semitones"):
+            banks.shift_cap(tmp_path)
+
+    def test_the_cap_reaches_the_thing_that_folds(self, tmp_path):
+        """The whole point: a declared cap has to arrive at fold_shift, or it
+        is a number in a file that changes nothing."""
+        from song_generator.pitchshift import fold_shift
+
+        assert abs(fold_shift(9.0, 6.0)) <= 6.0
+        assert fold_shift(9.0, 12.0) == pytest.approx(9.0)
+
 
 class TestWordBusLufs:
     def test_the_declared_level_is_returned(self, tmp_path):

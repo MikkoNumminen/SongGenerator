@@ -215,7 +215,7 @@ payoff rather than becoming the texture. In the example vocabulary that is
 ## Status
 
 All four build stages are done: separation and mode detection, melody and timing
-extraction, word mapping, and formant-corrected pitch shifting. 642 tests.
+extraction, word mapping, and formant-corrected pitch shifting. 659 tests.
 
 The HTTP edge and the Angular front end are built and carry their own suites.
 Neither is deployed: that needs a Google client id and somewhere to host static

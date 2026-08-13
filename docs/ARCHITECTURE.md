@@ -60,7 +60,7 @@ song.mp4
 | `analysis.py` | Melody and syllable timing out of the original vocal | `analyse`, `Analysis` |
 | `mapping.py` | Every arrangement decision, plus render and mix | `load_bank`, `plan_words`, `render`, `mix` |
 | `banks.py` | Per-bank behaviour from `bank.json`: which strategy each level uses, and its overrides | `strategy_for`, `overrides_for` |
-| `pitchshift.py` | WORLD or Rubber Band; octave folding | `render_unit`, `fold_shift` |
+| `pitchshift.py` | WORLD or Rubber Band; octave folding; unvoiced frames restored from the source | `render_unit`, `fold_shift` |
 | `config.py` | Every tunable, grouped by stage, with the reasoning |, |
 | `util.py` | Device resolution, work-dir naming, glob expansion, word scoring | `resolve_device`, `work_dir_for`, `expand`, `word_similarity` |
 

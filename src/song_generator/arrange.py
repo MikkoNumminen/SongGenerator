@@ -592,7 +592,7 @@ def build(slots, units: list[Unit], level: str, seed: int,
     # The bank_dir test is not redundant: a strategy other than "arranged" can
     # only come from a bank that declared one, so this says in code what the
     # line above says in logic.
-    if strategy == "sequence" and bank_dir is not None:
+    if strategy in ("sequence", "shuffled") and bank_dir is not None:
         # Nothing to redraw: the sequence has no draws in it, and there are
         # no required words because the order IS the content. One plan, and
         # it is the plan. Described the same way as any other, so the .arr
@@ -601,9 +601,26 @@ def build(slots, units: list[Unit], level: str, seed: int,
         # reads is a fact about that recording, and a busy melody would
         # otherwise decide it.
         speed = float(banks.overrides_for(bank_dir, level).get("reading_speed", 1.0))
-        plan = plan_sequence(slots, units, reading_speed=speed,
-                             split=not banks.never_split(bank_dir))
-        return plan, describe(plan, song, bank, level, seed), 1
+        order = units
+        if strategy == "shuffled":
+            # Shuffled from the canonical order, not from whatever order the
+            # bank happened to load in. plan_sequence sorts by (variant, name)
+            # and a sequence take survives words.json being rewritten or a
+            # clip being added; drawing from load_bank's order instead would
+            # have made the seed one input among several, so "same seed, same
+            # take" held only while that file's key order did.
+            order = sorted(units, key=lambda u: (u.variant, u.name))
+            # The level is part of the draw. cli resolves one seed for the
+            # run and hands it to every level, so a bank reciting shuffled at
+            # both levels drew the same order twice and wrote two identical
+            # files, which is the exact failure this strategy exists to fix,
+            # reappearing the moment somebody passed --seed.
+            random.Random(f"{seed}:{level}").shuffle(order)
+        plan = plan_sequence(slots, order, reading_speed=speed,
+                             split=not banks.never_split(bank_dir),
+                             keep_order=strategy == "shuffled")
+        return (_stamp_cap(plan, bank_dir),
+                describe(plan, song, bank, level, seed), 1)
 
     whole = banks.never_split(bank_dir)
     params = level_params(level)
@@ -666,7 +683,7 @@ def build(slots, units: list[Unit], level: str, seed: int,
         covered = wanted <= arrangement.words_used()
         paired = arrangement.has_pairing() or not possible
         if covered and paired:
-            return plan, arrangement, attempt + 1
+            return _stamp_cap(plan, bank_dir), arrangement, attempt + 1
         if best is None or scored(arrangement) > scored(best[1]):
             best = (plan, arrangement, attempt + 1)
 
@@ -684,6 +701,23 @@ def unreachable_words(units: list[Unit]) -> list[str]:
     """
     sayable = {w for u in units for w in u.words}
     return sorted(set(required_words()) - sayable)
+
+
+def _stamp_cap(plan, bank_dir):
+    """Carry the bank's shift cap onto every placement it made.
+
+    Set here rather than by the caller, because every plan this module
+    returns already knows its bank and the CLI's copy did not: a plan built
+    by anything else rendered at the global cap, and each rendering-time
+    consumer had to be found by hand, which is how two of the three were
+    missed. See banks.shift_cap.
+    """
+    from . import banks
+
+    cap = banks.shift_cap(bank_dir)
+    for placement in plan.placements:
+        placement.shift_cap = cap
+    return plan
 
 
 def realise(arrangement: Arrangement, slots, units: list[Unit],
@@ -720,8 +754,16 @@ def realise(arrangement: Arrangement, slots, units: list[Unit],
     whole = banks.never_split(bank_dir)
     recited = False
     speed = 1.0
+    # Both reciting strategies replay by reciting. "shuffled" differs from
+    # "sequence" only in the order the units were drawn in, and the log
+    # already names them in that order, so replay has nothing to re-draw.
+    # Reading this as "sequence" alone sent a shuffled take down the arranged
+    # path, where clips are fitted to their notes by stretching: the replay of
+    # a take whose whole point is that nothing is stretched came back
+    # stretched.
     if (bank_dir is not None
-            and banks.strategy_for(bank_dir, arrangement.level) == "sequence"):
+            and banks.strategy_for(bank_dir, arrangement.level)
+            in ("sequence", "shuffled")):
         recited = True
         # Bounded exactly as plan_sequence bounds it, so a replayed target
         # is the target the original plan carried.
@@ -860,7 +902,7 @@ def realise(arrangement: Arrangement, slots, units: list[Unit],
         for placement in plan.placements:
             if placement.target_s is None:
                 placement.target_s = placement.play_s
-    return plan
+    return _stamp_cap(plan, bank_dir)
 
 
 def log_path(work: Path, level: str, seed: int) -> Path:

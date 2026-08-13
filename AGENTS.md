@@ -70,6 +70,26 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
 
 ## Where the traps are
 
+- **Never validate a cut with a threshold you chose.** A gate at floor+12 dB
+  called a decaying vowel silence, so every check agreed the clips ended
+  cleanly while they were being chopped mid-word. Three rounds of measuring
+  confirmed the same mistake, because the gate decided both the cut and the
+  verdict. Test a cut against the source recording on both sides of it, and cut at the
+  middle of a measured silence so both sides are quiet by construction. Judging
+  a clip's start by comparing its first frames to its own body is the same
+  error inverted: a correct clip begins on a word, so that test flags the good
+  ones and clears nothing.
+- **A fix that makes a fault quieter has not found it.** Lowering the shift cap
+  improved audibly broken endings twice, and the cause was the cuts both times:
+  a smaller shift mangles any discontinuity less. Treat improvement as a hint
+  and keep looking for the mechanism.
+- **Most of these voices carry no pitch.** The generated banks measure 57 to 86
+  per cent unvoiced. WORLD rebuilds an unvoiced frame from aperiodicity alone,
+  so long breathy stretches came back as a tearing scratch, worst in the lowest
+  voice. `render_segments` puts the original samples back wherever the source
+  had no f0. Do not "fix" that by switching engines: Rubber Band never tears
+  but does about twice the spectral damage to those same clips. See
+  `docs/WORKFLOWS.md`, "A word breaks, scratches or loses its ending".
 - **Filenames end up on Windows.** A clip's measured note goes into its name,
   and an unpitched clip once wrote a literal `?`, which is illegal, the write
   threw and an entire source was silently abandoned. Sanitise anything derived
