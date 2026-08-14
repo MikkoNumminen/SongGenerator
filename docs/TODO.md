@@ -101,6 +101,99 @@ never see. Resolve it on a real vocal.
 
 ## Open items
 
+- **`sykeBank` was built from candidates nobody has listened to.**
+
+  141 candidates were mined into `words_syke_src/` and built straight into a
+  bank of 137 units, unheard and unnamed, junk included. Four did not make it,
+  and nobody has looked at which four or why. Deleting the bad ones and
+  rebuilding is what turns it into a bank rather than a pile.
+
+  It declares no `bank.json`, and that part is deliberate rather than missing:
+  it is cut from a sung song, not from generated speech, so it takes the
+  defaults `words_hq4` takes, which is what `vocabulary_local.py` says beside
+  it. `arranged` with splittable clips is the right placement for sung
+  material. Do not give it `sequence` and `never_split` by analogy with
+  `asuntoautoBank`, which is a speech bank and a different problem.
+
+  `words_asuntoauto_src/candidates/` has had no systematic listening pass
+  either, though its cuts are at least verified against the source.
+
+- **The run report names an engine it did not use.**
+
+  `mapping.py` prints `engine {config.SHIFT_ENGINE}` rather than the engine the
+  run actually used, so `--engine rubberband` reports "world". It misled an
+  entire A/B comparison until the two files were compared as audio.
+
+  Not a one-line fix, which is why it is written down rather than done in
+  passing: `report(plan, units)` has no access to the run's engine. That lives
+  in `args.engine`, no `Placement` carries it, so this needs the signature, the
+  one call site in `cli.py`, and any test that calls `report/2`.
+
+  The same report's `truncated` count fires on any reading speed above 1.0
+  whether or not anything was cut. That one is already documented where it
+  matters, in the diagnostic ladder in `docs/WORKFLOWS.md`, which tells the
+  reader to check `time fit` before believing it. Whoever fixes the counter
+  should delete that caveat in the same change.
+
+- **Settings that change the audio without changing the filename.**
+
+  `--engine`, `--mix-mode` and `--seed` each produce a materially different
+  render under the same name, so each overwrites the take before it with one
+  generation kept in `previous/`. `variant_tag` already names `--mimicry`,
+  `--no-shift`, `--mix` and `--arrangement`; these were left out.
+
+  Two neighbours look like the same problem and are not:
+
+  - `--separator` does not reach the audio at all. `separate.py` returns the
+    cached stems whenever they exist, with no backend in the cache key, so a
+    second separator on a song that already has stems is silently ignored while
+    the report and the JSON payload both name it. The defect is the cache key
+    and the report, not the filename.
+  - `--bare-syllables` changes nothing about what gets sung, which this file
+    already records further down: `cli` loads the bank with
+    `singable_only=False` and `arrange.enrich` filters to word-like units
+    regardless. Naming it in the filename would produce a differently named
+    file with identical audio.
+
+  `--no-words` is its own case. It writes an untagged instrumental straight
+  into the bank folder, bypassing `versioned_name` and
+  `keep_the_one_it_replaces`, so it appears in the library as a row with no
+  level in its name and keeps no previous copy. It cannot destroy a real take,
+  because every worded render carries its level, so the only thing it can
+  overwrite is an earlier instrumental of its own.
+
+- **Noted, not a problem here: `pylibrb` is GPLv2 while `LICENSE` is MIT.**
+
+  Recorded because it is the kind of thing that looks like an oversight later.
+  `pylibrb` is a required dependency in `pyproject.toml` and bundles the Rubber
+  Band Library, which is GPL-or-commercial. It is free of charge, which is the
+  bar this repository sets.
+
+  Copyleft only bites on distribution, and nothing here is distributed: this is
+  one person's tool that happens to be readable on GitHub. Left alone
+  deliberately. If it ever were packaged for anyone else it would need the move
+  to `[project.optional-dependencies]` beside `roformer`, and two things that
+  go with it: `pitchshift.py` imports `pylibrb` bare, so a missing extra gives
+  a raw traceback where `separate.py` raises a named error, and `cli.py` offers
+  `--engine rubberband` in its choices unconditionally.
+
+- **Old and new render names sit side by side, and they are not duplicates.**
+
+  `output/bussilaulu_.../ttsfi/` holds four files: two `.mim1p00` from before
+  the naming rule and two untagged from after. They are four different renders,
+  a day apart, with four different audio checksums, and `previous/` holds a
+  third generation again.
+
+  So there is no safe sweep for `*.mim1p00.mp3` beside an untagged twin, and
+  the earlier version of this note suggested one. It would delete real takes.
+  It would also delete the top rung of any `--ladder` render, which the code
+  still writes as `mim1p00` on purpose so seven files can be told apart: disk
+  currently holds 139 of them, and the only reason the pattern has not
+  misfired is that nobody has run a ladder beside a plain render.
+
+  Whether the older takes are worth keeping is a listening question, one folder
+  at a time.
+
 - **The planner predicts folding by a different rule than the renderer uses.**
 
   `pitch_cost` in `mapping.py` measures a candidate against the MEAN shift
