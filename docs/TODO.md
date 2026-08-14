@@ -101,6 +101,70 @@ never see. Resolve it on a real vocal.
 
 ## Open items
 
+- **`sykeBank` has never been listened to, and declares nothing.**
+
+  Its 137 units were mined from a fetched song and built straight into a bank:
+  the 142 candidates in `words_syke_src/` went in unheard and unnamed, junk
+  included, so the bank is whatever the silence split produced. Deleting the
+  bad ones and rebuilding is what turns it into a bank rather than a pile.
+
+  It also has no `bank.json`, so it takes the defaults: `arranged` at both
+  levels, clips splittable. On generated speech that means the word endings are
+  cut and stretched exactly as `asuntoautoBank` was before it was tuned.
+  Nothing has been rendered with it yet, so nobody has hit that. Give it a
+  declaration before anything is.
+
+  `words_asuntoauto_src/candidates/` has had no systematic listening pass
+  either, though its cuts are at least verified against the source.
+
+- **The run report states two things that are not true.**
+
+  `mapping.py` prints `engine {config.SHIFT_ENGINE}` rather than the engine the
+  run actually used, so `--engine rubberband` reports "world". It misled an
+  entire A/B comparison before somebody checked the audio differed.
+
+  It also prints `truncated N units cut short by the next entry`, counting any
+  placement whose play time is under the clip's natural length. A reading speed
+  above 1.0 makes that every placement, cut or not: a recitation at 1.3 reported
+  123 units cut short with nothing cut. The number that matters is how many were
+  clamped past the stretch range, which is not what this counts.
+
+  Both are one-line fixes and both are in the report the diagnostic ladder in
+  `docs/WORKFLOWS.md` tells people to read.
+
+- **Four settings change the audio without changing the filename.**
+
+  `--engine`, `--separator`, `--raw-clips` and `--bare-syllables` all produce
+  materially different renders under exactly the same name, so each overwrites
+  the take before it and `previous/` keeps only one generation. `variant_tag`
+  already names what was asked for specially, for `--mimicry`, `--no-shift`,
+  `--mix` and `--arrangement`; these four were left out of it.
+
+  `--no-words` is worse: it writes an untagged instrumental straight into the
+  bank folder, bypassing `versioned_name` and `keep_the_one_it_replaces`
+  entirely, so it appears in the library as a take with neither level nor
+  variant in its name and `--rollback` can never bring back what it replaced.
+
+- **`pylibrb` is GPLv2 and this repository is MIT.**
+
+  It is a required dependency in `pyproject.toml`, and it bundles the Rubber
+  Band Library, which is GPL-or-commercial. Free of charge, which is the bar
+  the project sets, but copyleft, which an MIT project cannot carry into a
+  distribution without a licence conflict.
+
+  The fix is one line: move it to `[project.optional-dependencies]` the way
+  `roformer` already is, so the MIT core stays clean and the GPL engine is
+  opted into. WORLD is the default and measures better on this material
+  anyway, so nothing about an ordinary render changes.
+
+- **Renders from before the naming rule are still on disk.**
+
+  `output/bussilaulu_.../ttsfi/` holds four files: the two current names and
+  two `.mim1p00` leftovers from when a run wrote a rung tag. They are the same
+  two takes under two naming schemes, so the library lists each twice. Worth a
+  sweep for `*.mim1p00.mp3` beside an untagged twin, rather than deleting by
+  hand one folder at a time.
+
 - **The planner predicts folding by a different rule than the renderer uses.**
 
   `pitch_cost` in `mapping.py` measures a candidate against the MEAN shift
