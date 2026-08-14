@@ -145,17 +145,19 @@ never see. Resolve it on a real vocal.
   entirely, so it appears in the library as a take with neither level nor
   variant in its name and `--rollback` can never bring back what it replaced.
 
-- **`pylibrb` is GPLv2 and this repository is MIT.**
+- **Noted, not a problem here: `pylibrb` is GPLv2 while `LICENSE` is MIT.**
 
-  It is a required dependency in `pyproject.toml`, and it bundles the Rubber
-  Band Library, which is GPL-or-commercial. Free of charge, which is the bar
-  the project sets, but copyleft, which an MIT project cannot carry into a
-  distribution without a licence conflict.
+  Recorded because it is the kind of thing that looks like an oversight later.
+  `pylibrb` is a required dependency in `pyproject.toml` and bundles the Rubber
+  Band Library, which is GPL-or-commercial. It is free of charge, which is the
+  bar this repository sets.
 
-  The fix is one line: move it to `[project.optional-dependencies]` the way
-  `roformer` already is, so the MIT core stays clean and the GPL engine is
-  opted into. WORLD is the default and measures better on this material
-  anyway, so nothing about an ordinary render changes.
+  Copyleft only bites on distribution, and nothing here is distributed: this is
+  one person's tool that happens to be readable on GitHub. Left alone
+  deliberately. If it ever were packaged for anyone else, the one-line move to
+  `[project.optional-dependencies]` beside `roformer` is what that would need,
+  and nothing about a render would change, since WORLD is the default and
+  measures better on this material anyway.
 
 - **Renders from before the naming rule are still on disk.**
 
