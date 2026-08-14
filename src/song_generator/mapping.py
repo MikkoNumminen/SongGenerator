@@ -558,7 +558,8 @@ def _choose(units: list[Unit], remaining: int, span_s: float,
             allow_shouts: bool = True, allow_climax: bool = False,
             targets: list[float] | None = None,
             play: dict | None = None,
-            used: dict[str, int] | None = None) -> Unit | None:
+            used: dict[str, int] | None = None,
+            shift_cap: float | None = None) -> Unit | None:
     """Pick a unit that fits the slots left.
 
     Three things compete: how naturally the clip fills the time it is given, a
@@ -593,11 +594,29 @@ def _choose(units: list[Unit], remaining: int, span_s: float,
         from .pitchshift import fold_shift
 
         covered = targets[:u.syllables] or targets[:1]
+        # The mean, while fold_unit decides on the worst syllable in the word.
+        # Those disagree, and a word wanting +2/+5/+8 against a cap of 6 is
+        # predicted unfolded and folded anyway. Left alone here deliberately:
+        # changing it re-ranks every candidate and moves every arrangement
+        # this repository has a golden value for, so it is its own change with
+        # its own listening pass. docs/TODO.md carries it.
         want = float(np.mean(covered))
         raw = want - u.midi
 
-        cost = abs(fold_shift(raw)) / 12.0
-        if abs(raw) > config.SHIFT_CAP_SEMITONES:
+        # The bank's own cap, not the tool's. Choosing a unit is where the
+        # folding is predicted, and predicting it against 12 for a bank that
+        # folds at 6 kept picking units the planner believed landed exactly
+        # and which were folded on the way out.
+        cap = config.SHIFT_CAP_SEMITONES if shift_cap is None else shift_cap
+        folded = fold_shift(raw, cap)
+        cost = abs(folded) / 12.0
+        # Charged for folding that happens, not for exceeding the cap. Folding
+        # moves by whole octaves, so below six semitones there is no octave
+        # that reduces the shift and fold_shift returns it untouched: a bank
+        # declaring 4 was charged the penalty on every shift past 4 while
+        # nothing folded, steering the planner away from the units that land
+        # closest. That is this branch's own fix arriving from the other side.
+        if folded != raw:
             # Folding changes the register, so the melody survives only in
             # part. That is a worse outcome than a merely large shift.
             cost += config.FOLD_PENALTY
@@ -664,19 +683,35 @@ def _choose(units: list[Unit], remaining: int, span_s: float,
                 + pitch_cost(u) + variety_cost(u) + role_cost(u))
 
     band = float(play.get("tie_band", 0.35)) if play else 0.35
-    ranked = sorted(pool, key=mismatch)
-    top = [u for u in ranked if mismatch(u) <= mismatch(ranked[0]) + band] or ranked[:1]
+    # Scored once. This ran mismatch three times over the pool and a fourth
+    # over the leader, and mismatch now folds a shift on every call: _choose
+    # runs several times per slot, over every slot, across the coverage
+    # redraws, per level, per song.
+    scored = sorted(((mismatch(u), i, u) for i, u in enumerate(pool)))
+    best = scored[0][0]
+    top = [u for cost, _, u in scored if cost <= best + band] or [scored[0][2]]
     return rng.choice(top)
 
 
 def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None,
-               play: dict | None = None) -> Plan:
+               play: dict | None = None, shift_cap: float | None = None) -> Plan:
     """Lay units onto slots. With `play`, vary what gets said and how often.
 
     `play` is a parameter set from config.PLAY_LEVELS. Passing None keeps the
     behaviour this had before playfulness existed, which is what the tests for
     everything else depend on.
     """
+    def pick(*args, **kwargs):
+        """_choose with this bank's cap already attached.
+
+        Bound here rather than passed at each of the five call sites below,
+        because the cap is a property of the run and forgetting it at one of
+        them would leave that one predicting the folding against the wrong
+        number with nothing to show for it.
+        """
+        kwargs.setdefault("shift_cap", shift_cap)
+        return _choose(*args, **kwargs)
+
     rng = random.Random(config.WORD_ROTATION_SEED if seed is None else seed)
     forced = config.WORD_SEQUENCE
     plan = Plan(slots_total=len(slots))
@@ -781,7 +816,7 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None,
                 # odd phrase in the song and the shout stops being an event.
                 filler = None
                 if shouts_used < shout_budget and climax_left > 0:
-                    filler = _choose([u for u in units if u.syllables == 1],
+                    filler = pick([u for u in units if u.syllables == 1],
                                       1, span_s, rng, last, allow_climax=True,
                                       targets=targets, play=play, used=used)
                 if filler is not None:
@@ -836,7 +871,7 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None,
                     paired = [u for u in payoff if u.is_shout_pairing
                               and u.syllables <= remaining]
                     payoff = paired or payoff
-                unit = _choose(payoff, remaining, span_s, rng, last,
+                unit = pick(payoff, remaining, span_s, rng, last,
                                allow_climax=True, targets=targets,
                                play=play, used=used)
 
@@ -846,7 +881,7 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None,
                 if again:
                     # Inside a chant the repeat penalty is exactly wrong, so the
                     # pool is narrowed to the chanted label and it cannot fire.
-                    unit = _choose(again, remaining, span_s, rng, None,
+                    unit = pick(again, remaining, span_s, rng, None,
                                    allow_shouts=True, allow_climax=True,
                                    targets=targets, play=play, used=None)
                     chant_left -= 1
@@ -854,7 +889,7 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None,
                     chant_left = 0
 
             if unit is None:
-                unit = _choose(units, remaining, span_s, rng, last,
+                unit = pick(units, remaining, span_s, rng, last,
                                allow_shouts=shouts_used < shout_budget,
                                allow_climax=False, targets=targets,
                                play=play, used=used)
@@ -878,7 +913,7 @@ def plan_words(slots: list[Slot], units: list[Unit], seed: int | None = None,
                     and remaining > unit.syllables):
                 bias = config.SHOUT_LEAD_IN_CLIMAX_BIAS if unit.is_climax else 1.0
                 if rng.random() < min(0.95, config.SHOUT_LEAD_IN_CHANCE * bias):
-                    lead = _choose([u for u in units if u.is_bare_shout],
+                    lead = pick([u for u in units if u.is_bare_shout],
                                    1, group[i].dur_s, rng, last, allow_climax=True,
                                    targets=targets, play=play, used=used)
                     if lead is not None:

@@ -288,6 +288,112 @@ reflect what is on disk, and an ordinary run says nothing about it.
 
 ---
 
+## Tune a bank of generated voices
+
+Everything below was settled by tuning `asuntoautoBank` over one long session,
+mostly by getting it wrong first. Walk it in order. Each step's decision
+depends on a measurement, and the measurement is cheap.
+
+`doctor --bank <name>` prints the first three.
+
+**1. Measure the voice before deciding anything.**
+
+| measurement | what it decides |
+|---|---|
+| **voiced fraction** | how much of the clip WORLD can rebuild at all |
+| **register**, median MIDI | whether the melody is reachable, and by how much |
+| **edge safety**, source level either side of every cut | whether the clips are usable at all |
+
+A generated voice is mostly breath, and that is the single fact governing
+everything else: an unvoiced frame carries no f0, so the vocoder cannot
+transpose it, and the lower the voice the worse it gets. `render_segments`
+restores those frames from the source, which is what makes such a bank usable
+at all.
+
+Two figures, and they are not the same measurement. **Per clip**, the phrases
+in these banks run 57 to 86 per cent unvoiced, and the spread between the
+voices is what matters: the lowest one is the highest number and it tears
+first. `doctor` reports a **bank-wide mean over sampled clips**, one number,
+which for `asuntoautoBank` is 42 per cent voiced. Read the doctor line for
+whether a bank is breathy at all, and measure per clip when deciding which
+voice is the problem.
+
+**2. Cut only where the recording is already silent.**
+
+Find every silence of 80 ms or more and cut at the **middle** of each one. Both
+sides of every cut are then quiet by construction rather than by a threshold
+somebody chose, and a threshold somebody chose is how three rounds of checking
+confirmed the same broken cuts. See the ending runbook below for that story.
+
+Do not try to separate words that run together. If a chorus says two words with
+no gap, there is no clean cut between them and no setting recovers one: the
+short clip can only be cut mid-word. Take the whole phrase and let the planner
+use it whole. Four of five attempts to split one word out of this recording had
+to be abandoned for exactly this.
+
+**3. Choose the strategy from what the material can survive.**
+
+| you want | declare | cost |
+|---|---|---|
+| words whole, in the recorded order | `sequence` | deterministic, so both levels render the same file |
+| words whole, varied | `shuffled` + `never_split` | order only; nothing follows the tune's rhythm |
+| the tune's rhythm followed | `arranged` | clips are stretched to their notes, and past about 0.6 a word stops sounding like the word |
+
+`never_split` is not optional for spoken or generated material. Half a spoken
+word is a different sound, not a shorter one.
+
+**4. Set the level against the band, and measure rather than copy.**
+
+A speaking voice needs more than a sung one to be heard, but a hot word bus
+trips the ceiling in `mapping.mix` and drags the whole mix down: at -11.0 LUFS
+this bank's renders came back quieter overall than at -14.0. `asuntoautoBank`
+settled at **-13.0**. Copying another bank's number without measuring is a
+documented way to make every render sound wrong.
+
+**5. Decide the register by folding, not by pre-shifting.**
+
+Compare the bank's median MIDI with the song's. Folding already moves a clip by
+whole octaves for free, at render time, in one pass. Baking an octave into the
+clips costs a second generation of processing, and if you bake it with WORLD on
+a breathy voice you get a bank that is already torn before any song touches it.
+That was tried here and thrown away.
+
+**6. Leave the engine alone.**
+
+WORLD, not Rubber Band. Rubber Band needs no f0 so it never tears, which makes
+it look like the fix for a breathy voice, and it is not: measured as
+mel-spectral distance from the source at a five semitone shift, it does about
+twice the damage, worst on the lowest voice.
+
+| clip | unvoiced | WORLD | Rubber Band | WORLD + restore |
+|---|---|---|---|---|
+| female phrase | 57% | 3.1 | 3.6 | **2.3** |
+| male phrase | 72% | 1.8 | 3.3 | **1.0** |
+
+**7. Where `asuntoautoBank` landed**, as a worked example:
+
+```jsonc
+{
+  "levels": {
+    "conservative": {"strategy": "sequence", "overrides": {"reading_speed": 1.0}},
+    "wild":         {"strategy": "shuffled", "overrides": {"reading_speed": 1.0}}
+  },
+  "never_split": true,                 // spoken words are never cut
+  "mix": {"word_bus_lufs": -13.0},     // measured, not copied
+  "shift_cap_semitones": 12.0          // lower it only if the voice tears
+}
+```
+
+Three voices, cut at measured silences, every clip whole, nothing stretched.
+
+**What listening is still for.** None of this can be judged from the numbers.
+Every fault found here was found by ear first and explained afterwards: which
+words broke, that a second voice broke identically, that the lower voice broke
+sooner. The measurements tell you which explanation is true, not that something
+is wrong. Hand over the candidate folder and listen before building.
+
+---
+
 ## A word breaks, scratches or loses its ending
 
 The most expensive fault this tool has had, and it was misdiagnosed four times

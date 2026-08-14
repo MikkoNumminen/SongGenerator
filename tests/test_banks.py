@@ -1147,3 +1147,77 @@ class TestOutputPerBank:
         assert b.parent.name == "muslimbank"
         # Same song folder, so the levels of one song stay side by side.
         assert a.parent.parent == b.parent.parent
+
+
+class TestTheCapReachesTheChoosing:
+    """Choosing a unit is where the folding is predicted.
+
+    The cap only ever reached the rendering, so a bank that folds at 6 had its
+    units chosen as though it folded at 12: the planner kept picking clips it
+    believed landed exactly and which were folded on the way out, and its
+    mimicry score fell, which made decide_by_mimicry shift MORE units to reach
+    the same target.
+    """
+
+    def test_plan_words_hands_the_cap_to_every_choice(self, monkeypatch):
+        from song_generator import mapping
+
+        seen = []
+        real = mapping._choose
+
+        def watched(*args, **kwargs):
+            seen.append(kwargs.get("shift_cap"))
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr(mapping, "_choose", watched)
+        mapping.plan_words(_slots(), _raw_spoken(6), seed=3,
+                           play=dict(config.PLAY_LEVELS["wild"]), shift_cap=5.0)
+
+        assert seen, "nothing was chosen, so the test proves nothing"
+        assert set(seen) == {5.0}, f"a call went out without the cap: {set(seen)}"
+
+    def test_a_declared_cap_reaches_it_through_build(self, monkeypatch, tmp_path):
+        from song_generator import arrange as arrange_mod
+        from song_generator import mapping
+
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "shift_cap_semitones": 4.0
+        }), encoding="utf-8")
+        seen = []
+        real = mapping._choose
+
+        def watched(*args, **kwargs):
+            seen.append(kwargs.get("shift_cap"))
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr(mapping, "_choose", watched)
+        arrange_mod.build(_slots(), _raw_spoken(6), "wild", 3,
+                          song="f", bank="f", bank_dir=tmp_path)
+
+        assert seen and set(seen) == {4.0}
+
+    def test_the_doctor_predicts_folding_against_the_same_cap(self, tmp_path, capsys):
+        """The render prints octave-folded and this prints the prediction, and
+        the WORKFLOWS ladder says to compare them. Against different caps they
+        cannot be compared."""
+        from song_generator import doctor
+
+        units = _raw_spoken(4)
+        centre = float(np.median([u.midi for u in units if u.midi is not None]))
+        # Half the notes sit 5 semitones out and half 15, so a cap of 12 folds
+        # one group and a cap of 2 folds both. Notes all at one distance would
+        # read the same against either.
+        notes = ([{"midi": centre + 5.0} for _ in range(6)]
+                 + [{"midi": centre + 15.0} for _ in range(6)])
+
+        doctor._report_folding(units, notes, None)
+        loose = capsys.readouterr().out
+
+        (tmp_path / "bank.json").write_text(json.dumps({
+            "shift_cap_semitones": 2.0
+        }), encoding="utf-8")
+        doctor._report_folding(units, notes, tmp_path)
+        tight = capsys.readouterr().out
+
+        assert loose != tight, "the declared cap changed nothing"
+        assert "% would need octave folding" in tight

@@ -650,6 +650,14 @@ def build(slots, units: list[Unit], level: str, seed: int,
                 int(arrangement.has_pairing()))
 
     best = None
+    # Read once. banks._declared has no cache, so asking inside the loop
+    # re-read, re-parsed and re-validated bank.json on every redraw and again
+    # when the plan was stamped: a dozen times per level, per song, for a
+    # value that cannot change mid-loop. It also meant a malformed file was
+    # refused from inside the loop, after planning work, rather than before
+    # the first draw.
+    cap = banks.shift_cap(bank_dir)
+
     for attempt in range(tries):
         this_seed = seed + attempt
 
@@ -666,7 +674,8 @@ def build(slots, units: list[Unit], level: str, seed: int,
 
         pool = enrich(units, level, random.Random(this_seed), split=not whole)
         plan = plan_words(slots, pool, seed=this_seed,
-                          play=None if level == "off" else drawing)
+                          play=None if level == "off" else drawing,
+                          shift_cap=cap)
         if whole:
             # Marked after planning rather than threaded through plan_words,
             # which every bank shares. The planner's job is which clip goes
@@ -683,7 +692,7 @@ def build(slots, units: list[Unit], level: str, seed: int,
         covered = wanted <= arrangement.words_used()
         paired = arrangement.has_pairing() or not possible
         if covered and paired:
-            return _stamp_cap(plan, bank_dir), arrangement, attempt + 1
+            return _stamp_cap(plan, bank_dir, cap), arrangement, attempt + 1
         if best is None or scored(arrangement) > scored(best[1]):
             best = (plan, arrangement, attempt + 1)
 
@@ -703,7 +712,7 @@ def unreachable_words(units: list[Unit]) -> list[str]:
     return sorted(set(required_words()) - sayable)
 
 
-def _stamp_cap(plan, bank_dir):
+def _stamp_cap(plan, bank_dir, cap=None):
     """Carry the bank's shift cap onto every placement it made.
 
     Set here rather than by the caller, because every plan this module
@@ -714,7 +723,8 @@ def _stamp_cap(plan, bank_dir):
     """
     from . import banks
 
-    cap = banks.shift_cap(bank_dir)
+    if cap is None:
+        cap = banks.shift_cap(bank_dir)
     for placement in plan.placements:
         placement.shift_cap = cap
     return plan

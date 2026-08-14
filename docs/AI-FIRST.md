@@ -263,7 +263,30 @@ listening the repository can do by itself. It still cannot hear.
 
 ---
 
-## Current: 8.8
+### Iteration 7, writing down what the ear found: 8.9
+
+The tuning of a three-voice bank produced a working configuration and a long
+list of things that do not work, and none of it was anywhere a later bank would
+look. A score for a repository that cannot hear should still reward knowing
+what to measure and in what order, because that is the part a machine can carry
+between banks.
+
+`docs/WORKFLOWS.md` gained the procedure: what the voiced fraction governs, why
+cuts belong in the middle of a measured silence, which placement strategy
+survives which material, why the bus level is measured rather than copied from
+a bank that sounds similar, why folding an octave beats baking one in, and why
+the engine is left alone with the numbers that say so. `doctor --bank` now
+prints the first measurement it starts from, so the runbook opens with
+something runnable rather than something to set up.
+
+Audible verification moves 8 to 9. The repository still cannot hear, and the
+entry says so: every fault in that session was found by ear and only then
+explained. What changed is that the explanation, the order to look in, and the
+values that were settled are written down instead of living in one session.
+
+---
+
+## Current: 8.9
 
 | # | Dimension | 0 | now |
 |---|---|---|---|
@@ -277,10 +300,10 @@ listening the repository can do by itself. It still cannot hear.
 | 8 | Actionable errors | 7 | 9 |
 | 9 | Domain glossary | 1 | 10 |
 | 10 | Runbooks | 3 | 10 |
-| 11 | Audible verification | 0 | 8 |
+| 11 | Audible verification | 0 | 9 |
 | 12 | Rendered verification | 0 | 2 |
 
-**Mean: 8.8**, against **4.2** at baseline scored the same way.
+**Mean: 8.9**, against **4.2** at baseline scored the same way.
 
 Both of those numbers are over twelve dimensions, and every earlier score in
 this log is a mean over however many dimensions existed when it was written, so

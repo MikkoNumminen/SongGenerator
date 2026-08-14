@@ -70,6 +70,15 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
 
 ## Where the traps are
 
+- **Tuning a new voice bank has a settled procedure.** `docs/WORKFLOWS.md`,
+  "Tune a bank of generated voices", is the order to do it in and the
+  measurement behind each decision: what the voiced fraction governs, why cuts
+  go in the middle of a measured silence, which strategy survives which
+  material, why the bus level is measured rather than copied, why folding beats
+  pre-shifting, and why the engine is left alone. It was settled by getting all
+  of it wrong first. `doctor --bank <name>` prints the measurements it starts
+  from.
+
 - **Never validate a cut with a threshold you chose.** A gate at floor+12 dB
   called a decaying vowel silence, so every check agreed the clips ended
   cleanly while they were being chopped mid-word. Three rounds of measuring
