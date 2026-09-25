@@ -187,6 +187,40 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   stored light theme that flashed dark on every load. Check a front-end change
   in a browser, at a narrow width, with the keyboard, in both themes. See
   `docs/AI-FIRST.md`, dimension 12.
+- **The other voices for `--voices` are not in this repo.** They live in
+  `AudiobookMaker`, a separate repo kept as read-only source material here and
+  never edited from this one. Its chatterbox_grandmom engine is "Isoäiti",
+  referenced by `assets/voices/grandmom_reference.wav`; named voice packs are
+  zips under `.local/ÄänipaketitÄpillä/` (keskisarja, lotta_harala,
+  lotta_interview_host, roni_arvonen, reader_00, reader_01), each
+  `<name>.abvpack.zip` holding `<name>/reference.wav`, `sample.wav` and
+  `meta.yaml`. Unzip into a scratch directory, never into `AudiobookMaker`
+  itself. Searching this repo for a voice name finds nothing; searching
+  `AudiobookMaker` finds them. See `docs/WORKFLOWS.md`, "Make a voice-converted
+  copy of a bank".
+- **`--voices` needs a speaker model this repo does not ship.**
+  `pip install -e .[voices]` adds `speechbrain` plus four small dependencies
+  (HyperPyYAML, ruamel.yaml, ruamel.yaml.clib, sentencepiece) and leaves torch
+  untouched. The `speechbrain/spkrec-ecapa-voxceleb` weights it needs are not
+  gated, unlike the pyannote models already sitting in `AudiobookMaker`'s
+  chatterbox venv, which is why `turns.py` uses that model instead. speechbrain
+  wants the device spelled `"cuda:0"`; a bare `"cuda"` logs a parse warning and
+  falls back to device 0 anyway.
+- **Turns are measured on sliding windows, not on `analysis.json`'s phrases,
+  on purpose.** A phrase can run long in rap: one measured posse cut had 31
+  phrases, several over 25 seconds, and one of them spanned an actual
+  handover between singers. A phrase is not a safe proxy for a turn.
+- **`--no-words` writes into the library, not just to stdout.** It writes an
+  instrumental-only mp3 to `output/<song>/<bank>/`, so reaching for it only to
+  force separation ahead of a real render leaves a file behind that has to be
+  found and deleted by hand.
+- **"This song" with nothing attached means the attachment did not arrive.**
+  Ask which song rather than guessing from a recent render or from whichever
+  multi-singer song happens to be sitting in `input/`.
+- **Two agents in one checkout stash and commit over each other.** Working
+  the same checkout concurrently is only safe when the files being touched do
+  not overlap and neither side runs a state-changing git command; give each
+  agent its own working tree otherwise, per the standing rule on that.
 - **A float WAV is not a pure function of its samples.** libsndfile writes a
   PEAK chunk holding the wall-clock time of the write, at byte 60. Two runs
   producing bit-identical audio therefore produce files that differ by that one

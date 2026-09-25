@@ -12,6 +12,7 @@ from pathlib import Path
 import numpy as np
 
 from . import __version__, arrange, audio_io, banks, config
+from . import turns as take
 from .analysis import analyse, report as analysis_report
 from .detect import detect_vocal
 from .mapping import (
@@ -82,6 +83,11 @@ def build_parser() -> argparse.ArgumentParser:
                    help="which prebuilt bank to sing with")
     p.add_argument("--words-dir", type=Path, default=None,
                    help="a bank directory directly, overriding --bank")
+    p.add_argument("--voices", nargs="+", default=None, metavar="BANK",
+                   choices=sorted(config.BANKS),
+                   help="sing from several banks, the voice changing wherever "
+                        "the original singer does, in the order given; "
+                        "replaces --bank [needs: pip install -e .[voices]]")
     p.add_argument("--raw-clips", action="store_true",
                    help="sing from the recorded clips even when a standardised "
                         "tier exists beside them")
@@ -117,6 +123,39 @@ def build_parser() -> argparse.ArgumentParser:
                    help="pitch/time engine")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return p
+
+
+def refuse_contradicting_voices(parser: argparse.ArgumentParser,
+                                args: argparse.Namespace) -> None:
+    """--voices with anything that names one bank, or a single voice.
+
+    Refused rather than resolved, for the reason --ladder is: whichever one
+    lost would lose without a word. --words-dir points at one directory, and a
+    replayed arrangement belongs to the one bank that wrote it; a multi-voice
+    run writes one log per voice, and nothing replays them together.
+    """
+    if args.voices is None:
+        return
+    if len(set(args.voices)) < 2:
+        parser.error("--voices takes turns between at least two different "
+                     "banks; for one, use --bank")
+    if args.words_dir is not None:
+        parser.error("--voices names its banks from the bank table, so it "
+                     "cannot be combined with --words-dir, which names one")
+    if args.arrangement is not None:
+        parser.error("--arrangement replays one bank's log, and a --voices "
+                     "run writes one log per voice, so the two cannot be "
+                     "combined")
+
+
+def output_bank_name(args: argparse.Namespace) -> str:
+    """The name outputs are filed under: the chosen bank, the directory itself
+    when --words-dir bypasses the bank table, or every voice joined by "+" when
+    several take turns, so a turn-taking render never lands in the folder of
+    one of its banks and replaces that bank's own take."""
+    if args.voices:
+        return "+".join(args.voices)
+    return args.words_dir.name if args.words_dir else args.bank
 
 
 def drives_its_own_shift(args: argparse.Namespace) -> bool:
@@ -320,7 +359,7 @@ def _rollback(args) -> int:
     """
     # The same two lines the render itself uses to decide where it writes.
     # Anything else would roll back a folder the render never touches.
-    bank_name = args.words_dir.name if args.words_dir else args.bank
+    bank_name = output_bank_name(args)
     out = output_path(args.output, args.input, bank_name)
 
     restored = []
@@ -355,6 +394,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.ladder and named:
         parser.error(f"--ladder renders every rung, so it cannot be combined "
                      f"with {named[0]}, which names one")
+    refuse_contradicting_voices(parser, args)
 
     if args.rollback:
         # Before anything expensive. Rolling back needs neither stems nor a
@@ -366,9 +406,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: input file not found: {args.input}", file=sys.stderr)
         return EXIT_ERROR
 
-    # The name outputs are filed under: the chosen bank, or the directory
-    # itself when --words-dir bypasses the bank table.
-    bank_name = args.words_dir.name if args.words_dir else args.bank
+    bank_name = output_bank_name(args)
     output = output_path(args.output, args.input, bank_name)
     work = work_dir_for(args.input, args.work_dir)
     device = resolve_device(args.device)
@@ -456,40 +494,88 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  wrote     {output}  (instrumental only, --no-words)")
         return EXIT_OK
 
-    words_dir = args.words_dir or Path(config.BANKS[args.bank])
-    # A bank may sit at its own level against the bed. A speaking voice
-    # needs more than a shouted one to be heard over a band. banks resolves
-    # a standardised tier back to the bank beside it, so --words-dir pointed
-    # at either finds the same declaration.
-    # This is also where a malformed bank.json is refused: banks validates
-    # the whole file on every read, so catching its refusal here turns it
-    # into an error with the error exit code rather than a traceback.
-    try:
-        bus_lufs = banks.mix_for(words_dir).get("word_bus_lufs")
-    except ValueError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+    # One voice unless --voices named several. Each is (name, directory the
+    # run was pointed at, directory actually sung from, its units); a plain
+    # run is a list of one, so everything below serves both.
+    names = args.voices or [args.words_dir.name if args.words_dir else args.bank]
+    voices: list[tuple[str, Path, Path, list]] = []
+    bus_levels: set[float | None] = set()
+    for name in names:
+        words_dir = (args.words_dir if args.words_dir and not args.voices
+                     else Path(config.BANKS[name]))
+        # A bank may sit at its own level against the bed. A speaking voice
+        # needs more than a shouted one to be heard over a band. banks resolves
+        # a standardised tier back to the bank beside it, so --words-dir pointed
+        # at either finds the same declaration.
+        # This is also where a malformed bank.json is refused: banks validates
+        # the whole file on every read, so catching its refusal here turns it
+        # into an error with the error exit code rather than a traceback.
+        try:
+            bus_levels.add(banks.mix_for(words_dir).get("word_bus_lufs"))
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return EXIT_ERROR
+        singing_from, standardised = resolve_bank(
+            words_dir, prefer_standardised=not args.raw_clips)
+        try:
+            # --bare-syllables travels as an argument, never as a config write: a
+            # module global set here outlives this run, and batch renders many
+            # songs in one process, so every later song would inherit it.
+            voice_units = load_bank(words_dir, prefer_standardised=not args.raw_clips,
+                                    singable_only=False,
+                                    place_bare_syllables=True if args.bare_syllables else None)
+            if not args.json:
+                how = "standardised" if standardised else "as recorded"
+                print(f"  bank      {name} ({singing_from}, {how})")
+        except BankError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return EXIT_ERROR
+        voices.append((name, words_dir, singing_from, voice_units))
+
+    # The voices share one word bus, and the bus is levelled once. Two banks
+    # declaring different levels cannot both be honoured, and quietly picking
+    # one would put the other where its bank.json says it must not be.
+    if len(bus_levels) > 1:
+        declared = ", ".join(f"{n}: {banks.mix_for(d).get('word_bus_lufs')}"
+                             for n, d, _, _ in voices)
+        print(f"error: the voices declare different word_bus_lufs ({declared}),"
+              " and they share one word bus.", file=sys.stderr)
         return EXIT_ERROR
-    singing_from, standardised = resolve_bank(
-        words_dir, prefer_standardised=not args.raw_clips)
-    try:
-        # --bare-syllables travels as an argument, never as a config write: a
-        # module global set here outlives this run, and batch renders many
-        # songs in one process, so every later song would inherit it.
-        units = load_bank(words_dir, prefer_standardised=not args.raw_clips,
-                          singable_only=False,
-                          place_bare_syllables=True if args.bare_syllables else None)
-        if not args.json:
-            how = "standardised" if standardised else "as recorded"
-            print(f"  bank      {args.bank} ({singing_from}, {how})")
-    except BankError as exc:
-        print(f"error: {exc}", file=sys.stderr)
-        return EXIT_ERROR
+    bus_lufs = bus_levels.pop()
+    words_dir = voices[0][1]
+    units = [u for _, _, _, voice_units in voices for u in voice_units]
 
     slots, merged, split = clean_slots([n.__dict__ for n in analysis.notes])
 
-    cannot_say = arrange.unreachable_words(units)
-    if cannot_say and not args.json:
-        print(f"  BANK      holds no clip saying: {', '.join(cannot_say)}")
+    unreachable = {name: arrange.unreachable_words(voice_units)
+                   for name, _, _, voice_units in voices}
+    # A word counts as unsayable only when no voice can say it; one voice
+    # lacking it still leaves the other voice's turns to say it in.
+    cannot_say = [w for w in unreachable[names[0]]
+                  if all(w in missing for missing in unreachable.values())]
+    if not args.json:
+        for name, missing in unreachable.items():
+            if missing:
+                who = f" ({name})" if len(voices) > 1 else ""
+                print(f"  BANK      holds no clip saying{who}: {', '.join(missing)}")
+
+    turns: list[take.Turn] = []
+    if len(voices) > 1:
+        try:
+            turns, cached = take.load_or_detect(
+                work, stems.vocal, config.SAMPLE_RATE,
+                [n.__dict__ for n in analysis.notes], device)
+        except take.TurnError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return EXIT_ERROR
+        if not args.json:
+            how = "cached" if cached else "measured"
+            print(f"  turns     {len(turns)} singers' turns, {how} -> "
+                  f"{work / take.TURNS_FILE}")
+            for k, turn in enumerate(turns):
+                print(f"    {fmt_duration(turn.start_s):>6} - "
+                      f"{fmt_duration(turn.end_s):<6}  singer {turn.speaker:<3}"
+                      f" -> {names[k % len(names)]}")
 
     # Both levels, every time. Which one is funnier is a listening decision, so
     # a run that produced one of them and offered the other had not finished
@@ -527,22 +613,41 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"  arrangement replayed from {args.arrangement}")
             else:
                 seed = args.seed if args.seed is not None else random.randrange(1, 1_000_000)
-                word_plan, described, tries = arrange.build(
-                    slots, units, level, seed,
-                    song=args.input.stem, bank=str(singing_from),
-                    # The directory the run was pointed at, tier or bank.
-                    # banks resolves a tier back to the bank beside it, so
-                    # the settings are always the bank's as declared: a
-                    # standardised tier is a derivative of the bank, and
-                    # reading settings from the tier made every one of them
-                    # vanish the moment a tier was built or named.
-                    bank_dir=words_dir)
-                saved = arrange.save(described, work)
+                # Every voice is arranged over the whole song from the same
+                # seed, and take_turns then keeps each one's placements inside
+                # its own turns. A plain run is one voice and keeps them all.
+                plans = []
+                for name, voice_dir, singing_from, voice_units in voices:
+                    voice_plan, described, tries = arrange.build(
+                        slots, voice_units, level, seed,
+                        song=args.input.stem, bank=str(singing_from),
+                        # The directory the run was pointed at, tier or bank.
+                        # banks resolves a tier back to the bank beside it, so
+                        # the settings are always the bank's as declared: a
+                        # standardised tier is a derivative of the bank, and
+                        # reading settings from the tier made every one of them
+                        # vanish the moment a tier was built or named.
+                        bank_dir=voice_dir)
+                    plans.append(voice_plan)
+                    # One log per voice, in a folder per voice: two banks at
+                    # one seed and level would otherwise share a filename.
+                    saved = arrange.save(
+                        described, work if len(voices) == 1
+                        else work / config.VOICES_LOG_DIR / name)
+                    if not args.json:
+                        who = f" ({name})" if len(voices) > 1 else ""
+                        redrawn = "" if tries == 1 else f", redrawn {tries - 1}x for coverage"
+                        print(f"  play      {level}{who}, seed {described.seed}{redrawn}")
+                        print(f"  words     {saved}")
                 label = level
-                if not args.json:
-                    redrawn = "" if tries == 1 else f", redrawn {tries - 1}x for coverage"
-                    print(f"  play      {level}, seed {described.seed}{redrawn}")
-                    print(f"  words     {saved}")
+                if len(voices) == 1:
+                    word_plan = plans[0]
+                else:
+                    word_plan, owners = take.take_turns(plans, turns)
+                    if not args.json:
+                        for v, (name, _, _, _) in enumerate(voices):
+                            print(f"  voice     {name} sings "
+                                  f"{owners.count(v)} of {len(owners)} units")
         except arrange.ArrangementError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return EXIT_ERROR
@@ -551,7 +656,15 @@ def main(argv: list[str] | None = None) -> int:
         # already reported once against the bank, and repeating it per level
         # said the same thing three times while burying the case that matters:
         # a word the bank HAS and this arrangement happened to miss.
-        missing = [w for w in described.missing() if w not in cannot_say]
+        # Several voices are read off the plan they ended up singing together,
+        # since each arrangement's own coverage was counted over the whole song
+        # and half of every one of them has been handed to another voice.
+        if len(voices) == 1 or level is None:
+            unsaid = described.missing()
+        else:
+            said = {w for p in word_plan.placements for w in p.unit.words}
+            unsaid = [w for w in arrange.required_words() if w not in said]
+        missing = [w for w in unsaid if w not in cannot_say]
         if missing and not args.json:
             print(f"  MISSING   {label} never says: {', '.join(missing)}")
         word_plan.merged, word_plan.split = merged, split

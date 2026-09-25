@@ -286,6 +286,44 @@ values that were settled are written down instead of living in one session.
 
 ---
 
+### Iteration 8, what the multi-voice feature left unwritten: not rescored
+
+Building `--voices` surfaced several things that were true the whole session
+but nowhere an agent picking this up cold could find them. None of them are a
+code defect, so this entry does not touch the rubric; it records what got
+written down so the next session does not rediscover it by trial.
+
+The voices a bank can be converted into are not in this repository. They live
+in `AudiobookMaker`, a separate repo kept read-only from here, as named voice
+packs and one built-in reference recording. Grepping this repo for a voice
+name finds nothing, and nothing here said to look elsewhere. That is now in
+`AGENTS.md`.
+
+Voice conversion, not text-to-speech, is what makes "this bank, another
+voice" work, because it keeps the takes and the delivery and only swaps the
+timbre; the recipe (source clips, not the built bank, because filenames carry
+identity) is now in `docs/WORKFLOWS.md`.
+
+The speaker model `--voices` needs was not installed in the render venv, and
+installing it was a small, well-scoped change (`speechbrain` and four light
+dependencies, torch untouched) that nothing in the repo said to expect. Also
+unwritten: `--no-words` leaves a stray mp3 in the output library rather than
+just printing a report, which cost a manual cleanup this session.
+
+One request was ambiguous in a way no doc could have caught: "render this
+song" arrived with no file attached, and it would have been possible to guess
+from a recent render or from a multi-singer song sitting in `input/` instead
+of asking. The owner confirmed it was a slip, not a real reference. That is a
+process note rather than a repository fact, and it went into `AGENTS.md`
+anyway because a future agent can hit the same ambiguity.
+
+None of this moves a dimension. Onboarding and runbooks are already scored on
+what a fresh agent needs, and what changed is their content, not whether the
+category exists. The score stands at 8.9 until something in the next session
+argues it should move.
+
+---
+
 ## Current: 8.9
 
 | # | Dimension | 0 | now |

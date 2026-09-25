@@ -72,6 +72,109 @@ costs is the files.
 
 ---
 
+## Sing a song with several voices taking turns
+
+```powershell
+.\.venv\Scripts\song-generator.exe input\song.mp4 --voices ppbank isoaiti
+```
+
+For a posse cut where several people sing: each turn is sung by the next bank
+in the list, cycling, switching wherever the original singer changes. Not one
+voice per singer. With more singers than voices, mapping singers to voices can
+put two different singers next to each other in the same voice, and the
+listener never hears the change; alternating at every turn is what makes the
+switch audible regardless of how many people are actually on the track.
+
+Needs the optional extra: `pip install -e .[voices]`. It installs
+`speechbrain`, which measures who is singing when.
+
+Output lands in `output/<song>/<bankA+bankB>/`, named by every voice joined
+with `+`, so a turn-taking render never lands in one of its own banks' folders
+and overwrites that bank's plain take. Still two files, conservative and wild,
+both at full mimicry.
+
+Refused rather than attempted: fewer than two distinct banks (use `--bank` for
+one), `--words-dir` (`--voices` names banks from the bank table), and
+`--arrangement` (a `--voices` run writes one log per voice and there is no
+replay of a multi-voice run yet). Banks whose `bank.json` declare different
+`word_bus_lufs` are refused too, since the voices share one word bus.
+
+**How turns are found.** The vocal stem is cut into overlapping windows and
+each becomes a speaker embedding; windows cluster by voice, and a run of
+windows shorter than `TURN_MIN_S` is folded into its neighbours rather than
+treated as its own singer. The result is cached as `work/<song>/turns.json`
+together with the settings that produced it, and reused while a run's settings
+still match. See `docs/DATA-FORMATS.md` for the file.
+
+**Tuning `TURN_DISTANCE`.** This is the knob to reach for first, in
+`config.py`'s `STAGE 4b` block. It is the cosine distance at which two voices
+stop being merged into one cluster. Measured on a 5:43 rap posse cut (521
+voiced windows):
+
+| `TURN_DISTANCE` | Result |
+|---|---|
+| 0.6 | five turns, matching the track by ear: 40-91, 91-132, 132-234, 234-285, 285-306 s |
+| 0.55 | the same five turns, with more short blips absorbed |
+| 0.5 | 27 clusters: single verses split into pieces |
+| 0.4 | 74 clusters, about one per line |
+
+Raise it when two different singers come out as one turn; lower it when one
+singer's turn keeps splitting. `TURN_MIN_S` (4.0 s as shipped) is the second
+knob: it decides how short a stretch has to be before it is folded into its
+neighbours rather than counted as a singer of its own.
+
+**Correcting a boundary by hand.** Turns are cached, so a boundary that is a
+few hundred milliseconds off can be fixed once rather than re-detected every
+run: open `work/<song>/turns.json`, move a `start_s` or `end_s`, and rerun with
+the same `--voices` and the same config. The file is read back as long as its
+`settings` block still matches what the current config would measure with;
+editing a turn's own times does not touch `settings`, so the edit sticks.
+Delete the file, or change one of the `STAGE 4b` constants, to force a fresh
+measurement.
+
+### Make a voice-converted copy of a bank
+
+For turning an existing bank into a second voice that says the same words with
+the same takes and the same sung delivery, only in a different timbre. Voice
+conversion keeps the delivery; text-to-speech would not.
+
+1. Start from the bank's **source** clips, the hand-named recordings a bank
+   was built from (for `ppbank`, that is `words_hq`), not the built bank
+   itself: `build_bank` parses word identity out of the source filenames, so
+   converting the source and re-running `build_bank` on the result keeps every
+   name.
+2. Convert each source clip toward a reference recording of the target voice
+   with `ChatterboxVC` (from the `chatterbox` project, run in a venv that has
+   it installed):
+
+   ```python
+   from chatterbox.vc import ChatterboxVC
+
+   model = ChatterboxVC.from_pretrained(device="cuda")
+   wav = model.generate(audio=source_clip_path, target_voice_path=reference_wav)
+   # resample wav from the model's 24 kHz to the source clip's own rate
+   # before writing it under the source clip's own filename
+   ```
+
+   Write the converted audio into a sibling `words_<voice>_src/candidates/`
+   directory, one file per source clip, same filenames. The model's output
+   pitch does not need to match the source: `build_bank` measures pitch from
+   the audio it is given, and the renderer re-pitches every clip to its slot
+   regardless.
+3. Build the bank from the converted candidates:
+
+   ```powershell
+   python -m song_generator.build_bank --candidates words_<voice>_src/candidates --out words_<voice>
+   ```
+
+Durations should come back within tens of milliseconds of the source clips;
+much more than that means the conversion changed the pacing and the syllable
+boundaries `build_bank` measures will be off. Register the new bank in
+`vocabulary_local.py` (bank names are local, kept out of this repository) or
+point `--words-dir` at it directly.
+
+---
+
 ## Fetch a song from the web
 
 ```powershell

@@ -168,6 +168,51 @@ a bank that declares nothing is pinned by `tests/test_determinism.py`.
 
 ---
 
+## `work/<song>/turns.json`
+
+Who is singing when, for `--voices`. Written and read by `turns.py`.
+
+```jsonc
+{
+  "settings": {
+    "model": "speechbrain/spkrec-ecapa-voxceleb",
+    "window_s": 2.0,
+    "hop_s": 0.5,
+    "min_voiced": 0.4,
+    "distance": 0.6,
+    "min_turn_s": 4.0
+  },
+  "turns": [
+    { "start_s": 0.0, "end_s": 91.4, "speaker": 0 },
+    { "start_s": 91.4, "end_s": 132.8, "speaker": 1 }
+  ]
+}
+```
+
+The first and last turn always reach to the start and end of the song, so
+every moment belongs to somebody. `speaker` is a cluster index, not a voice:
+`take_turns` hands turn 0 to the first `--voices` bank, turn 1 to the second,
+and cycles, regardless of which speaker cluster a turn carries.
+
+`settings` records what a measurement was made with. It is checked, not just
+stored: a run reuses the file only when every value still matches
+`turns.settings()`, and re-measures otherwise. That is what makes a boundary
+moved by hand stick: editing `start_s` or `end_s` on a turn changes nothing
+`settings` looks at, so the edited file is still read back on the next run
+against the same song and the same config.
+
+---
+
+## `work/<song>/voices/<bank>/arrangements/<seed>-<level>.arr`
+
+Where a `--voices` run's arrangement logs land, one folder per bank so two
+voices at the same seed and level do not share a filename. Otherwise this is
+the same `.arr` format described next: each voice is arranged over the whole
+song on its own, and `take_turns` afterwards keeps each voice's placements
+only inside the turns it owns.
+
+---
+
 ## `work/<song>/arrangements/<seed>-<level>.arr`
 
 What gets sung where, for one run. Written by `arrange.py` on every render,

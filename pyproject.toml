@@ -37,6 +37,10 @@ dependencies = [
 # onnxruntime, which is easy to have collide with a torch CUDA install.
 roformer = ["audio-separator[gpu]"]
 
+# Telling singers apart for --voices (turns.py). Optional because only a
+# turn-taking render needs a speaker model; everything else runs without it.
+voices = ["speechbrain>=1.1"]
+
 # The HTTP edge under api/. Optional so installing the pipeline to use from the
 # command line, which is most installs, does not drag in a web framework.
 api = [
@@ -101,6 +105,8 @@ module = [
     "pylibrb",
     "pyloudnorm",
     "pyworld",
+    "sklearn.*",
+    "speechbrain.*",
     "scipy.*",
     "soundfile",
     "google.auth.*",

@@ -131,6 +131,20 @@ Slicing and spelling exist to reach sequences nobody recorded, not to replace
 what was recorded. In practice `spelled` should be near zero and appears only
 when nothing recorded will do.
 
+**Voice**. One bank, when several take turns singing a song under `--voices`.
+Not one voice per singer: the voices alternate at every change of turn instead,
+because with more singers than voices, mapping singers to voices can put two
+different singers next to each other in the same voice, and the change a
+listener is meant to hear would not happen.
+
+**Turn**. A stretch of the song sung by one original singer, measured from the
+vocal stem by `turns.py` and used only by `--voices`. Detected by clustering
+speaker embeddings of the sung parts of the stem, then folding any stretch
+shorter than `TURN_MIN_S` into its neighbours, since a stretch that short is a
+window straddling a handover rather than a singer. Cached as `turns.json`
+beside the stems; a boundary moved by hand in that file stays moved while the
+settings that produced it still match. See `docs/DATA-FORMATS.md`.
+
 **Chant**. The same thing said several times running, on purpose. Distinct
 from the monotony `repeat_penalty` exists to stop, which is one clip quietly
 winning every slot because it happens to fit best. A chant is chosen, bounded
