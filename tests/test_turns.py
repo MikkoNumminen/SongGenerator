@@ -305,7 +305,7 @@ class TestLoadOrDetect:
 
         monkeypatch.setattr("song_generator.turns.detect", _boom)
 
-        got, cached = load_or_detect(tmp_path, vocal=VOCAL, sr=16000, notes=[])
+        got, cached, _ = load_or_detect(tmp_path, vocal=VOCAL, sr=16000, notes=[])
 
         assert cached is True
         assert got == [Turn(0.0, 5.0, 0)]
@@ -319,7 +319,7 @@ class TestLoadOrDetect:
         fresh = [Turn(0.0, 3.0, 0)]
         monkeypatch.setattr("song_generator.turns.detect", lambda *a, **kw: fresh)
 
-        got, cached = load_or_detect(tmp_path, vocal=VOCAL, sr=16000, notes=[])
+        got, cached, _ = load_or_detect(tmp_path, vocal=VOCAL, sr=16000, notes=[])
 
         assert cached is False
         assert got == fresh
@@ -328,11 +328,36 @@ class TestLoadOrDetect:
         assert saved["turns"] == [{"start_s": 0.0, "end_s": 3.0, "speaker": 0}]
         assert not (tmp_path / ".turns.json.tmp").exists()
 
+    def test_measuring_again_keeps_the_file_it_replaces(self, tmp_path, monkeypatch):
+        """The file is editable by hand, so it is never simply written over."""
+        edited = {"settings": {**settings(), "min_turn_s": -1.0},
+                  "turns": [{"start_s": 0.0, "end_s": 1.0, "speaker": 9}]}
+        (tmp_path / "turns.json").write_text(json.dumps(edited), encoding="utf-8")
+        monkeypatch.setattr("song_generator.turns.detect",
+                            lambda *a, **kw: [Turn(0.0, 3.0, 0)])
+        _, _, previous = load_or_detect(tmp_path, vocal=VOCAL, sr=16000, notes=[])
+        assert previous == tmp_path / "turns.previous.json"
+        assert json.loads(previous.read_text(encoding="utf-8")) == edited
+
+    def test_the_model_is_fetched_beside_the_song_s_work_directory(self, tmp_path, monkeypatch):
+        """Not wherever the command happened to be run from."""
+        seen = {}
+
+        def detect(*a, model_dir=None, **kw):
+            seen["dir"] = model_dir
+            return [Turn(0.0, 1.0, 0)]
+
+        monkeypatch.setattr("song_generator.turns.detect", detect)
+        song = tmp_path / "work" / "song"
+        song.mkdir(parents=True)
+        load_or_detect(song, vocal=VOCAL, sr=16000, notes=[])
+        assert seen["dir"] == tmp_path / "work" / "models" / "spkrec"
+
     def test_no_cache_file_detects(self, tmp_path, monkeypatch):
         fresh = [Turn(0.0, 2.0, 0)]
         monkeypatch.setattr("song_generator.turns.detect", lambda *a, **kw: fresh)
 
-        got, cached = load_or_detect(tmp_path, vocal=VOCAL, sr=16000, notes=[])
+        got, cached, _ = load_or_detect(tmp_path, vocal=VOCAL, sr=16000, notes=[])
 
         assert cached is False
         assert got == fresh
@@ -347,7 +372,7 @@ class TestLoadOrDetect:
         }), encoding="utf-8")
         fresh = [Turn(0.0, 9.0, 1)]
         monkeypatch.setattr("song_generator.turns.detect", lambda *a, **kw: fresh)
-        got, cached = load_or_detect(tmp_path, vocal=VOCAL, sr=16000,
+        got, cached, _ = load_or_detect(tmp_path, vocal=VOCAL, sr=16000,
                                      notes=[{"onset_s": 2.0, "dur_s": 0.5}])
         assert cached is False and got == fresh
 
@@ -361,7 +386,7 @@ class TestLoadOrDetect:
         }), encoding="utf-8")
         fresh = [Turn(0.0, 9.0, 1)]
         monkeypatch.setattr("song_generator.turns.detect", lambda *a, **kw: fresh)
-        got, cached = load_or_detect(tmp_path, vocal=VOCAL + 1.0, sr=16000, notes=[])
+        got, cached, _ = load_or_detect(tmp_path, vocal=VOCAL + 1.0, sr=16000, notes=[])
         assert cached is False
         assert got == fresh
 
@@ -390,7 +415,7 @@ class TestLoadOrDetect:
             "settings": settings(), "vocal": turns_mod.fingerprint(VOCAL),
             "turns": [{"start_s": 0.0, "end_s": 5.0, "speaker": 0, "note": "x"}]}),
             encoding="utf-8")
-        got, cached = load_or_detect(tmp_path, vocal=VOCAL, sr=16000, notes=[])
+        got, cached, _ = load_or_detect(tmp_path, vocal=VOCAL, sr=16000, notes=[])
         assert cached and got == [Turn(0.0, 5.0, 0)]
 
     def test_invalid_json_raises_turn_error(self, tmp_path, monkeypatch):
@@ -547,6 +572,26 @@ class TestReviewFixes:
         assert [line.onset_s for line in drawn[0].lines] == [1.0]
         assert [line.onset_s for line in drawn[1].lines] == [6.0]
 
+    def test_a_voice_that_owns_no_turn_is_not_planned(self, monkeypatch):
+        """One turn for two voices: the second would be judged on nothing
+        and spend every redraw on it."""
+        from song_generator import arrange, cli
+        built = []
+
+        def build(slots, units, level, seed, song="", bank="", bank_dir=None,
+                  sings=None):
+            built.append(bank)
+            plan = Plan(placements=[_placement(1.0)])
+            return plan, arrange.describe(plan, song, bank, level, seed), 1
+
+        monkeypatch.setattr(arrange, "build", build)
+        voices = [("a", None, "a", []), ("b", None, "b", [])]
+        plan, drawn, draws, owners = cli.arrange_voices(
+            voices, {"a": [], "b": []}, [Turn(0.0, 10.0, 0)], "wild", 1, "song")
+        assert built == ["a"]
+        assert draws == [1, 0]
+        assert owners == [0] and not drawn[1].lines
+
     def test_one_voice_is_arrange_build_alone(self, monkeypatch):
         from song_generator import arrange, cli
         calls = []
@@ -629,6 +674,11 @@ class TestSwallowRecordedInTheLog:
         with pytest.raises(arrange.ArrangementError, match="--swallow"):
             cli.refuse_other_grid(logged, now, tmp_path / "w.arr")
 
+    def test_an_unswallowed_log_says_to_leave_swallow_out(self, tmp_path):
+        from song_generator import arrange, cli
+        with pytest.raises(arrange.ArrangementError, match="without --swallow"):
+            cli.refuse_other_grid(None, 2.4, tmp_path / "w.arr")
+
     @pytest.mark.parametrize("logged, now", [(None, None), (2.4, 2.40001)])
     def test_the_same_grid_replays(self, logged, now, tmp_path):
         from song_generator import cli
@@ -640,3 +690,16 @@ class TestSwallowRecordedInTheLog:
         one = parse("--voices", a, b, "--swallow", "2.6", f"{b}=2")
         two = parse("--voices", a, b, "--swallow", f"{b}=2", "2.6")
         assert cli.swallow_word(one) == cli.swallow_word(two)
+
+
+class TestSoundingLength:
+    def test_a_clip_with_no_pitch_to_move_to_sounds_whole(self):
+        """A shifted render with no segments plays the clip whole, so that is
+        how long it sounds, not play_s."""
+        from song_generator import mapping
+        unit = _unit()
+        unit.syllable_midi = [None] * len(unit.syllable_midi or [None])
+        unit.midi = None
+        p = Placement(unit=unit, onset_s=0.0, slot_span_s=0.1, play_s=0.1,
+                      n_slots=1, phrase=0, slots=[])
+        assert mapping.sounding_s(p) == pytest.approx(unit.duration_s)

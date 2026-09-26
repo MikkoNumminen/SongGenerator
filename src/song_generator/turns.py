@@ -183,7 +183,7 @@ def voiced_windows(notes: list[dict], duration_s: float) -> list[float]:
 
 
 def detect(vocal: np.ndarray, sr: int, notes: list[dict],
-           device: str = "cpu") -> list[Turn]:
+           device: str = "cpu", model_dir: Path | None = None) -> list[Turn]:
     """Measure the turns in a vocal stem. Needs speechbrain and its model."""
     try:
         from speechbrain.inference.speaker import EncoderClassifier
@@ -214,12 +214,13 @@ def detect(vocal: np.ndarray, sr: int, notes: list[dict],
     run_on = "cuda:0" if device == "cuda" else device
     # Fetched into the work directory by copying, never linking. Its default
     # links out of the Hugging Face cache, which Windows refuses without
-    # Developer Mode, and a relative default would land in whatever directory
-    # the command was run from.
+    # Developer Mode. load_or_detect passes a directory beside the song's own,
+    # so the model follows --work-dir rather than the directory the command
+    # happened to be run from.
     try:
         model = EncoderClassifier.from_hparams(
             source=config.TURN_MODEL, run_opts={"device": run_on},
-            savedir=str(Path(config.WORK_DIR) / "models" / "spkrec"),
+            savedir=str(model_dir or Path(config.WORK_DIR) / "models" / "spkrec"),
             local_strategy=LocalStrategy.COPY)
     except OSError as exc:
         raise TurnError(f"could not load the speaker model {config.TURN_MODEL}:"
@@ -295,11 +296,15 @@ def _read_turns(path: Path, saved) -> list[Turn]:
 
 
 def load_or_detect(work: Path, vocal: np.ndarray, sr: int, notes: list[dict],
-                   device: str = "cpu") -> tuple[list[Turn], bool]:
+                   device: str = "cpu"
+                   ) -> tuple[list[Turn], bool, Path | None]:
     """The cached turns when they were measured the way config says on this
     vocal stem, else fresh.
 
-    Returns the turns and whether they came from the cache.
+    Returns the turns, whether they came from the cache, and where the file
+    they replaced was moved when they did not. The file is documented as
+    editable by hand, so measuring again never simply writes over it: the
+    one before goes to turns.previous.json, hand edits and all.
     """
     path = Path(work) / TURNS_FILE
     stem = fingerprint(vocal, notes)
@@ -310,15 +315,20 @@ def load_or_detect(work: Path, vocal: np.ndarray, sr: int, notes: list[dict],
             raise TurnError(f"{path} is not valid JSON: {exc}") from exc
         if (isinstance(saved, dict) and saved.get("settings") == settings()
                 and saved.get("vocal") == stem):
-            return _read_turns(path, saved), True
+            return _read_turns(path, saved), True, None
 
-    turns = detect(vocal, sr, notes, device)
+    turns = detect(vocal, sr, notes, device,
+                   model_dir=Path(work).parent / "models" / "spkrec")
+    previous = None
+    if path.is_file():
+        previous = path.with_name("turns.previous.json")
+        path.replace(previous)
     tmp = path.with_name(f".{path.name}.tmp")
     tmp.write_text(json.dumps({"settings": settings(), "vocal": stem,
                                "turns": [asdict(t) for t in turns]}, indent=2),
                    encoding="utf-8")
     tmp.replace(path)
-    return turns, False
+    return turns, False, previous
 
 
 # ---------------------------------------------------------------------------

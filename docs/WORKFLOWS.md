@@ -122,6 +122,26 @@ words could start while the outgoing voice's last word was still sounding, for
 a second or more when the two swallow at different paces. Those incoming words
 are dropped whole until the outgoing word has finished; nothing is cut.
 
+When fewer turns are found than there are voices (one singer, or one cluster
+for several), the voices past the last turn own nothing. They are not planned
+at all, and the run says which of them sings nothing, instead of spending
+every coverage redraw on a voice nobody hears.
+
+**Known limits, left as they are.** Each was found in review and judged not
+worth its cost yet:
+
+- `--voices` and `--swallow` take several values, so they swallow the song's
+  path when written before it. Put the song first:
+  `song-generator.exe input\song.mp4 --voices a b`.
+- Coverage is judged on the placements whose onset is in a voice's turn, so a
+  required word placed in the first moment of a turn and then dropped at the
+  handover still counts as said; the report's line of words never said is
+  the check.
+- Arrangement logs are named by seed and level only, so a swallowed and an
+  unswallowed run at the same `--seed` write the same `.arr`.
+- The run report adds both banks' units together, so two banks holding a clip
+  of the same label print it as one.
+
 **How turns are found.** The vocal stem is cut into overlapping windows and
 each becomes a speaker embedding; windows cluster by voice, and a run of
 windows shorter than `TURN_MIN_S` is folded into its neighbours rather than
@@ -334,9 +354,10 @@ The filename lists the values in a fixed order (everybody's first, then each
 voice's own by name), so the same request always writes the same file.
 
 A swallowed take's `.arr` log records the grid in a `swallow` header line, and
-`--arrangement` refuses to replay it on any other grid: without the same
-`--swallow`, every line would land on the unswallowed notes at more than twice
-the pace it was planned for.
+`--arrangement` rebuilds that grid from it, so the take comes back without
+`--swallow` being typed again. An explicit `--swallow` that disagrees with the
+log is refused: replayed on the unswallowed notes, every line would land at
+more than twice the pace it was planned for.
 
 A swallowed run needs its bank plans laid over fewer, wider slots, so it also
 places fewer, longer units. Filenames carry the setting,

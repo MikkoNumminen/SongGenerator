@@ -297,8 +297,18 @@ def arrange_voices(voices, voice_slots, turns, level: str, seed: int,
     take and nothing else, so its log reads as what was heard.
     """
     n = len(voices)
+    # A voice that owns no turn, when fewer turns were found than there are
+    # voices, would be judged on nothing and spend every redraw on it.
+    heard = {k % n for k in range(len(turns))} if n > 1 else {0}
     plans, whole, draws = [], [], []
     for v, (name, voice_dir, singing_from, units) in enumerate(voices):
+        if v not in heard:
+            silent = Plan()
+            plans.append(silent)
+            whole.append(arrange.describe(silent, song, str(singing_from),
+                                          level, seed))
+            draws.append(0)
+            continue
         sings = None if n == 1 else (
             lambda t, v=v: take.voice_of(turns, n, t) == v)
         plan, described, tries = arrange.build(
@@ -326,8 +336,9 @@ def refuse_other_grid(logged: float | None, current: float | None,
 
     Replay anchors each line to the nearest slot and its recorded slot count,
     so the same log on a grid swallowed differently sings every word over a
-    different number of notes: without --swallow a swallowed log comes back
-    at more than twice its pace. The log records the grid; a mismatch stops.
+    different number of notes. The log records its grid and replay rebuilds
+    it; this is only asked when --swallow was given as well, and a value that
+    disagrees with the log stops rather than winning.
     """
     same = (logged is None and current is None) or (
         logged is not None and current is not None
@@ -338,13 +349,13 @@ def refuse_other_grid(logged: float | None, current: float | None,
             else f"{logged:.4f} notes per bank syllable")
     now = ("unswallowed notes" if current is None
            else f"{current:.4f} notes per bank syllable")
-    if logged_words is not None:
-        advice = (f"It was made with --swallow {logged_words:g}. If this run was"
-                  " given that too, the bank has changed since the log was"
-                  " written, and its lines no longer fit the notes.")
+    if logged is None:
+        advice = "It was made without --swallow; leave --swallow out."
     else:
-        advice = ("Replay it with the --swallow it was made with, so every "
-                  "line lands on the notes it was planned over.")
+        advice = "Leave --swallow out and the log's own grid is used."
+        if logged_words is not None:
+            advice += (f" It was made with --swallow {logged_words:g}; if this"
+                       " run was given that too, the bank has changed since.")
     raise arrange.ArrangementError(
         f"{path} was arranged on {made}, and this run folds {now}.\n    "
         + advice)
@@ -754,6 +765,7 @@ def main(argv: list[str] | None = None) -> int:
     units = [u for _, _, _, voice_units in voices for u in voice_units]
 
     slots, merged, split = clean_slots([n.__dict__ for n in analysis.notes])
+    base_slots = slots
     # Each voice may swallow at its own pace, so each gets its own slots.
     voice_slots = {}
     swallow_per: dict[str, float] = {}
@@ -787,7 +799,7 @@ def main(argv: list[str] | None = None) -> int:
     turns: list[take.Turn] = []
     if len(voices) > 1:
         try:
-            turns, cached = take.load_or_detect(
+            turns, cached, kept_previous = take.load_or_detect(
                 work, stems.vocal, config.SAMPLE_RATE,
                 [n.__dict__ for n in analysis.notes], device)
         except take.TurnError as exc:
@@ -801,6 +813,12 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"    {fmt_duration(turn.start_s):>6} - "
                       f"{fmt_duration(turn.end_s):<6}  singer {turn.speaker:<3}"
                       f" -> {names[k % len(names)]}")
+            if kept_previous is not None:
+                print(f"  turns     measured again; the file before, with any"
+                      f" hand edits, is {kept_previous}")
+        if len(turns) < len(voices) and not args.json:
+            print(f"  TURNS     only {len(turns)} turn(s) for {len(voices)}"
+                  f" voices, so {', '.join(names[len(turns):])} sings nothing")
 
     # Both levels, every time. Which one is funnier is a listening decision, so
     # a run that produced one of them and offered the other had not finished
@@ -828,8 +846,19 @@ def main(argv: list[str] | None = None) -> int:
                 described = arrange.load(
                     args.arrangement,
                     bank_words={w for u in units for w in u.words})
-                refuse_other_grid(described.swallow, swallow_per.get(names[0]),
-                                  args.arrangement, described.swallow_words)
+                # The log records the grid it was laid over, so replay
+                # rebuilds that grid rather than asking for it to be retyped.
+                # Only an explicit --swallow that disagrees is refused.
+                if args.swallow:
+                    refuse_other_grid(described.swallow,
+                                      swallow_per.get(names[0]),
+                                      args.arrangement, described.swallow_words)
+                elif described.swallow_words is not None:
+                    # So the filename names the grid the take was sung on.
+                    args.swallow = [(None, described.swallow_words,
+                                     described.swallow_words)]
+                slots = (swallow_slots(base_slots, described.swallow)
+                         if described.swallow else base_slots)
                 # The bank's declaration travels into replay too, so a
                 # sequence bank's own log comes back whole and paced rather
                 # than re-pitched per syllable and cut to its slots.
@@ -858,7 +887,7 @@ def main(argv: list[str] | None = None) -> int:
                         described, work if len(voices) == 1
                         else work / config.VOICES_LOG_DIR / name)
                     if not args.json:
-                        redrawn = ("" if tries == 1
+                        redrawn = ("" if tries <= 1
                                    else f", redrawn {tries - 1}x for coverage")
                         if len(voices) == 1:
                             print(f"  play      {level}, seed {described.seed}{redrawn}")

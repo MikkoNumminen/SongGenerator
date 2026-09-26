@@ -208,8 +208,9 @@ render) and of the notes the melody analysis found in it, which decide which
 windows are embedded at all. Separating a song again (`--force`, or another
 separator) writes new stems to the same paths, and turns measured on the old
 stem would otherwise be laid over the new one. A different stem or different
-notes are measured again, which also discards any hand edits made against the
-old ones.
+notes are measured again. The file it replaces is never written over: it is
+moved to `turns.previous.json` beside it, hand edits and all, and the run says
+so, so a boundary moved by hand can be copied across into the new file.
 
 A hand edit that cannot be used is refused with an error naming the file:
 a turn missing `start_s`, `end_s` or `speaker`, a value that is not a number,
@@ -268,11 +269,11 @@ land on. Omit it in a hand-written file and the slots decide.
 A take made with `--swallow` carries one more header line after the others,
 `#   swallow 3.0600 from 2.6 words`: the notes per bank syllable its slots were
 folded to, and the `--swallow` value that grid came from. The lines are laid
-over that grid, so a replay on any other is refused, and the error names the
-`--swallow` value to pass. When that value no longer gives the same grid, the
-bank itself has changed since the log was written, and the error says so. A
-log without the line was made on unswallowed notes, which is every log written
-before the line existed.
+over that grid, and `--arrangement` rebuilds it from the figure in the log, so
+`--swallow` need not be typed again; the filename is tagged from the words
+figure. An explicit `--swallow` that disagrees with the log is refused rather
+than winning. A log without the line was made on unswallowed notes, which is
+every log written before the line existed.
 
 **Two-way on purpose.** The tool writes it and a person can edit it and feed
 it back:

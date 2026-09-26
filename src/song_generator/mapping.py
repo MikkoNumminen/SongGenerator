@@ -1471,8 +1471,11 @@ def sounding_s(p: Placement) -> float:
     whether this placement reaches a later moment errs towards yes.
     """
     segments, total = build_segments(p)
-    natural = min(p.play_s, p.unit.duration_s)
-    return max(total if segments else 0.0, natural)
+    if not segments:
+        # No syllable had a pitch to move to, and a shifted render then plays
+        # the clip whole.
+        return p.unit.duration_s
+    return max(total, min(p.play_s, p.unit.duration_s))
 
 
 def precompute_shifted(plan: Plan, sr: int = config.SAMPLE_RATE,
