@@ -241,6 +241,12 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   pass/fail test for a converted or synthesised voice; listen before
   building the bank. See
   `docs/WORKFLOWS.md`, "Make a voice-converted copy of a bank".
+- **Whistling comes out of the separator as vocals.** It lands in the vocal
+  stem, the analysis finds notes in it, and a render sings words over it. There
+  is no reliable automatic test for it: a pure-tone detector that found it also
+  fired on held sung notes in most of the library. Keep it with
+  `--keep-original` and ranges written by someone who has heard the song. See
+  `docs/WORKFLOWS.md`, "Keep whistling, or anything else that is not words".
 - **Generated Finnish speech must never be asked for a fragment under 60
   characters.** AudiobookMaker's Finnish model rambles or repeats on a
   fragment shorter than its own minimum-fragment guard, 60 characters

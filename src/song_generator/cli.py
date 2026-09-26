@@ -12,6 +12,7 @@ from pathlib import Path
 import numpy as np
 
 from . import __version__, arrange, audio_io, banks, config
+from . import keep
 from . import turns as take
 from .analysis import analyse, report as analysis_report
 from .detect import detect_vocal
@@ -53,6 +54,14 @@ If you believe this song DOES have vocals, the numbers above show which test
 drew the line -- the thresholds are all in src/song_generator/config.py under
 "STAGE 1b".\
 """
+
+
+def keep_ranges(text: str) -> list[tuple[float, float]]:
+    """--keep-original's value, refused by argparse when it does not parse."""
+    try:
+        return keep.parse_ranges(text)
+    except keep.KeepError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from None
 
 
 def swallow_range(text: str) -> tuple[str | None, float, float]:
@@ -169,6 +178,12 @@ def build_parser() -> argparse.ArgumentParser:
                         "syllable is far too many words. 2-4 for everybody, "
                         "VOICE=2.4 for one voice of --voices: 2-4 "
                         "keskisarja=2.4 makes keskisarja a quarter quicker")
+    p.add_argument("--keep-original", type=keep_ranges, default=None,
+                   metavar="RANGES",
+                   help="leave the original vocal alone in these stretches, "
+                        "e.g. \"0:24-0:30,1:03-1:09\": no words there, and "
+                        "the original put back over the band. For whistling "
+                        "and anything else in the vocal stem that is not words")
     p.add_argument("--raw-clips", action="store_true",
                    help="sing from the recorded clips even when a standardised "
                         "tier exists beside them")
@@ -456,8 +471,15 @@ def variant_tag(args: argparse.Namespace) -> str | None:
     ladder gives its own top rung.
     """
     if args.arrangement:
-        return join_tags("replay", swallow_word(args))
-    return join_tags(_shift_tag(args), swallow_word(args))
+        return join_tags("replay", swallow_word(args), keep_word(args))
+    return join_tags(_shift_tag(args), swallow_word(args), keep_word(args))
+
+
+def keep_word(args: argparse.Namespace) -> str | None:
+    """--keep-original in a filename. Only that it was used, not the ranges:
+    a second attempt at the ranges should replace the first, with the one
+    before kept in previous/ as every re-render is."""
+    return "keep" if args.keep_original else None
 
 
 def join_tags(*tags: str | None) -> str | None:
@@ -781,6 +803,15 @@ def main(argv: list[str] | None = None) -> int:
     units = [u for _, _, _, voice_units in voices for u in voice_units]
 
     slots, merged, split = clean_slots([n.__dict__ for n in analysis.notes])
+    bed = stems.instrumental
+    if args.keep_original:
+        slots, dropped = keep.outside(slots, args.keep_original)
+        bed = keep.with_original(stems.instrumental, stems.vocal,
+                                 args.keep_original, config.SAMPLE_RATE)
+        if not args.json:
+            held = sum(e - s for s, e in args.keep_original)
+            print(f"  keep      original vocal in {len(args.keep_original)}"
+                  f" stretches, {held:.1f}s; {dropped} slots left without words")
     base_slots = slots
     # Each voice may swallow at its own pace, so each gets its own slots.
     voice_slots = {}
@@ -953,14 +984,14 @@ def main(argv: list[str] | None = None) -> int:
                 # seven files have to be told apart from each other, and
                 # mim1p00 is what the ladder has always called that file.
                 path = versioned_name(output, label, tag=join_tags(
-                    rung_word(target), swallow_word(args)))
+                    rung_word(target), swallow_word(args), keep_word(args)))
 
             word_bus = render(word_plan, stems.instrumental.shape[1], config.SAMPLE_RATE,
                               shift=not args.no_shift, engine=args.engine, cache=cache)
             # Immediately before the write, so nothing can reach the encoder
             # without the take that was there being kept first.
             keep_the_one_it_replaces(path)
-            audio_io.encode_mp3(path, mix_buses(word_bus, stems.instrumental,
+            audio_io.encode_mp3(path, mix_buses(word_bus, bed,
                                                 config.SAMPLE_RATE,
                                                 word_bus_lufs=bus_lufs))
             written.append((path, label, mimicry(word_plan),

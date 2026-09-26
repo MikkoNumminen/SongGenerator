@@ -68,6 +68,7 @@ costs is the files.
 | `--raw-clips` | Ignore the standardised tier, sing the recordings as they are |
 | `--no-shift` | Words at their own recorded pitch |
 | `--swallow 2-4` | Fold 2-4 of the original's words into one bank syllable, for rap; see below |
+| `--keep-original "0:24-0:30"` | Leave the original vocal in those stretches, for whistling and anything else that is not words; see below |
 | `--rows 30` | Print more of the extracted note table |
 | `--json` | Machine-readable summary |
 
@@ -332,6 +333,37 @@ bank was built without reading it. `words_isoaiti/bank.json` now declares
 slowed, a long swallowed slot leaves a pause after the word instead of
 stretching it, and her own intonation carries through, shifted by one
 constant.
+
+---
+
+## Keep whistling, or anything else that is not words: `--keep-original`
+
+The separator sends whatever sounds like a voice into the vocal stem, and
+whistling sounds like one. On "Kielinuppu - Suomalainen metsä" the whistling
+came out in the vocal stem, the analysis found notes in it, and the render sang
+swear words over it. The owner's verdict: the whistling is part of the song and
+has to stay.
+
+```powershell
+.\.venv\Scripts\song-generator.exe input\song.mp4 --keep-original "0:24-0:30,1:03-1:09"
+```
+
+Inside every range no slot gets a word (a slot that touches the range at all is
+dropped, since a word begun before it would ring on into it), and the original
+vocal stem goes back onto the bed with a `KEEP_ORIGINAL_FADE_S` fade inside
+each edge. It is added before the bed is levelled, so it sits against the band
+as it did in the original. The files are tagged `.keep`; a second attempt at
+the ranges replaces the first, which is kept in `previous/`.
+
+**The ranges are given by hand, on purpose.** A detector was tried: whistling
+is close to a pure tone, so frames with at least 60% of their 150 Hz to 8 kHz
+energy within two bins of one peak above 500 Hz, and nothing 4 dB near it an
+octave below, were marked. On this song it found steady tones near 785 Hz, but
+a child's voice held on one note is nearly as pure, and across 40 other cached
+songs it fired on long sung notes: 88 seconds of Avantasia's "Ghostlights", 40
+of "Kalasatamaan", 34 of "Through the Fire and Flames". Run by default it would
+put real singing back into renders across the library. Listen to the song, or
+to its `work/<song>/vocal.wav`, and write down where the whistling is.
 
 ---
 

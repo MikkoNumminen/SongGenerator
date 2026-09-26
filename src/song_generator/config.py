@@ -1050,6 +1050,12 @@ TURN_MIN_S = 4.0
 VOICES_LOG_DIR = "voices"
 
 
+# --keep-original: how long the original vocal takes to fade in and out at the
+# edges of a kept range. Long enough not to click, short enough that a whistle
+# starting on the beat still starts on it. Inside the range, never outside it.
+KEEP_ORIGINAL_FADE_S = 0.05
+
+
 # ---------------------------------------------------------------------------
 # STAGE 5 -- MIXING
 # ---------------------------------------------------------------------------
