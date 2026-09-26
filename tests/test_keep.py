@@ -107,14 +107,48 @@ class TestWithOriginal:
 
 
 class TestNoWordsInsideARange:
-    def test_the_word_bus_is_silent_inside_whatever_was_placed(self):
-        """The last guarantee: a word ringing on from before a range, from
-        any planner, is cut there."""
+    def test_the_gate_closes_inside_and_stays_open_outside(self):
+        """The last guarantee, after the planner has already kept words out."""
         sr = 1000
         bus = np.ones((2, 3 * sr), dtype=np.float32)
-        out = keep.silence_words(bus, [(1.0, 2.0)], sr)
+        out = bus * keep.word_gate([(1.0, 2.0)], bus.shape[1], sr)
         assert out[:, int(1.5 * sr)].max() == 0.0
         assert out[:, int(0.5 * sr)].min() == 1.0
+
+    def test_a_word_ringing_into_a_range_is_found_by_what_it_sounds(self):
+        """The last word of a phrase plays past its slot; measured by what
+        the render plays, it reaches the range and is left out whole."""
+        from factories import make_unit
+        from song_generator.mapping import Placement
+        word = list(config.WORD_SYLLABLES)[0]
+        slot = Slot(0.5, 0.7, 60, 0)
+        ringing = Placement(unit=make_unit([word], per_word=0.8), onset_s=0.5,
+                            slot_span_s=0.2, play_s=0.8, n_slots=1, phrase=0,
+                            slots=[slot], split=False, target_s=0.8)
+        assert keep.rings_into(ringing, [(1.0, 2.0)])
+        assert not keep.rings_into(ringing, [(1.5, 2.0)])
+
+    def test_the_first_slot_after_a_range_is_a_hard_break(self):
+        slots = [Slot(0.0, 0.2, 60, 0), Slot(0.9, 1.05, 60, 0),
+                 Slot(1.25, 1.4, 60, 0)]
+        kept, _, _ = keep.outside(slots, [(1.0, 1.2)])
+        assert [s.hard_break for s in kept] == [False, True]
+
+    def test_phrase_grouping_respects_a_hard_break_under_the_phrase_gap(self):
+        """group_phrases rebuilds phrases from gaps; a range narrower than
+        PHRASE_GAP_S would otherwise vanish into one phrase again."""
+        a = Slot(0.0, 0.2, 60, 0)
+        b = Slot(0.25, 0.4, 60, 0, hard_break=True)
+        assert len(mapping.group_phrases([a, b])) == 2
+        assert len(mapping.group_phrases([Slot(0.0, 0.2, 60, 0),
+                                          Slot(0.25, 0.4, 60, 0)])) == 1
+
+    def test_swallowing_carries_the_break_to_the_group_it_starts(self):
+        slots = [Slot(t, t + 0.1, 60, 0) for t in (0.0, 0.2, 0.4)]
+        slots += [Slot(t, t + 0.1, 60, 1, hard_break=(t == 0.6))
+                  for t in (0.6, 0.8, 1.0)]
+        out = mapping.swallow_slots(slots, 3.0)
+        assert [s.hard_break for s in out] == [False, True]
 
 
 class TestLevel:
@@ -167,7 +201,34 @@ class TestFlag:
                                        "--swallow", "2"))
         assert tagged == f"swallow2.{one}"
 
-    def test_replaying_onto_kept_ranges_is_refused(self):
+    def test_keeping_with_no_words_is_refused(self):
+        """--no-words writes the band alone, so there is nothing to keep in."""
         with pytest.raises(SystemExit):
-            cli.main(["song.mp4", "--keep-original", "0:24-0:30",
-                      "--arrangement", "w.arr"])
+            cli.main(["song.mp4", "--keep-original", "0:24-0:30", "--no-words"])
+
+
+class TestReplay:
+    def test_the_log_records_the_ranges_and_reads_them_back(self):
+        """They decide which slots existed, so a replay brings them back."""
+        from song_generator import arrange
+        word = list(config.WORD_SYLLABLES)[0]
+        arr = arrange.Arrangement("song", "bank", "wild", 7, [
+            arrange.Line(0, 1.0, 1, [word])], keep=[(24.0, 30.0), (63.0, 69.5)])
+        back = arrange.parse_text(arrange.render_text(arr))
+        assert back.keep == [(24.0, 30.0), (63.0, 69.5)]
+
+    def test_a_log_without_ranges_reads_as_none(self):
+        from song_generator import arrange
+        word = list(config.WORD_SYLLABLES)[0]
+        arr = arrange.Arrangement("song", "bank", "wild", 7, [
+            arrange.Line(0, 1.0, 1, [word])])
+        assert arrange.parse_text(arrange.render_text(arr)).keep is None
+
+    def test_unreadable_ranges_in_a_log_are_refused(self):
+        from song_generator import arrange
+        word = list(config.WORD_SYLLABLES)[0]
+        text = arrange.render_text(arrange.Arrangement(
+            "song", "bank", "wild", 7, [arrange.Line(0, 1.0, 1, [word])]))
+        text = text.replace("# Words available", "#   keep    24-soon\n# Words available")
+        with pytest.raises(arrange.ArrangementError, match="kept ranges"):
+            arrange.parse_text(text)

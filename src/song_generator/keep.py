@@ -13,12 +13,16 @@ word may sound. Three things make that hold whatever the planner does:
 - every slot touching a range is dropped, and the range is widened to cover
   those slots whole, so the note the singer started before the edge is kept
   from its start rather than faded in halfway;
-- the slots on either side of a range are put in different phrases, because
-  every planner groups by phrase: swallowing would otherwise fold the last
-  note before a range and the first after it into one slot spanning it, and
-  reciting would carry straight through a short one;
-- the word bus is silenced inside the ranges before mixing, with the same
-  fades, which catches any word still ringing on from before one.
+- the first slot after a range is marked as a hard break, which every
+  planner's phrase grouping respects: swallowing would otherwise fold the
+  last note before a range and the first after it into one slot spanning it,
+  and group_phrases would rebuild one phrase across a range narrower than
+  PHRASE_GAP_S;
+- a placement that would still sound inside a range, the last word of a
+  phrase ringing on past its slot, is dropped whole before coverage is
+  judged (rings_into, used through arrange.build's sings), never cut;
+- the word bus is gated inside the ranges before mixing all the same, as the
+  last guarantee; after the two above it removes nothing.
 
 The ranges are given by hand. A detector was tried: a whistle is a nearly
 pure tone, so frames whose energy sits almost entirely in one peak above
@@ -128,7 +132,8 @@ def outside(slots: list, ranges: Sequence[tuple[float, float]]
             previous.offset_s <= b and s.onset_s >= e for b, e in widened)
         if previous is None or s.phrase != previous.phrase or crossed:
             phrase += 1
-        renumbered.append(replace(s, phrase=phrase))
+        renumbered.append(replace(s, phrase=phrase,
+                                  hard_break=s.hard_break or crossed))
         previous = s
     return renumbered, len(slots) - len(kept), widened
 
@@ -178,10 +183,27 @@ def with_original(instrumental: np.ndarray, vocal: np.ndarray,
     return bed
 
 
-def silence_words(word_bus: np.ndarray, ranges: Sequence[tuple[float, float]],
-                  sr: int = config.SAMPLE_RATE) -> np.ndarray:
-    """The word bus with nothing inside the kept ranges, whatever was placed."""
-    return (word_bus * (1.0 - mask(ranges, word_bus.shape[-1], sr))).astype(np.float32)
+def word_gate(ranges: Sequence[tuple[float, float]], n_samples: int,
+              sr: int = config.SAMPLE_RATE) -> np.ndarray:
+    """0.0 inside the kept ranges and 1.0 outside, to multiply the word bus by.
+
+    Built once per run: the ranges and the song's length do not change
+    between the renders a run writes.
+    """
+    return 1.0 - mask(ranges, n_samples, sr)
+
+
+def rings_into(placement, ranges: Sequence[tuple[float, float]]) -> bool:
+    """Whether this placement would still be sounding inside a kept range.
+
+    Measured with sounding_s, what the render will actually play, not with
+    the span the planner asked for.
+    """
+    from .mapping import sounding_s
+
+    start = placement.onset_s
+    end = start + sounding_s(placement)
+    return any(start < e and end > b for b, e in ranges)
 
 
 def tag(ranges: Sequence[tuple[float, float]]) -> str:

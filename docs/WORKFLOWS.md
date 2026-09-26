@@ -349,30 +349,43 @@ has to stay.
 ```
 
 Inside every range the original vocal stem goes back onto the bed with a
-`KEEP_ORIGINAL_FADE_S` fade inside each edge, and no word sounds. Three things
-make that hold whatever the planner does:
+`KEEP_ORIGINAL_FADE_S` fade inside each edge, and no word sounds. Four things
+make that hold whatever the planner does, and none of them cuts a word:
 
-- A slot that touches a range at all is dropped, since a word begun before it
-  would ring on into it, and the range is widened to cover that slot whole.
-  The singer's note is then put back from where it started, instead of leaving
-  a stretch with neither a word nor the original and then the note coming in
-  halfway.
-- The slots either side of a range go into different phrases. Every planner
-  groups by phrase, so without the break `--swallow` folded the last note
-  before a range and the first after it into one slot spanning the range, and
-  reciting carried straight through a short one.
-- The word bus is silenced inside the ranges before mixing.
+- A slot that touches a range at all is dropped, and the range is widened to
+  cover that slot whole. The singer's note is then put back from where it
+  started, instead of leaving a stretch with neither a word nor the original
+  and then the note coming in halfway.
+- The first slot after a range is a hard break (`Slot.hard_break`), which
+  `group_phrases` and `swallow_slots` both respect. Without it `--swallow`
+  folded the last note before a range and the first after it into one slot
+  spanning the range, and `group_phrases`, which rebuilds phrases from gaps,
+  joined the two sides of any range narrower than `PHRASE_GAP_S`.
+- A word that would still be sounding inside a range, typically the last word
+  of a phrase ringing on past its slot, is dropped whole. It is measured with
+  `mapping.sounding_s`, what the render will play, and judged as not singing
+  inside `arrange.build`, so the redraws find its required word somewhere else
+  instead of the report counting a word nobody hears.
+- The word bus is gated inside the ranges before mixing, as the last
+  guarantee. After the three above it removes nothing; a first version relied
+  on it alone and chopped the words it caught.
 
 The bed is levelled on the band alone (`mix(level_from=...)`). Levelled whole,
 a bed holding a minute of kept vocal turned the band down everywhere, and the
-words sat louder over the verses than in a plain render of the same song.
+words sat louder over the verses than in a plain render of the same song. The
+final peak ceiling still scales the whole mix when the sum passes it, as it
+does for any render; measured with the original vocal added back, the band
+peaked at -2.6, 0.1 and -4.5 dBFS on the three songs tried, so the ceiling
+engaged only on "Suomalainen metsä", whose band alone already peaks at -0.2.
 
 The files are tagged `keep` plus a short hash of the merged ranges, e.g.
 `.keep3fa9c1`, so two sets of ranges on one song are two pieces side by side,
 and the same ranges typed again replace the take they made, which is kept in
 `previous/`. A range starting after the song ends is refused as the typo it
-is, and so is `--arrangement`, which would snap saved lines onto the slots
-beside a kept range.
+is, and so is `--no-words`, which writes the band alone. The `.arr` log
+records the ranges in a `keep` header line, and `--arrangement` brings them
+back with it; an explicit `--keep-original` that disagrees with the log is
+refused, since the lines were laid over the slots the log's ranges left.
 
 **The ranges are given by hand, on purpose.** A detector was tried: whistling
 is close to a pure tone, so frames with at least 60% of their 150 Hz to 8 kHz

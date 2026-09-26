@@ -112,6 +112,11 @@ class Slot:
     midi: float
     phrase: int
     rms_db: float = -30.0
+    # True when no planner may join this slot to the one before it, however
+    # small the gap. --keep-original sets it on the first slot after a kept
+    # range; group_phrases would otherwise rebuild one phrase across a range
+    # narrower than PHRASE_GAP_S and a word could be planned straight over it.
+    hard_break: bool = False
 
     @property
     def dur_s(self) -> float:
@@ -439,7 +444,8 @@ def swallow_slots(slots: list[Slot], per_syllable: float) -> list[Slot]:
             g = phrase[a:b]
             longest = max(g, key=lambda s: s.dur_s)
             out.append(Slot(g[0].onset_s, g[-1].offset_s, longest.midi,
-                            g[0].phrase, max(s.rms_db for s in g)))
+                            g[0].phrase, max(s.rms_db for s in g),
+                            hard_break=g[0].hard_break))
         i = j + 1
     return out
 
@@ -487,7 +493,8 @@ def group_phrases(slots: list[Slot]) -> list[list[Slot]]:
     """
     groups: list[list[Slot]] = []
     for slot in slots:
-        if groups and slot.onset_s - groups[-1][-1].offset_s <= config.PHRASE_GAP_S:
+        if (groups and not slot.hard_break
+                and slot.onset_s - groups[-1][-1].offset_s <= config.PHRASE_GAP_S):
             groups[-1].append(slot)
         else:
             groups.append([slot])
@@ -1578,12 +1585,7 @@ def render(plan: Plan, n_samples: int, sr: int = config.SAMPLE_RATE,
 
 
 def _normalise(audio: np.ndarray, target_lufs: float, sr: int) -> np.ndarray:
-    from .detect import integrated_lufs
-
-    loudness = integrated_lufs(audio, sr)
-    if not np.isfinite(loudness):
-        return audio
-    return (audio * (10 ** ((target_lufs - loudness) / 20))).astype(np.float32)
+    return (audio * _gain_to(audio, target_lufs, sr)).astype(np.float32)
 
 
 def _gain_to(audio: np.ndarray, target_lufs: float, sr: int) -> float:

@@ -297,7 +297,7 @@ def refuse_contradicting_swallow(parser: argparse.ArgumentParser,
 
 
 def arrange_voices(voices, voice_slots, turns, level: str, seed: int,
-                   song: str):
+                   song: str, kept=()):
     """Every voice's arrangement, and the one plan they sing together.
 
     Returns (plan, one Arrangement per voice, draws per voice, the voice of
@@ -312,6 +312,11 @@ def arrange_voices(voices, voice_slots, turns, level: str, seed: int,
 
     The Arrangement returned per voice describes what that voice sings in the
     take and nothing else, so its log reads as what was heard.
+
+    kept is the --keep-original ranges. A word that would still be sounding
+    inside one, the last word of a phrase ringing past its slot, is not
+    heard: it is judged as not singing, so coverage is found elsewhere, and
+    dropped whole from the plan rather than cut at the range.
     """
     n = len(voices)
     # How long each voice sings. A voice that owns no turn, when fewer turns
@@ -334,21 +339,30 @@ def arrange_voices(voices, voice_slots, turns, level: str, seed: int,
             whole[v] = arrange.describe(plans[v], song, str(singing_from),
                                         level, seed)
             continue
-        sings = None if n == 1 else (
-            lambda t, v=v: take.voice_of(turns, n, t) == v)
+
+        def sings(p, v=v):
+            return ((n == 1 or take.voice_of(turns, n, p.onset_s) == v)
+                    and not (kept and keep.rings_into(p, kept)))
         plan, described, tries = arrange.build(
             voice_slots[name], units, level, seed, song=song,
-            bank=str(singing_from), bank_dir=voice_dir, sings=sings,
+            bank=str(singing_from), bank_dir=voice_dir,
+            sings=sings if (n > 1 or kept) else None,
             wanted=None if n == 1 else set(arrange.required_words()) - said,
             pairing=not paired)
+        if kept:
+            plan.placements = [p for p in plan.placements
+                               if not keep.rings_into(p, kept)]
         plans[v], whole[v], draws[v] = plan, described, tries
         if n > 1:
             sung = arrange.describe(
-                Plan(placements=[p for p in plan.placements if sings(p.onset_s)]),
+                Plan(placements=[p for p in plan.placements if sings(p)]),
                 song, str(singing_from), level, seed)
             said |= sung.words_used()
             paired = paired or sung.has_pairing()
     if n == 1:
+        if kept:
+            whole = [arrange.describe(plans[0], song, whole[0].bank, level,
+                                      whole[0].seed)]
         return plans[0], whole, draws, [0] * len(plans[0].placements)
 
     plan, owners = take.take_turns(
@@ -651,13 +665,9 @@ def main(argv: list[str] | None = None) -> int:
                      f"with {named[0]}, which names one")
     refuse_contradicting_voices(parser, args)
     refuse_contradicting_swallow(parser, args)
-    if args.keep_original and args.arrangement:
-        # A saved line inside a kept range would be snapped to the nearest
-        # slot left, on top of whatever is already there, next to the very
-        # stretch meant to be left alone; and the log records no ranges.
-        parser.error("--keep-original decides which slots exist, so it cannot "
-                     "be combined with --arrangement, which replays lines onto "
-                     "them")
+    if args.keep_original and args.no_words:
+        parser.error("--no-words writes the band alone, so it cannot keep the "
+                     "original vocal anywhere; leave out one of the two")
     # --bank has no default in the parser so that naming it beside --voices
     # can be told apart from not naming it. Resolved here, after the check.
     if args.bank is None:
@@ -819,13 +829,38 @@ def main(argv: list[str] | None = None) -> int:
 
     slots, merged, split = clean_slots([n.__dict__ for n in analysis.notes])
     bed = stems.instrumental
+    # A replay's log records the ranges its take was made with, and they decide
+    # which slots exist, so the log is read before the slots are cut.
+    replayed = None
+    if args.arrangement:
+        try:
+            replayed = arrange.load(
+                args.arrangement, bank_words={w for u in units for w in u.words})
+        except arrange.ArrangementError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return EXIT_ERROR
+        logged = replayed.keep or None
+        given = args.keep_original or None
+        if given is not None and logged != [(round(a, 2), round(b, 2))
+                                             for a, b in given]:
+            print(f"error: {args.arrangement} was made with kept ranges"
+                  f" {logged or 'none'}, and this run asks for {given}. The"
+                  " lines were laid over the slots those ranges left; leave"
+                  " --keep-original out and the log's own come back.",
+                  file=sys.stderr)
+            return EXIT_ERROR
+        args.keep_original = logged
+
     kept_ranges: list[tuple[float, float]] = []
+    word_gate = None
     if args.keep_original:
         slots, dropped, kept_ranges = keep.outside(slots, args.keep_original)
         bed = keep.with_original(stems.instrumental, stems.vocal, kept_ranges,
                                  config.SAMPLE_RATE)
+        word_gate = keep.word_gate(kept_ranges, stems.instrumental.shape[1],
+                                   config.SAMPLE_RATE)
         if not args.json:
-            held = sum(e - s for s, e in kept_ranges)
+            held = sum(max(0.0, min(e, duration) - s) for s, e in kept_ranges)
             print(f"  keep      original vocal in {len(kept_ranges)}"
                   f" stretches, {held:.1f}s; {dropped} slots left without words")
     base_slots = slots
@@ -907,9 +942,7 @@ def main(argv: list[str] | None = None) -> int:
                 # and the bank decides what words exist: a bank cut with
                 # build_bank --raw calls every unit "raw", which no
                 # vocabulary holds, and its own log has to replay.
-                described = arrange.load(
-                    args.arrangement,
-                    bank_words={w for u in units for w in u.words})
+                described = replayed
                 # The log records the grid it was laid over, so replay
                 # rebuilds that grid rather than asking for it to be retyped.
                 # Only an explicit --swallow that disagrees is refused.
@@ -934,7 +967,8 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 seed = args.seed if args.seed is not None else random.randrange(1, 1_000_000)
                 word_plan, drawn, draws, owners = arrange_voices(
-                    voices, voice_slots, turns, level, seed, args.input.stem)
+                    voices, voice_slots, turns, level, seed, args.input.stem,
+                    kept=kept_ranges)
                 if len(voices) > 1 and not args.json:
                     # The run's own seed, which brings the whole take back.
                     # Each voice's log records the seed its draw survived on.
@@ -945,6 +979,8 @@ def main(argv: list[str] | None = None) -> int:
                     # pace without a word.
                     described.swallow = swallow_per.get(name)
                     described.swallow_words = swallow_words(args, name)
+                    described.keep = (list(args.keep_original)
+                                      if args.keep_original else None)
                     # One log per voice, in a folder per voice: two banks at
                     # one seed and level would otherwise share a filename.
                     saved = arrange.save(
@@ -1009,9 +1045,8 @@ def main(argv: list[str] | None = None) -> int:
             # Immediately before the write, so nothing can reach the encoder
             # without the take that was there being kept first.
             keep_the_one_it_replaces(path)
-            if kept_ranges:
-                word_bus = keep.silence_words(word_bus, kept_ranges,
-                                              config.SAMPLE_RATE)
+            if word_gate is not None:
+                word_bus = word_bus * word_gate
             audio_io.encode_mp3(path, mix_buses(
                 word_bus, bed, config.SAMPLE_RATE, word_bus_lufs=bus_lufs,
                 level_from=stems.instrumental if kept_ranges else None))
