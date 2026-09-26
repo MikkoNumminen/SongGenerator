@@ -365,6 +365,29 @@ of "Kalasatamaan", 34 of "Through the Fire and Flames". Run by default it would
 put real singing back into renders across the library. Listen to the song, or
 to its `work/<song>/vocal.wav`, and write down where the whistling is.
 
+**Keeping the choruses original.** The same flag makes a piece that is half
+the original song: the owner's call on "Suomalainen metsä" was that the
+choruses are good places for the original voice, with the bank singing the
+verses. What it takes is where the choruses are, found like this:
+
+1. Transcribe `work/<song>/vocal.wav` with Whisper as a hint, only to learn
+   which line repeats. Pass `condition_on_previous_text=False`: with it on,
+   large-v3 locked into the chorus line after 83 seconds and printed it for
+   every remaining second of the song.
+2. Take one chorus the transcript places cleanly as a template, and slide its
+   chroma (`librosa.feature.chroma_cqt`, cosine similarity per frame) over the
+   whole vocal stem. Every chorus is a peak. On this song all seven came out
+   at 0.88 to 1.00, 19.6 seconds apart, where the transcript's word timings
+   had put the fifth one four seconds early.
+3. Start each range just before the chorus's first note and end it after the
+   chorus's measured length (9.0 s here). Snapping the edges to gaps between
+   notes does not work on legato singing: the analysis found no gap at all at
+   most chorus edges.
+
+Ranges from different reasons can go in one `--keep-original`; overlapping
+ones merge. Use `-o` to give the piece its own name, or its `.keep` takes
+replace the ones already kept for the whistling.
+
 ---
 
 ## Slow rap down before singing it: `--swallow`
