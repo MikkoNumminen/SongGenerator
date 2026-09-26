@@ -348,12 +348,31 @@ has to stay.
 .\.venv\Scripts\song-generator.exe input\song.mp4 --keep-original "0:24-0:30,1:03-1:09"
 ```
 
-Inside every range no slot gets a word (a slot that touches the range at all is
-dropped, since a word begun before it would ring on into it), and the original
-vocal stem goes back onto the bed with a `KEEP_ORIGINAL_FADE_S` fade inside
-each edge. It is added before the bed is levelled, so it sits against the band
-as it did in the original. The files are tagged `.keep`; a second attempt at
-the ranges replaces the first, which is kept in `previous/`.
+Inside every range the original vocal stem goes back onto the bed with a
+`KEEP_ORIGINAL_FADE_S` fade inside each edge, and no word sounds. Three things
+make that hold whatever the planner does:
+
+- A slot that touches a range at all is dropped, since a word begun before it
+  would ring on into it, and the range is widened to cover that slot whole.
+  The singer's note is then put back from where it started, instead of leaving
+  a stretch with neither a word nor the original and then the note coming in
+  halfway.
+- The slots either side of a range go into different phrases. Every planner
+  groups by phrase, so without the break `--swallow` folded the last note
+  before a range and the first after it into one slot spanning the range, and
+  reciting carried straight through a short one.
+- The word bus is silenced inside the ranges before mixing.
+
+The bed is levelled on the band alone (`mix(level_from=...)`). Levelled whole,
+a bed holding a minute of kept vocal turned the band down everywhere, and the
+words sat louder over the verses than in a plain render of the same song.
+
+The files are tagged `keep` plus a short hash of the merged ranges, e.g.
+`.keep3fa9c1`, so two sets of ranges on one song are two pieces side by side,
+and the same ranges typed again replace the take they made, which is kept in
+`previous/`. A range starting after the song ends is refused as the typo it
+is, and so is `--arrangement`, which would snap saved lines onto the slots
+beside a kept range.
 
 **The ranges are given by hand, on purpose.** A detector was tried: whistling
 is close to a pure tone, so frames with at least 60% of their 150 Hz to 8 kHz
@@ -385,8 +404,8 @@ verses. What it takes is where the choruses are, found like this:
    most chorus edges.
 
 Ranges from different reasons can go in one `--keep-original`; overlapping
-ones merge. Use `-o` to give the piece its own name, or its `.keep` takes
-replace the ones already kept for the whistling.
+ones merge. The chorus piece and the whistling piece get different tags, so
+both stay in the song's folder.
 
 ---
 

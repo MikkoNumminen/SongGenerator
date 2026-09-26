@@ -3,13 +3,22 @@
 Some of what a separator calls vocals is not words. "Suomalainen metsä" has
 whistling in it; the separator put it in the vocal stem with the singing, the
 analysis found notes in it, and the planner sang swear words over it. The
-whistling was part of the song and the words were not an improvement.
+whistling was part of the song and the words were not an improvement. The same
+flag makes a piece that is half the original: keep the choruses, and the bank
+sings the verses.
 
-So a render can be told where to leave the original alone. Inside a kept
-range no slot is given a word, and the original vocal stem is laid back onto
-the bed, faded in and out over KEEP_ORIGINAL_FADE_S so it does not click.
-Because it goes into the bed before the bed is levelled, it sits against the
-band exactly as it did in the original.
+Inside a kept range the original vocal stem is laid back onto the bed, and no
+word may sound. Three things make that hold whatever the planner does:
+
+- every slot touching a range is dropped, and the range is widened to cover
+  those slots whole, so the note the singer started before the edge is kept
+  from its start rather than faded in halfway;
+- the slots on either side of a range are put in different phrases, because
+  every planner groups by phrase: swallowing would otherwise fold the last
+  note before a range and the first after it into one slot spanning it, and
+  reciting would carry straight through a short one;
+- the word bus is silenced inside the ranges before mixing, with the same
+  fades, which catches any word still ringing on from before one.
 
 The ranges are given by hand. A detector was tried: a whistle is a nearly
 pure tone, so frames whose energy sits almost entirely in one peak above
@@ -22,23 +31,30 @@ stays with the person who has heard the song.
 
 from __future__ import annotations
 
+import hashlib
 import re
+from dataclasses import replace
 from typing import Sequence
 
 import numpy as np
 
 from . import config
+from .arrange import unclock
 
-_TIME = r"(?:(\d+):)?(\d+(?:\.\d+)?)"
-_RANGE = re.compile(rf"^\s*{_TIME}\s*-\s*{_TIME}\s*$")
+# m:ss(.s) or plain seconds. The clock format arrange.py writes and reads, and
+# unclock does the reading; this only decides what is shaped like a time.
+_CLOCK = re.compile(r"^\d+(?::[0-5]?\d)?(?:\.\d+)?$")
 
 
 class KeepError(ValueError):
     pass
 
 
-def _seconds(minutes: str | None, seconds: str) -> float:
-    return (int(minutes) * 60 if minutes else 0) + float(seconds)
+def _time(text: str, part: str) -> float:
+    text = text.strip()
+    if not _CLOCK.match(text):
+        raise KeepError(f"expected a time like 0:24 or 24.5 in {part!r}, got {text!r}")
+    return unclock(text) if ":" in text else float(text)
 
 
 def parse_ranges(text: str) -> list[tuple[float, float]]:
@@ -50,11 +66,10 @@ def parse_ranges(text: str) -> list[tuple[float, float]]:
     """
     ranges = []
     for part in filter(None, (p.strip() for p in text.split(","))):
-        m = _RANGE.match(part)
-        if not m:
+        sides = part.split("-")
+        if len(sides) != 2:
             raise KeepError(f"expected ranges like 0:24-0:30, got {part!r}")
-        start = _seconds(m.group(1), m.group(2))
-        end = _seconds(m.group(3), m.group(4))
+        start, end = (_time(side, part) for side in sides)
         if end <= start:
             raise KeepError(f"{part!r} ends before it starts")
         ranges.append((start, end))
@@ -73,15 +88,49 @@ def merge(ranges: Sequence[tuple[float, float]]) -> list[tuple[float, float]]:
     return [(s, e) for s, e in out]
 
 
-def outside(slots: list, ranges: Sequence[tuple[float, float]]) -> tuple[list, int]:
-    """The slots that touch no kept range, and how many were dropped.
+def refuse_past_the_end(ranges: Sequence[tuple[float, float]],
+                        duration_s: float) -> None:
+    """A range that starts after the song ends is a typo, never a request.
 
-    Touching at all is enough to drop one. A word that began before a kept
-    stretch would ring on into it, over the very thing being kept.
+    "10:24" for "1:02.4" would otherwise keep nothing, drop nothing, and
+    write a take tagged as kept with words sung straight over the part that
+    was meant to be left alone.
     """
-    kept = [s for s in slots
-            if not any(s.onset_s < e and s.offset_s > b for b, e in ranges)]
-    return kept, len(slots) - len(kept)
+    late = [(s, e) for s, e in ranges if s >= duration_s]
+    if late:
+        shown = ", ".join(f"{s:g}-{e:g}s" for s, e in late)
+        raise KeepError(f"{shown} starts after the song ends at {duration_s:.1f}s")
+
+
+def outside(slots: list, ranges: Sequence[tuple[float, float]]
+            ) -> tuple[list, int, list[tuple[float, float]]]:
+    """The slots left to sing, how many were dropped, and the ranges widened.
+
+    A slot touching a range at all is dropped: a word begun before the range
+    would ring on into it. Its whole span joins the range, so what is put
+    back starts where the singer's note did and nothing is left as a hole
+    with neither a word nor the original in it.
+
+    The kept slots are renumbered into phrases that never span a range, so no
+    planner can join the notes on either side of one.
+    """
+    kept, spans = [], list(ranges)
+    for s in slots:
+        if any(s.onset_s < e and s.offset_s > b for b, e in ranges):
+            spans.append((s.onset_s, s.offset_s))
+        else:
+            kept.append(s)
+    widened = merge(spans)
+
+    renumbered, phrase, previous = [], -1, None
+    for s in kept:
+        crossed = previous is not None and any(
+            previous.offset_s <= b and s.onset_s >= e for b, e in widened)
+        if previous is None or s.phrase != previous.phrase or crossed:
+            phrase += 1
+        renumbered.append(replace(s, phrase=phrase))
+        previous = s
+    return renumbered, len(slots) - len(kept), widened
 
 
 def mask(ranges: Sequence[tuple[float, float]], n_samples: int, sr: int,
@@ -106,12 +155,40 @@ def mask(ranges: Sequence[tuple[float, float]], n_samples: int, sr: int,
     return m
 
 
+def _fit(audio: np.ndarray, n: int) -> np.ndarray:
+    """audio cut or zero-padded to n samples, so no stem shortens the song."""
+    audio = np.asarray(audio, dtype=np.float32)
+    if audio.shape[-1] >= n:
+        return audio[..., :n]
+    pad = [(0, 0)] * (audio.ndim - 1) + [(0, n - audio.shape[-1])]
+    return np.pad(audio, pad)
+
+
 def with_original(instrumental: np.ndarray, vocal: np.ndarray,
                   ranges: Sequence[tuple[float, float]],
                   sr: int = config.SAMPLE_RATE) -> np.ndarray:
-    """The bed, with the original vocal put back inside the kept ranges."""
-    n = min(instrumental.shape[-1], vocal.shape[-1])
-    m = mask(ranges, n, sr)
-    bed = np.array(instrumental[..., :n], dtype=np.float32)
-    bed += vocal[..., :n] * m
+    """The bed, with the original vocal put back inside the kept ranges.
+
+    As long as the instrumental: a vocal stem a few samples short would
+    otherwise cut the end off every kept take.
+    """
+    n = instrumental.shape[-1]
+    bed = np.array(instrumental, dtype=np.float32)
+    bed += _fit(vocal, n) * mask(ranges, n, sr)
     return bed
+
+
+def silence_words(word_bus: np.ndarray, ranges: Sequence[tuple[float, float]],
+                  sr: int = config.SAMPLE_RATE) -> np.ndarray:
+    """The word bus with nothing inside the kept ranges, whatever was placed."""
+    return (word_bus * (1.0 - mask(ranges, word_bus.shape[-1], sr))).astype(np.float32)
+
+
+def tag(ranges: Sequence[tuple[float, float]]) -> str:
+    """The filename word for these ranges: keep, and a short hash of them.
+
+    Two sets of ranges are two different pieces, the whistling kept and the
+    whole chorus kept, and a bare "keep" had the second replace the first.
+    """
+    text = ",".join(f"{s:.2f}-{e:.2f}" for s, e in merge(ranges))
+    return "keep" + hashlib.sha1(text.encode()).hexdigest()[:6]

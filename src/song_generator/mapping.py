@@ -1586,17 +1586,38 @@ def _normalise(audio: np.ndarray, target_lufs: float, sr: int) -> np.ndarray:
     return (audio * (10 ** ((target_lufs - loudness) / 20))).astype(np.float32)
 
 
+def _gain_to(audio: np.ndarray, target_lufs: float, sr: int) -> float:
+    """The linear gain that brings audio to target_lufs, 1.0 when silent."""
+    from .detect import integrated_lufs
+
+    loudness = integrated_lufs(audio, sr)
+    return 1.0 if not np.isfinite(loudness) else 10 ** ((target_lufs - loudness) / 20)
+
+
 def mix(word_bus: np.ndarray, instrumental: np.ndarray,
         sr: int = config.SAMPLE_RATE,
-        word_bus_lufs: float | None = None) -> np.ndarray:
+        word_bus_lufs: float | None = None,
+        level_from: np.ndarray | None = None) -> np.ndarray:
     """Words over the bed. word_bus_lufs lets a bank sit at its own level.
 
     None keeps config.WORD_BUS_LUFS, which is what every bank did before one
     of them needed to be louder, so passing nothing changes nothing.
+
+    level_from is the audio whose loudness sets the bed's gain, when the bed
+    holds more than the band. --keep-original puts stretches of the original
+    vocal into the bed, and levelling that bed as a whole turned the band down
+    everywhere by an amount that grew with the seconds kept, so the words sat
+    louder over the verses than in a plain render. Measured on the band
+    alone, the band sits where it always does and the kept vocal sits against
+    it as it did in the original.
     """
     target = config.WORD_BUS_LUFS if word_bus_lufs is None else word_bus_lufs
     words = _normalise(word_bus, target, sr)
-    bed = _normalise(instrumental, config.INSTRUMENTAL_LUFS, sr)
+    if level_from is None:
+        bed = _normalise(instrumental, config.INSTRUMENTAL_LUFS, sr)
+    else:
+        gain = _gain_to(level_from, config.INSTRUMENTAL_LUFS, sr)
+        bed = (instrumental * gain).astype(np.float32)
 
     n = min(words.shape[1], bed.shape[1])
     out = words[:, :n] + bed[:, :n]

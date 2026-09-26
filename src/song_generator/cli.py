@@ -476,10 +476,13 @@ def variant_tag(args: argparse.Namespace) -> str | None:
 
 
 def keep_word(args: argparse.Namespace) -> str | None:
-    """--keep-original in a filename. Only that it was used, not the ranges:
-    a second attempt at the ranges should replace the first, with the one
-    before kept in previous/ as every re-render is."""
-    return "keep" if args.keep_original else None
+    """--keep-original in a filename: keep and a short hash of the ranges.
+
+    A bare "keep" had the chorus piece replace the whistling piece of the same
+    song. Different ranges are a different piece and get a different name;
+    the same ranges typed again replace the take they made before.
+    """
+    return keep.tag(args.keep_original) if args.keep_original else None
 
 
 def join_tags(*tags: str | None) -> str | None:
@@ -648,6 +651,13 @@ def main(argv: list[str] | None = None) -> int:
                      f"with {named[0]}, which names one")
     refuse_contradicting_voices(parser, args)
     refuse_contradicting_swallow(parser, args)
+    if args.keep_original and args.arrangement:
+        # A saved line inside a kept range would be snapped to the nearest
+        # slot left, on top of whatever is already there, next to the very
+        # stretch meant to be left alone; and the log records no ranges.
+        parser.error("--keep-original decides which slots exist, so it cannot "
+                     "be combined with --arrangement, which replays lines onto "
+                     "them")
     # --bank has no default in the parser so that naming it beside --voices
     # can be told apart from not naming it. Resolved here, after the check.
     if args.bank is None:
@@ -671,6 +681,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         mix = audio_io.decode(args.input)
         duration = mix.shape[1] / config.SAMPLE_RATE
+        if args.keep_original:
+            keep.refuse_past_the_end(args.keep_original, duration)
 
         if not args.json:
             print(f"  song      {args.input.name}  ({fmt_duration(duration)})")
@@ -692,6 +704,9 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_ERROR
     except audio_io.AudioError as exc:
         print(f"error: {exc}", file=sys.stderr)
+        return EXIT_ERROR
+    except keep.KeepError as exc:
+        print(f"error: --keep-original {exc}", file=sys.stderr)
         return EXIT_ERROR
 
     payload = {
@@ -804,16 +819,19 @@ def main(argv: list[str] | None = None) -> int:
 
     slots, merged, split = clean_slots([n.__dict__ for n in analysis.notes])
     bed = stems.instrumental
+    kept_ranges: list[tuple[float, float]] = []
     if args.keep_original:
-        slots, dropped = keep.outside(slots, args.keep_original)
-        bed = keep.with_original(stems.instrumental, stems.vocal,
-                                 args.keep_original, config.SAMPLE_RATE)
+        slots, dropped, kept_ranges = keep.outside(slots, args.keep_original)
+        bed = keep.with_original(stems.instrumental, stems.vocal, kept_ranges,
+                                 config.SAMPLE_RATE)
         if not args.json:
-            held = sum(e - s for s, e in args.keep_original)
-            print(f"  keep      original vocal in {len(args.keep_original)}"
+            held = sum(e - s for s, e in kept_ranges)
+            print(f"  keep      original vocal in {len(kept_ranges)}"
                   f" stretches, {held:.1f}s; {dropped} slots left without words")
     base_slots = slots
+
     # Each voice may swallow at its own pace, so each gets its own slots.
+    # After the kept ranges, whose phrase breaks stop any group spanning one.
     voice_slots = {}
     swallow_per: dict[str, float] = {}
     for name, _, _, voice_units in voices:
@@ -991,9 +1009,12 @@ def main(argv: list[str] | None = None) -> int:
             # Immediately before the write, so nothing can reach the encoder
             # without the take that was there being kept first.
             keep_the_one_it_replaces(path)
-            audio_io.encode_mp3(path, mix_buses(word_bus, bed,
-                                                config.SAMPLE_RATE,
-                                                word_bus_lufs=bus_lufs))
+            if kept_ranges:
+                word_bus = keep.silence_words(word_bus, kept_ranges,
+                                              config.SAMPLE_RATE)
+            audio_io.encode_mp3(path, mix_buses(
+                word_bus, bed, config.SAMPLE_RATE, word_bus_lufs=bus_lufs,
+                level_from=stems.instrumental if kept_ranges else None))
             written.append((path, label, mimicry(word_plan),
                             sum(1 for p in word_plan.placements if p.do_shift)))
 
