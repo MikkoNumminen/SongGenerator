@@ -411,9 +411,10 @@ def render_text(arr: Arrangement) -> str:
         # could land a phrase near a half on the other side and move a slot.
         out.append(f"#   swallow {arr.swallow!r}{words}")
     if arr.keep:
-        # Written exactly: rounded, a range edge could move past a slot's end
-        # and the replay would cut a different set of slots than the take.
-        out.append("#   keep    " + ",".join(f"{s!r}-{e!r}" for s, e in arr.keep))
+        # To the microsecond, fixed-point: rounded to hundredths an edge could
+        # move past a slot's end and a replay cut a different set of slots,
+        # and repr turns a tiny value into 1e-05, which splits on its minus.
+        out.append("#   keep    " + ",".join(f"{s:.6f}-{e:.6f}" for s, e in arr.keep))
     phrase = None
     for line in arr.lines:
         if line.phrase != phrase:
@@ -558,14 +559,17 @@ def parse_text(text: str, bank_words: set[str] | None = None) -> Arrangement:
                 "over, and replay refuses any other.") from exc
     keep = None
     if meta["keep"]:
+        # Read by the parser --keep-original uses, so a hand-edited header is
+        # held to the same rules: in order, merged, forwards, finite.
+        from .keep import KeepError, parse_ranges
+
         try:
-            keep = [(float(a), float(b)) for a, b in
-                    (part.split("-") for part in meta["keep"].split(","))]
-        except ValueError as exc:
+            keep = parse_ranges(meta["keep"])
+        except KeepError as exc:
             raise ArrangementError(
                 f"line {meta_lines['keep']}: cannot read the kept ranges "
-                f"{meta['keep']!r}. They decide which slots the lines were laid"
-                " over, so replay cannot guess them.") from exc
+                f"{meta['keep']!r} ({exc}). They decide which slots the lines"
+                " were laid over, so replay cannot guess them.") from exc
     return Arrangement(meta["song"], meta["bank"], meta["level"], seed, lines,
                        swallow, swallow_words, keep)
 

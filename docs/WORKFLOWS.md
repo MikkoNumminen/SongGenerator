@@ -386,10 +386,13 @@ The files are tagged `keep` plus a short hash of the merged ranges, e.g.
 and the same ranges typed again replace the take they made, which is kept in
 `previous/`. A range starting after the song ends is refused as the typo it
 is, and so is `--no-words`, which writes the band alone. The `.arr` log
-records the ranges exactly in a `keep` header line, and `--arrangement` brings
-them back with it, checked against the song's length like any other; an
-explicit `--keep-original` that disagrees with the log is refused, since the
-lines were laid over the slots the log's ranges left.
+records the ranges to the microsecond in a `keep` header line, and
+`--arrangement` brings them back with it, read by the same parser as
+`--keep-original` and checked against the song's length; an explicit
+`--keep-original` that disagrees with the log is refused, since the lines were
+laid over the slots the log's ranges left. A replayed line that would sound
+inside a kept range (edited by hand, or re-laid by a reciting bank) is left
+out whole, as a fresh take's would be, and the run says how many.
 
 **Known limits, left as they are.** A bank that recites (`sequence` or
 `shuffled` in its `bank.json`) loses the unit that would ring into a kept

@@ -272,7 +272,7 @@ class TestThirdReview:
                              phrase=0, split=False, target_s=length)
 
         def build(slots, units, level, seed, song="", bank="", bank_dir=None,
-                  sings=None):
+                  sings=None, **kw):
             plan = Plan(placements=[placement(0.0, 0.5), placement(0.8, 0.6)],
                         slots_used=4, slots_total=10)
             return plan, arrange.describe(plan, song, bank, level, seed), 1
@@ -283,3 +283,36 @@ class TestThirdReview:
             kept=[(1.0, 2.0)])
         assert [p.onset_s for p in plan.placements] == [0.0]
         assert plan.slots_used == 2
+
+
+class TestFourthReview:
+    def _log(self, header):
+        from song_generator import arrange
+        word = list(config.WORD_SYLLABLES)[0]
+        text = arrange.render_text(arrange.Arrangement(
+            "song", "bank", "wild", 7, [arrange.Line(0, 1.0, 1, [word])]))
+        return text.replace("# Words available",
+                            f"#   keep    {header}\n# Words available")
+
+    @pytest.mark.parametrize("header", ["30-24", "nan-nan", "inf-inf", "24-"])
+    def test_a_hand_edited_header_is_held_to_the_same_rules(self, header):
+        """Reversed, not a number, or unfinished: refused by name, never a
+        take tagged as kept with words over the stretch, never a traceback."""
+        from song_generator import arrange
+        with pytest.raises(arrange.ArrangementError, match="kept ranges"):
+            arrange.parse_text(self._log(header))
+
+    def test_ranges_out_of_order_in_a_log_are_sorted_and_merged(self):
+        from song_generator import arrange
+        assert arrange.parse_text(self._log("63-69,24-30,65-70")).keep ==             [(24.0, 30.0), (63.0, 70.0)]
+
+    def test_a_tiny_edge_survives_the_round_trip(self):
+        """repr wrote 1e-05, which split on its own minus sign."""
+        from song_generator import arrange
+        word = list(config.WORD_SYLLABLES)[0]
+        arr = arrange.Arrangement("song", "bank", "wild", 7, [
+            arrange.Line(0, 1.0, 1, [word])], keep=[(0.00001, 30.0)])
+        assert arrange.parse_text(arrange.render_text(arr)).keep == [(0.00001, 30.0)]
+
+    def test_ranges_that_cut_different_slots_get_different_names(self):
+        assert keep.tag([(24.001, 30.0)]) != keep.tag([(24.004, 30.0)])

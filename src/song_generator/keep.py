@@ -134,7 +134,8 @@ def outside(slots: list, ranges: Sequence[tuple[float, float]]
         if not touching:
             break
         widened = merge(widened + [(s.onset_s, s.offset_s) for s in touching], join)
-        kept = [s for s in kept if s not in touching]
+        gone = {id(s) for s in touching}
+        kept = [s for s in kept if id(s) not in gone]
 
     renumbered, phrase, previous = [], -1, None
     for s in kept:
@@ -222,5 +223,7 @@ def tag(ranges: Sequence[tuple[float, float]]) -> str:
     Two sets of ranges are two different pieces, the whistling kept and the
     whole chorus kept, and a bare "keep" had the second replace the first.
     """
-    text = ",".join(f"{s:.2f}-{e:.2f}" for s, e in merge(ranges))
+    # The precision the log keeps, so two sets of ranges that cut different
+    # slots never share a name.
+    text = ",".join(f"{s:.6f}-{e:.6f}" for s, e in merge(ranges))
     return "keep" + hashlib.sha1(text.encode()).hexdigest()[:6]

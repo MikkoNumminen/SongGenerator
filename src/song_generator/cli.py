@@ -332,6 +332,10 @@ def arrange_voices(voices, voice_slots, turns, level: str, seed: int,
     # voices before it have not said.
     said: set[str] = set()
     paired = False
+
+    def heard(p):
+        return not (kept and keep.rings_into(p, kept))
+
     for v in sorted(range(n), key=lambda i: -owned[i]):
         name, voice_dir, singing_from, units = voices[v]
         if owned[v] <= 0:
@@ -339,9 +343,6 @@ def arrange_voices(voices, voice_slots, turns, level: str, seed: int,
             whole[v] = arrange.describe(plans[v], song, str(singing_from),
                                         level, seed)
             continue
-
-        def heard(p):
-            return not (kept and keep.rings_into(p, kept))
 
         def sings(p, v=v):
             return ((n == 1 or take.voice_of(turns, n, p.onset_s) == v)
@@ -355,9 +356,9 @@ def arrange_voices(voices, voice_slots, turns, level: str, seed: int,
         if kept:
             # The same rule coverage was judged by, so what is counted as
             # heard is what is rendered.
-            silent = [p for p in plan.placements if not heard(p)]
-            plan.placements = [p for p in plan.placements if heard(p)]
-            plan.slots_used -= sum(p.n_slots for p in silent)
+            verdicts = [(p, heard(p)) for p in plan.placements]
+            plan.placements = [p for p, ok in verdicts if ok]
+            plan.slots_used -= sum(p.n_slots for p, ok in verdicts if not ok)
         plans[v], whole[v], draws[v] = plan, described, tries
         if n > 1:
             sung = arrange.describe(
@@ -975,6 +976,19 @@ def main(argv: list[str] | None = None) -> int:
                 # than re-pitched per syllable and cut to its slots.
                 word_plan = arrange.realise(described, slots, units,
                                             bank_dir=words_dir)
+                if kept_ranges:
+                    # A line edited by hand, or re-laid by a reciting bank,
+                    # can reach into a kept range: dropped whole, as a fresh
+                    # take's would be, rather than cut there by the gate.
+                    ringing = [p for p in word_plan.placements
+                               if keep.rings_into(p, kept_ranges)]
+                    gone = {id(p) for p in ringing}
+                    word_plan.placements = [p for p in word_plan.placements
+                                            if id(p) not in gone]
+                    word_plan.slots_used -= sum(p.n_slots for p in ringing)
+                    if ringing and not args.json:
+                        print(f"  keep      {len(ringing)} replayed line(s)"
+                              " would sound inside a kept range, left out")
                 label = described.level or "replay"
                 if not args.json:
                     print(f"  arrangement replayed from {args.arrangement}")
