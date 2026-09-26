@@ -334,6 +334,25 @@ reference and the pitch first, are now in `docs/WORKFLOWS.md`; the trap is now
 in `AGENTS.md`. Same as above: this is what got written down, not a rubric
 argument, so the score stands at 8.9, still not rescored.
 
+A third round, listening to that text-to-speech bank once it was actually
+rendered into a song, found two gaps this repository's own runbook should
+have closed and did not. First, `docs/WORKFLOWS.md` already carried a tuning
+procedure, "Tune a bank of generated voices", that says in as many words that
+`never_split` is not optional for spoken or generated material; the Isoäiti
+bank was built without reading it, shipped with no `bank.json` at all, and
+came back sounding like a computer voice. A runbook that exists is not the
+same as a runbook that gets followed, and nothing here checked that it had
+been. Second, the tool that actually builds a clean word bank for a generated
+voice, `build_word_bank.py`, existed the whole time, but only in the git
+history of a different repository, on a branch nobody here had reason to
+know about; reaching it took an owner naming AudiobookMaker's history by
+commit rather than an agent finding it. The dead end tried first, cutting
+sentences at their longest silences, cost a full round of rolls before that
+was found. Both are now written where the next agent building a generated
+bank will read them before starting rather than after: the trap and the
+tool's location in `AGENTS.md`, the recipe in `docs/WORKFLOWS.md`. Still not
+a rubric argument; the score stands at 8.9.
+
 ---
 
 ## Current: 8.9

@@ -54,42 +54,70 @@ drew the line -- the thresholds are all in src/song_generator/config.py under
 """
 
 
-def swallow_range(text: str) -> tuple[int, int]:
-    """--swallow's value: "2-4", or "3" for exactly three."""
-    lo, _, hi = text.partition("-")
+def swallow_range(text: str) -> tuple[str | None, float, float]:
+    """One --swallow value: "2-4", "3", or a voice's own, "keskisarja=2.4".
+
+    Returns (voice or None, lo, hi) in words. Only the mean is used as the
+    pace, so a range and its midpoint render the same; a range is accepted
+    because that is how the words to swallow are naturally described.
+    """
+    voice, _, spec = text.rpartition("=")
+    lo, _, hi = spec.partition("-")
     try:
-        pair = (int(lo), int(hi or lo))
+        lo_f, hi_f = float(lo), float(hi or lo)
     except ValueError:
         raise argparse.ArgumentTypeError(
-            f"expected a word count or a range like 2-4, got {text!r}") from None
-    if not 1 <= pair[0] <= pair[1]:
-        raise argparse.ArgumentTypeError(
-            f"expected 1 <= LO <= HI, got {text!r}")
-    return pair
+            f"expected a word count, a range like 2-4, or VOICE=2.4,"
+            f" got {text!r}") from None
+    if not 0 < lo_f <= hi_f:
+        raise argparse.ArgumentTypeError(f"expected 0 < LO <= HI, got {text!r}")
+    return (voice or None), lo_f, hi_f
 
 
-def swallow_notes(words: tuple[int, int], units) -> tuple[int, int]:
+def swallow_words(args: argparse.Namespace, voice: str) -> float | None:
+    """How many of the song's words this voice's bank words swallow, or None.
+
+    A voice's own value wins over the one given for everybody, so one voice
+    can be quickened without moving the other.
+    """
+    chosen = None
+    for who, lo, hi in args.swallow or []:
+        if who == voice or (who is None and chosen is None):
+            chosen = (lo + hi) / 2
+            if who == voice:
+                break
+    return chosen
+
+
+def swallow_notes(words: float, units) -> float:
     """Words to swallow per bank word, as notes per bank syllable.
 
     The analysis finds notes, one per sung syllable, and the planner puts one
     bank syllable on each slot. So a bank word swallowing N words needs each
     of its syllables to take N * RAP_WORD_SYLLABLES notes, shared out over the
-    syllables the bank's words have on average.
+    syllables the bank's words have on average. Never under one note: a bank
+    syllable cannot sound on part of one.
     """
     words_held = sum(len(u.words) for u in units)
     bank_syllables = (sum(u.syllables for u in units) / words_held
                       if words_held else 1.0)
-    lo, hi = (max(1, round(w * config.RAP_WORD_SYLLABLES / bank_syllables))
-              for w in words)
-    return lo, max(lo, hi)
+    return max(1.0, words * config.RAP_WORD_SYLLABLES / bank_syllables)
+
+
+def _number_word(value: float) -> str:
+    return f"{value:g}".replace(".", "p")
 
 
 def swallow_word(args: argparse.Namespace) -> str | None:
-    """--swallow as it is spelled in a filename: swallow2-4."""
-    if args.swallow is None:
+    """--swallow as it is spelled in a filename: swallow2-4, and a voice's
+    own after it, swallow2-4-keskisarja2p4."""
+    if not args.swallow:
         return None
-    lo, hi = args.swallow
-    return f"swallow{lo}" if lo == hi else f"swallow{lo}-{hi}"
+    parts = []
+    for who, lo, hi in args.swallow:
+        span = _number_word(lo) if lo == hi else f"{_number_word(lo)}-{_number_word(hi)}"
+        parts.append(f"{who}{span}" if who else span)
+    return "swallow" + "-".join(parts)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -127,11 +155,14 @@ def build_parser() -> argparse.ArgumentParser:
                    help="sing from several banks, the voice changing wherever "
                         "the original singer does, in the order given; "
                         "replaces --bank [needs: pip install -e .[voices]]")
-    p.add_argument("--swallow", type=swallow_range, default=None, metavar="LO-HI",
-                   help="each bank word swallows LO to HI of the original's "
+    p.add_argument("--swallow", type=swallow_range, nargs="+", default=None,
+                   metavar="WORDS",
+                   help="each bank word swallows this many of the original's "
                         "words, sounding across them and following their "
                         "tune, for rap, where one bank syllable per rapped "
-                        "syllable is far too many words; e.g. 2-4")
+                        "syllable is far too many words. 2-4 for everybody, "
+                        "VOICE=2.4 for one voice of --voices: 2-4 "
+                        "keskisarja=2.4 makes keskisarja a quarter quicker")
     p.add_argument("--raw-clips", action="store_true",
                    help="sing from the recorded clips even when a standardised "
                         "tier exists beside them")
@@ -200,6 +231,32 @@ def output_bank_name(args: argparse.Namespace) -> str:
     if args.voices:
         return "+".join(args.voices)
     return args.words_dir.name if args.words_dir else args.bank
+
+
+def refuse_contradicting_swallow(parser: argparse.ArgumentParser,
+                                 args: argparse.Namespace) -> None:
+    """Two paces for one voice, or a pace for a voice that is not singing.
+
+    Refused for the reason every contradiction here is: whichever value lost
+    would lose without a word, and a pace given to a misspelt voice would
+    leave that voice at the default while the filename claimed otherwise.
+    """
+    if not args.swallow:
+        return
+    everybody = [s for s in args.swallow if s[0] is None]
+    if len(everybody) > 1:
+        parser.error("--swallow takes one value for every voice; give a "
+                     "voice its own as VOICE=WORDS")
+    named = [s[0] for s in args.swallow if s[0] is not None]
+    repeated = sorted({n for n in named if named.count(n) > 1})
+    if repeated:
+        parser.error(f"--swallow names {', '.join(repeated)} more than once")
+    singing = set(args.voices or [args.words_dir.name if args.words_dir
+                                  else args.bank])
+    unknown = sorted(set(named) - singing)
+    if unknown:
+        parser.error(f"--swallow names {', '.join(unknown)}, which is not "
+                     f"singing in this run ({', '.join(sorted(singing))})")
 
 
 def drives_its_own_shift(args: argparse.Namespace) -> bool:
@@ -450,6 +507,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(f"--ladder renders every rung, so it cannot be combined "
                      f"with {named[0]}, which names one")
     refuse_contradicting_voices(parser, args)
+    refuse_contradicting_swallow(parser, args)
 
     if args.rollback:
         # Before anything expensive. Rolling back needs neither stems nor a
@@ -601,14 +659,21 @@ def main(argv: list[str] | None = None) -> int:
     units = [u for _, _, _, voice_units in voices for u in voice_units]
 
     slots, merged, split = clean_slots([n.__dict__ for n in analysis.notes])
-    if args.swallow is not None:
-        notes_lo, notes_hi = swallow_notes(args.swallow, units)
-        before = len(slots)
-        slots = swallow_slots(slots, notes_lo, notes_hi)
+    # Each voice may swallow at its own pace, so each gets its own slots.
+    voice_slots = {}
+    for name, _, _, voice_units in voices:
+        words = swallow_words(args, name)
+        if words is None:
+            voice_slots[name] = slots
+            continue
+        per = swallow_notes(words, voice_units)
+        voice_slots[name] = swallow_slots(slots, per)
         if not args.json:
-            print(f"  swallow   each bank word over {args.swallow[0]}-"
-                  f"{args.swallow[1]} of the song's words: {notes_lo}-{notes_hi}"
-                  f" notes per bank syllable, {before} -> {len(slots)} slots")
+            who = f" ({name})" if len(voices) > 1 else ""
+            print(f"  swallow{who}  each bank word over {words:g} of the song's"
+                  f" words: {per:.2f} notes per bank syllable,"
+                  f" {len(slots)} -> {len(voice_slots[name])} slots")
+    slots = voice_slots[names[0]]
 
     unreachable = {name: arrange.unreachable_words(voice_units)
                    for name, _, _, voice_units in voices}
@@ -682,7 +747,7 @@ def main(argv: list[str] | None = None) -> int:
                 plans = []
                 for name, voice_dir, singing_from, voice_units in voices:
                     voice_plan, described, tries = arrange.build(
-                        slots, voice_units, level, seed,
+                        voice_slots[name], voice_units, level, seed,
                         song=args.input.stem, bank=str(singing_from),
                         # The directory the run was pointed at, tier or bank.
                         # banks resolves a tier back to the bank beside it, so

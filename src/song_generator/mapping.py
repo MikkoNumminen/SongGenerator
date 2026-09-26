@@ -393,8 +393,8 @@ def clean_slots(notes: list[dict]) -> tuple[list[Slot], int, int]:
     return final, merged, split
 
 
-def swallow_slots(slots: list[Slot], lo: int, hi: int) -> list[Slot]:
-    """Fold every run of lo..hi notes into one slot, so a syllable swallows them.
+def swallow_slots(slots: list[Slot], per_syllable: float) -> list[Slot]:
+    """Fold the original's notes so each slot holds per_syllable of them.
 
     Rap gives a note to every syllable, and a bank syllable on every one of
     them comes out as a machine gun of words at rap speed. Swallowing hands
@@ -403,13 +403,18 @@ def swallow_slots(slots: list[Slot], lo: int, hi: int) -> list[Slot]:
     the longest of them, which is the one the rapper leant on. The word still
     lands where the rapper's words did; there are just fewer of it.
 
-    A group ends at the widest gap among the places it may end, which is the
-    nearest thing to a word boundary a stream of syllables offers. Groups
-    never cross a phrase. A phrase's remainder shorter than lo joins the group
-    before it, and a phrase holding fewer than lo notes becomes one group.
+    The mean is kept exactly, because it is the pace: a phrase of N notes
+    becomes round(N / per_syllable) slots, split as evenly as the notes allow.
+    Asking for a quarter fewer notes per syllable then gives a quarter more
+    syllables, which a range of whole numbers could not promise once rounded.
+    Each boundary then moves up to SWALLOW_SNAP_NOTES notes to the widest gap
+    within reach, the nearest thing to a word boundary a stream of syllables
+    offers. Groups never cross a phrase.
     """
-    if lo < 1 or hi < lo:
-        raise ValueError(f"swallow needs 1 <= lo <= hi, got {lo}-{hi}")
+    if per_syllable < 1.0:
+        raise ValueError(f"swallow needs at least one note per syllable,"
+                         f" got {per_syllable}")
+    reach = config.SWALLOW_SNAP_NOTES
     out: list[Slot] = []
     i = 0
     while i < len(slots):
@@ -417,26 +422,21 @@ def swallow_slots(slots: list[Slot], lo: int, hi: int) -> list[Slot]:
         while j + 1 < len(slots) and slots[j + 1].phrase == slots[i].phrase:
             j += 1
         phrase = slots[i:j + 1]
-        groups: list[list[Slot]] = []
-        k = 0
-        while k < len(phrase):
-            left = len(phrase) - k
-            if left <= hi:
-                size = left
-            else:
-                # Candidate ends: after lo..hi notes, but never leaving a
-                # remainder too short to be a group of its own.
-                ends = [n for n in range(lo, hi + 1) if left - n >= lo] or [lo]
-                size = max(ends, key=lambda n: phrase[k + n].onset_s
-                           - phrase[k + n - 1].offset_s)
-            groups.append(phrase[k:k + size])
-            k += size
-        if len(groups) > 1 and len(groups[-1]) < lo:
-            # Popped first: `groups[-2] += groups.pop()` stores to -2 after
-            # the pop has already moved it.
-            tail = groups.pop()
-            groups[-1] += tail
-        for g in groups:
+        n = len(phrase)
+        groups = max(1, round(n / per_syllable))
+        edges = [0]
+        for k in range(1, groups):
+            ideal = round(k * n / groups)
+            # Room for at least one note on each side of every boundary.
+            lo = max(edges[-1] + 1, ideal - reach)
+            hi = min(n - (groups - k), ideal + reach)
+            edges.append(max(range(lo, hi + 1),
+                             key=lambda e: (phrase[e].onset_s
+                                            - phrase[e - 1].offset_s,
+                                            -abs(e - ideal))))
+        edges.append(n)
+        for a, b in zip(edges, edges[1:]):
+            g = phrase[a:b]
             longest = max(g, key=lambda s: s.dur_s)
             out.append(Slot(g[0].onset_s, g[-1].offset_s, longest.midi,
                             g[0].phrase, max(s.rms_db for s in g)))

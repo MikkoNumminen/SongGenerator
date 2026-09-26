@@ -604,6 +604,11 @@ DEFAULT_BANK = "ppbank"
 # checked against the ear and moved.
 RAP_WORD_SYLLABLES = 2.5
 
+# How far a swallowed group's boundary may move from its even split, in notes,
+# to land on a wider gap. One keeps the pace within a note of what was asked
+# while still preferring a pause to the middle of a word.
+SWALLOW_SNAP_NOTES = 1
+
 
 # Optional: snap placed word onsets to the beat grid from stage 2. Off by
 # default because in Mode A the original vocal's timing is already musical and

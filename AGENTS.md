@@ -231,12 +231,40 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   right. The Isoäiti bank was converted toward a reference that was
   measurably hers (0.81 cosine similarity to her other reference), at her
   own pitch (her reference speaks at MIDI 52.8, the converted clips measured
-  53.3), and it did not sound like her at all. The embedding score only
-  agreed with the ear after a different route was tried: 0.40 similarity for
-  the voice-conversion clips that failed by ear, 0.53 for the text-to-speech
-  clips that worked. An embedding number is not a pass/fail test for a
-  converted or synthesised voice; listen before building the bank. See
+  53.3), and it did not sound like her at all. The embedding score never
+  tracked the ear: 0.40 for the voice-conversion clips, 0.53 for the
+  phrase-by-phrase text-to-speech clips that came next and also failed by
+  ear (a computer voice, and words the model invented), and 0.48 for the
+  carrier-sentence clips that replaced both. An embedding number is not a
+  pass/fail test for a converted or synthesised voice; listen before
+  building the bank. See
   `docs/WORKFLOWS.md`, "Make a voice-converted copy of a bank".
+- **Generated Finnish speech must never be asked for a fragment under 60
+  characters.** AudiobookMaker's Finnish model rambles or repeats on a
+  fragment shorter than its own minimum-fragment guard, 60 characters
+  (`scripts/generate_chatterbox_audiobook.py`), and that guard only sits
+  upstream of the audiobook path; asking the model directly for a bare word
+  or phrase skips it. An Isoäiti take built by asking for short phrases like
+  `"Paska!"` (3-25 characters) came back saying things nobody wrote: "Paska!"
+  as "Aukumaala", "Eeeeee!" as "Ei, ei, ei.". Say the word inside a full
+  sentence instead; see `docs/WORKFLOWS.md`, "Make a voice-converted copy of
+  a bank".
+- **A bank of generated or converted speech needs `never_split` before its
+  first render, not after.** Without it, a spoken or synthesised clip is cut
+  into syllables and stretched to its slot exactly like sung material, and it
+  survives that far worse: an Isoäiti bank built with no `bank.json` at all
+  came back sounding like a computer voice, its clips fit at 0.59x natural
+  speed. `docs/WORKFLOWS.md`, "Tune a bank of generated voices", already says
+  `never_split` is not optional for spoken material; the bank was built
+  without reading it first.
+- **`AudiobookMaker`'s word-bank tool exists only in its own git history.**
+  `scripts/build_word_bank.py` says a word inside a carrier sentence and cuts
+  it back out by its own recognised timing, which is what a generated word
+  bank should be built from; it lives on commit `3658909` of branch
+  `feat/word-bank-generator` in that repo, not on its current checkout. Take
+  it with `git show 3658909:scripts/build_word_bank.py` rather than
+  rediscovering the need for it by trial. See `docs/WORKFLOWS.md`, "Make a
+  voice-converted copy of a bank".
 - **A float WAV is not a pure function of its samples.** libsndfile writes a
   PEAK chunk holding the wall-clock time of the write, at byte 60. Two runs
   producing bit-identical audio therefore produce files that differ by that one

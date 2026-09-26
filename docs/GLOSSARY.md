@@ -20,14 +20,19 @@ already massaged toward a mapping decision.
 boundary.
 
 **Swallow**. Folding several consecutive slots into one before planning, for
-`--swallow LO-HI`, so one bank syllable sounds across several of the
-original's rapped syllables instead of one. Built for rap, where the analysis
-gives a slot to nearly every syllable and a bank syllable on each one comes
-out as far too many words, far too fast. A group never crosses a phrase, ends
-at the widest gap among the sizes it is allowed to be (the nearest thing to a
-word boundary a run of rapped syllables offers), and takes its pitch from its
-longest slot, the one the rapper actually leant on. `swallow_slots` in
-`mapping.py`; off by default. See `docs/WORKFLOWS.md`.
+`--swallow`, so one bank syllable sounds across several of the original's
+sung syllables instead of one, at a pace named in words of the original (`2.6`,
+or a range like `2-4`, whose mean is the only part used). Built for rap,
+where the analysis gives a slot to nearly every syllable and a bank syllable
+on each one comes out as far too many words, far too fast. The word count is
+converted to notes per bank syllable, and a phrase of N notes becomes
+`round(N / per_syllable)` slots kept as close to that mean as
+rounding allows, split evenly and then nudged up to `SWALLOW_SNAP_NOTES`
+notes toward the widest gap nearby, the nearest thing to a word boundary a run
+of sung syllables offers. A group never crosses a phrase, and takes its pitch
+from its longest slot, the one the rapper actually leant on. A voice of
+`--voices` may swallow at its own pace. `swallow_slots` in `mapping.py`; off
+by default. See `docs/WORKFLOWS.md`.
 
 **Unit**. One clip from the bank, and the thing actually placed on the melody.
 A unit may be one word (`bravo`), several words the singer ran together
