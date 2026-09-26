@@ -595,6 +595,16 @@ BANKS = {
 }
 DEFAULT_BANK = "ppbank"
 
+# --swallow LO-HI: each bank word swallows LO to HI of the original's words,
+# for rap, where a bank syllable on every rapped syllable came out as too many
+# words far too fast. The analysis finds syllables rather than words, so a
+# word is counted as this many notes. An estimate for Finnish rap, which runs
+# on short words (mä, on, se) between long ones, not a measurement; the run
+# report prints the notes each bank syllable actually took, so it can be
+# checked against the ear and moved.
+RAP_WORD_SYLLABLES = 2.5
+
+
 # Optional: snap placed word onsets to the beat grid from stage 2. Off by
 # default because in Mode A the original vocal's timing is already musical and
 # quantising it only makes the result stiffer. BEAT_SUBDIVISION is the grid

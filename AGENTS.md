@@ -189,15 +189,20 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   `docs/AI-FIRST.md`, dimension 12.
 - **The other voices for `--voices` are not in this repo.** They live in
   `AudiobookMaker`, a separate repo kept as read-only source material here and
-  never edited from this one. Its chatterbox_grandmom engine is "Isoäiti",
-  referenced by `assets/voices/grandmom_reference.wav`; named voice packs are
-  zips under `.local/ÄänipaketitÄpillä/` (keskisarja, lotta_harala,
-  lotta_interview_host, roni_arvonen, reader_00, reader_01), each
-  `<name>.abvpack.zip` holding `<name>/reference.wav`, `sample.wav` and
-  `meta.yaml`. Unzip into a scratch directory, never into `AudiobookMaker`
-  itself. Searching this repo for a voice name finds nothing; searching
-  `AudiobookMaker` finds them. See `docs/WORKFLOWS.md`, "Make a voice-converted
-  copy of a bank".
+  never edited from this one. Its chatterbox_grandmom engine is "Isoäiti", with
+  two reference recordings of her that are both actually her voice:
+  `assets/voices/grandmom_reference.wav`, and the Finnish path's own
+  `samples/reference_finnish.wav` in the `Finnish-NLP/Chatterbox-Finnish` HF
+  cache, which it clones from. The two measure 0.81 cosine similarity apart,
+  so either is a correct reference; how the Isoäiti bank was actually made
+  (text-to-speech, not voice conversion, for reasons that had nothing to do
+  with which reference was used) is in `docs/WORKFLOWS.md`, "Make a
+  voice-converted copy of a bank". Named voice packs are zips under
+  `.local/ÄänipaketitÄpillä/` (keskisarja, lotta_harala, lotta_interview_host,
+  roni_arvonen, reader_00, reader_01), each `<name>.abvpack.zip` holding
+  `<name>/reference.wav`, `sample.wav` and `meta.yaml`. Unzip into a scratch
+  directory, never into `AudiobookMaker` itself. Searching this repo for a
+  voice name finds nothing; searching `AudiobookMaker` finds them.
 - **`--voices` needs a speaker model this repo does not ship.**
   `pip install -e .[voices]` adds `speechbrain` plus four small dependencies
   (HyperPyYAML, ruamel.yaml, ruamel.yaml.clib, sentencepiece) and leaves torch
@@ -221,6 +226,17 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   the same checkout concurrently is only safe when the files being touched do
   not overlap and neither side runs a state-changing git command; give each
   agent its own working tree otherwise, per the standing rule on that.
+- **A converted voice can be wrong while every measurement says it is right.**
+  The Keskisarja bank converted cleanly toward his reference and sounded
+  right. The Isoäiti bank converted toward a reference that was measurably
+  correct (0.81 cosine similarity to the voice's own other reference) and at
+  close to her own pitch (her reference speaks at MIDI 52.8, the converted
+  clips measured 53.3), and it did not sound like her at all. The embedding score only agreed with the ear
+  after the fact, once a different route was tried: 0.40 similarity for the
+  voice-conversion clips that failed by ear, 0.53 for the text-to-speech
+  clips that worked. An embedding number is not a pass/fail test for a
+  converted or synthesised voice; listen before building the bank. See
+  `docs/WORKFLOWS.md`, "Make a voice-converted copy of a bank".
 - **A float WAV is not a pure function of its samples.** libsndfile writes a
   PEAK chunk holding the wall-clock time of the write, at byte 60. Two runs
   producing bit-identical audio therefore produce files that differ by that one

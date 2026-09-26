@@ -67,6 +67,7 @@ costs is the files.
 | `--seed 42` | Fix the arrangement seed; otherwise a new one each run |
 | `--raw-clips` | Ignore the standardised tier, sing the recordings as they are |
 | `--no-shift` | Words at their own recorded pitch |
+| `--swallow 2-4` | Fold 2-4 of the original's words into one bank syllable, for rap; see below |
 | `--rows 30` | Print more of the extracted note table |
 | `--json` | Machine-readable summary |
 
@@ -92,6 +93,11 @@ Output lands in `output/<song>/<bankA+bankB>/`, named by every voice joined
 with `+`, so a turn-taking render never lands in one of its own banks' folders
 and overwrites that bank's plain take. Still two files, conservative and wild,
 both at full mimicry.
+
+The first `--voices` render of a rap posse cut ("SMC Hoodrats") came back with
+too many words far too fast: a bank syllable on every rapped syllable is a
+machine gun of words at rap tempo. `--swallow`, below the render section for
+rap material, is what turned that into something melodic.
 
 Refused rather than attempted: fewer than two distinct banks (use `--bank` for
 one), `--words-dir` (`--voices` names banks from the bank table), and
@@ -136,7 +142,11 @@ measurement.
 
 For turning an existing bank into a second voice that says the same words with
 the same takes and the same sung delivery, only in a different timbre. Voice
-conversion keeps the delivery; text-to-speech would not.
+conversion keeps the delivery; text-to-speech would not, which is why it is
+the first thing to try. It worked by ear for a male voice, Keskisarja, on this
+material. It did not for a female one, Isoäiti, even though nothing about the
+recipe below measured as wrong; see "When it does not sound like the voice"
+below before assuming a converted bank is fine because the numbers are.
 
 1. Start from the bank's **source** clips, the hand-named recordings a bank
    was built from (for `ppbank`, that is `words_hq`), not the built bank
@@ -172,6 +182,98 @@ much more than that means the conversion changed the pacing and the syllable
 boundaries `build_bank` measures will be off. Register the new bank in
 `vocabulary_local.py` (bank names are local, kept out of this repository) or
 point `--words-dir` at it directly.
+
+**When it does not sound like the voice.** The Isoäiti bank, converted by the
+recipe above, measured fine and did not sound like her at all. Checked and
+ruled out, in order:
+
+- **The reference file.** `assets/voices/grandmom_reference.wav` and
+  AudiobookMaker's own Finnish path (`samples/reference_finnish.wav`, cloned
+  from the `Finnish-NLP/Chatterbox-Finnish` HF cache) measure 0.81 cosine
+  similarity apart, so they are the same voice; the reference was not the
+  cause. Redoing the conversion against `reference_finnish.wav` still only
+  reached 0.40 similarity to her own reference, against 0.45 for Keskisarja's
+  voice-converted clips.
+- **Pitch.** Her reference speaks at MIDI 52.8 (E3); the converted clips
+  measured 53.3, close to it and nowhere near the song's own median of 49.7
+  (D3).
+
+What worked instead was text-to-speech through AudiobookMaker's own Finnish
+path, not voice conversion of the sung source:
+
+1. Import `_load_engine("cuda", None, language="fi")` and
+   `_generate_chunk(engine, text, "fi", ref)` from
+   `scripts/generate_chatterbox_audiobook.py` (import only; AudiobookMaker is
+   never edited), run in AudiobookMaker's `.venv-chatterbox`.
+2. One utterance per `ppbank` phrase, spoken as plain text (`"Paska! Perse!
+   Pillu!"`, `"Eeeeee!"` for the shout), two takes each: 30 clips in total.
+3. Write each take directly as `<word-word>_<n>.wav` so `build_bank` parses it
+   without a separate naming pass.
+4. Trim at `top_db 45`, keeping 80 ms after the last sound so a decaying final
+   vowel survives. Reroll any take outside 0.2-1.3 s per word (none needed
+   here).
+5. `build_bank --candidates words_isoaiti_src/candidates --out words_isoaiti`.
+
+Similarity to her reference came out at 0.53, better than the failed
+conversion's 0.40, but that number only agreed with the ear after the ear had
+already decided. An embedding score is not a pass/fail test for a converted
+or synthesised voice; listen before building the bank.
+
+---
+
+## Slow rap down before singing it: `--swallow`
+
+```powershell
+.\.venv\Scripts\song-generator.exe input\song.mp4 --swallow 2-4
+```
+
+For rap and anything else where the melody gives close to one note per sung
+syllable. A bank syllable placed on every one of them is a machine gun of
+words at rap tempo, far more than the genre can carry as singing.
+`--swallow LO-HI` folds LO to HI of the original's words into one bank
+syllable before the words are planned, so that syllable sounds for as long as
+the group it swallowed and is pronounced along with it, which is what reads
+as melodic rather than rushed. A single number (`--swallow 3`) swallows
+exactly that many. Off by default: this is for material dense enough to need
+it.
+
+A swallowed run needs its bank plans laid over fewer, wider slots, so it also
+places fewer, longer units. Filenames carry the setting,
+`smc_hoodrats.conservative.swallow2-4.mp3`, combined with any other tag by
+`join_tags` (`mim0p60.swallow2-4`), so a swallowed take never lands on top of
+a plain one.
+
+**What is actually folded.** `swallow_slots` in `mapping.py` groups
+consecutive slots within one phrase; a group never crosses a phrase boundary.
+A group ends at the widest gap among the sizes it is allowed to be, the
+nearest thing to a word boundary a run of rapped syllables offers. A phrase's
+leftover shorter than LO joins the group before it, and a phrase holding
+fewer than LO slots becomes one group of its own. The group's slot takes its
+onset from the first note, its offset from the last, and its pitch from the
+longest note in it, the one the rapper actually leant on.
+
+**Words to notes.** The analysis measures notes, roughly one per rapped
+syllable, but `--swallow` is asked in the original's *words*. Each bank
+syllable is asked to swallow `--swallow`'s word count times
+`RAP_WORD_SYLLABLES` (2.5 in `config.py`, an estimate for Finnish rap, which
+runs on short words between long ones, not a measurement) divided by the
+bank's own mean syllables per word. `--swallow 2-4` against a bank averaging
+2.12 syllables per word came out as 2-5 notes per bank syllable. The run
+report prints the notes-per-syllable figure it actually used; check that
+against the ear rather than the word count typed on the command line.
+
+**Measured on "SMC Hoodrats".** `--swallow 2-4` folded 998 slots to 323;
+placed 223 units conservative and 244 wild, against 92 and 95 after folding;
+came out at a median time-fit of 0.59x natural speed (clips slowed to about
+1.7x, inside `TIME_STRETCH_RANGE`); mimicry 0.97 both levels; 5% of syllables
+octave-folded. For reference, `--swallow 3-5` gives 4-6 notes per syllable,
+211 slots, and a median slot of 1.10 s; `--swallow 2-4` itself gives a median
+slot of 0.61 s against 0.17 s unswallowed.
+
+**Replaying an arrangement.** A saved arrangement is laid over the slots it
+was drawn against, so replaying it with `--arrangement` needs the same
+`--swallow` value the render was made with. A different value folds the
+slots differently and the arrangement no longer lines up with them.
 
 ---
 

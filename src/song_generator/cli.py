@@ -18,6 +18,7 @@ from .detect import detect_vocal
 from .mapping import (
     BankError,
     clean_slots,
+    swallow_slots,
     decide_shifts,
     load_bank,
     mimicry,
@@ -51,6 +52,44 @@ If you believe this song DOES have vocals, the numbers above show which test
 drew the line -- the thresholds are all in src/song_generator/config.py under
 "STAGE 1b".\
 """
+
+
+def swallow_range(text: str) -> tuple[int, int]:
+    """--swallow's value: "2-4", or "3" for exactly three."""
+    lo, _, hi = text.partition("-")
+    try:
+        pair = (int(lo), int(hi or lo))
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"expected a word count or a range like 2-4, got {text!r}") from None
+    if not 1 <= pair[0] <= pair[1]:
+        raise argparse.ArgumentTypeError(
+            f"expected 1 <= LO <= HI, got {text!r}")
+    return pair
+
+
+def swallow_notes(words: tuple[int, int], units) -> tuple[int, int]:
+    """Words to swallow per bank word, as notes per bank syllable.
+
+    The analysis finds notes, one per sung syllable, and the planner puts one
+    bank syllable on each slot. So a bank word swallowing N words needs each
+    of its syllables to take N * RAP_WORD_SYLLABLES notes, shared out over the
+    syllables the bank's words have on average.
+    """
+    words_held = sum(len(u.words) for u in units)
+    bank_syllables = (sum(u.syllables for u in units) / words_held
+                      if words_held else 1.0)
+    lo, hi = (max(1, round(w * config.RAP_WORD_SYLLABLES / bank_syllables))
+              for w in words)
+    return lo, max(lo, hi)
+
+
+def swallow_word(args: argparse.Namespace) -> str | None:
+    """--swallow as it is spelled in a filename: swallow2-4."""
+    if args.swallow is None:
+        return None
+    lo, hi = args.swallow
+    return f"swallow{lo}" if lo == hi else f"swallow{lo}-{hi}"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -88,6 +127,11 @@ def build_parser() -> argparse.ArgumentParser:
                    help="sing from several banks, the voice changing wherever "
                         "the original singer does, in the order given; "
                         "replaces --bank [needs: pip install -e .[voices]]")
+    p.add_argument("--swallow", type=swallow_range, default=None, metavar="LO-HI",
+                   help="each bank word swallows LO to HI of the original's "
+                        "words, sounding across them and following their "
+                        "tune, for rap, where one bank syllable per rapped "
+                        "syllable is far too many words; e.g. 2-4")
     p.add_argument("--raw-clips", action="store_true",
                    help="sing from the recorded clips even when a standardised "
                         "tier exists beside them")
@@ -237,7 +281,18 @@ def variant_tag(args: argparse.Namespace) -> str | None:
     ladder gives its own top rung.
     """
     if args.arrangement:
-        return "replay"
+        return join_tags("replay", swallow_word(args))
+    return join_tags(_shift_tag(args), swallow_word(args))
+
+
+def join_tags(*tags: str | None) -> str | None:
+    """Several filename tags as one, in order, skipping the absent ones."""
+    present = [t for t in tags if t]
+    return ".".join(present) if present else None
+
+
+def _shift_tag(args: argparse.Namespace) -> str | None:
+    """The shift part of variant_tag: a rung, --mix or --no-shift."""
     if args.no_shift:
         return "noshift"
     if args.mix is not None:
@@ -546,6 +601,14 @@ def main(argv: list[str] | None = None) -> int:
     units = [u for _, _, _, voice_units in voices for u in voice_units]
 
     slots, merged, split = clean_slots([n.__dict__ for n in analysis.notes])
+    if args.swallow is not None:
+        notes_lo, notes_hi = swallow_notes(args.swallow, units)
+        before = len(slots)
+        slots = swallow_slots(slots, notes_lo, notes_hi)
+        if not args.json:
+            print(f"  swallow   each bank word over {args.swallow[0]}-"
+                  f"{args.swallow[1]} of the song's words: {notes_lo}-{notes_hi}"
+                  f" notes per bank syllable, {before} -> {len(slots)} slots")
 
     unreachable = {name: arrange.unreachable_words(voice_units)
                    for name, _, _, voice_units in voices}
@@ -686,7 +749,8 @@ def main(argv: list[str] | None = None) -> int:
                 # Every rung of a ladder is tagged, including the top one:
                 # seven files have to be told apart from each other, and
                 # mim1p00 is what the ladder has always called that file.
-                path = versioned_name(output, label, tag=rung_word(target))
+                path = versioned_name(output, label, tag=join_tags(
+                    rung_word(target), swallow_word(args)))
 
             word_bus = render(word_plan, stems.instrumental.shape[1], config.SAMPLE_RATE,
                               shift=not args.no_shift, engine=args.engine, cache=cache)

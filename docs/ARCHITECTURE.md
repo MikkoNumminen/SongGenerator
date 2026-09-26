@@ -62,7 +62,7 @@ song.mp4
 | `separate.py` | Demucs or Mel-Band Roformer behind one interface, cached | `separate`, `Stems` |
 | `detect.py` | Mode A vs Mode B, with the numbers behind the verdict | `detect_vocal`, `VocalReport` |
 | `analysis.py` | Melody and syllable timing out of the original vocal | `analyse`, `Analysis` |
-| `mapping.py` | Every arrangement decision, plus render and mix | `load_bank`, `plan_words`, `render`, `mix` |
+| `mapping.py` | Every arrangement decision, plus render and mix | `load_bank`, `swallow_slots`, `plan_words`, `render`, `mix` |
 | `banks.py` | Per-bank behaviour from `bank.json`: which strategy each level uses, and its overrides | `strategy_for`, `overrides_for` |
 | `turns.py` | Who is singing when, so `--voices` can switch banks wherever the original singer changes | `detect`, `load_or_detect`, `take_turns` |
 | `pitchshift.py` | WORLD or Rubber Band; octave folding; unvoiced frames restored from the source | `render_unit`, `fold_shift` |

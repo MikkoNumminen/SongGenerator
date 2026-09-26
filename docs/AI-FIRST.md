@@ -322,6 +322,18 @@ what a fresh agent needs, and what changed is their content, not whether the
 category exists. The score stands at 8.9 until something in the next session
 argues it should move.
 
+A later session found a second thing worth recording here: a voice-converted
+bank can be wrong while every measurement says it is right. The Isoäiti bank
+converted cleanly toward a reference that turned out to be the correct voice
+(0.81 cosine similarity to AudiobookMaker's own Finnish reference) and at
+close to the right pitch, and it still did not sound like her. Only listening
+caught it; the embedding and pitch numbers agreed with the ear only after the
+fact, once text-to-speech through AudiobookMaker's Finnish path was tried
+instead and worked. That recipe, and the numbers behind ruling out the
+reference and the pitch first, are now in `docs/WORKFLOWS.md`; the trap is now
+in `AGENTS.md`. Same as above: this is what got written down, not a rubric
+argument, so the score stands at 8.9, still not rescored.
+
 ---
 
 ## Current: 8.9

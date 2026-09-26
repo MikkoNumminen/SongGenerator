@@ -393,6 +393,57 @@ def clean_slots(notes: list[dict]) -> tuple[list[Slot], int, int]:
     return final, merged, split
 
 
+def swallow_slots(slots: list[Slot], lo: int, hi: int) -> list[Slot]:
+    """Fold every run of lo..hi notes into one slot, so a syllable swallows them.
+
+    Rap gives a note to every syllable, and a bank syllable on every one of
+    them comes out as a machine gun of words at rap speed. Swallowing hands
+    each bank syllable several of the original's syllables instead: it sounds
+    for as long as they did, takes its onset from the first and its pitch from
+    the longest of them, which is the one the rapper leant on. The word still
+    lands where the rapper's words did; there are just fewer of it.
+
+    A group ends at the widest gap among the places it may end, which is the
+    nearest thing to a word boundary a stream of syllables offers. Groups
+    never cross a phrase. A phrase's remainder shorter than lo joins the group
+    before it, and a phrase holding fewer than lo notes becomes one group.
+    """
+    if lo < 1 or hi < lo:
+        raise ValueError(f"swallow needs 1 <= lo <= hi, got {lo}-{hi}")
+    out: list[Slot] = []
+    i = 0
+    while i < len(slots):
+        j = i
+        while j + 1 < len(slots) and slots[j + 1].phrase == slots[i].phrase:
+            j += 1
+        phrase = slots[i:j + 1]
+        groups: list[list[Slot]] = []
+        k = 0
+        while k < len(phrase):
+            left = len(phrase) - k
+            if left <= hi:
+                size = left
+            else:
+                # Candidate ends: after lo..hi notes, but never leaving a
+                # remainder too short to be a group of its own.
+                ends = [n for n in range(lo, hi + 1) if left - n >= lo] or [lo]
+                size = max(ends, key=lambda n: phrase[k + n].onset_s
+                           - phrase[k + n - 1].offset_s)
+            groups.append(phrase[k:k + size])
+            k += size
+        if len(groups) > 1 and len(groups[-1]) < lo:
+            # Popped first: `groups[-2] += groups.pop()` stores to -2 after
+            # the pop has already moved it.
+            tail = groups.pop()
+            groups[-1] += tail
+        for g in groups:
+            longest = max(g, key=lambda s: s.dur_s)
+            out.append(Slot(g[0].onset_s, g[-1].offset_s, longest.midi,
+                            g[0].phrase, max(s.rms_db for s in g)))
+        i = j + 1
+    return out
+
+
 def _split_long(group: list[Slot]) -> list[list[Slot]]:
     """Break a phrase that runs longer than a phrase should, at its widest gap.
 

@@ -19,6 +19,16 @@ already massaged toward a mapping decision.
 `PHRASE_GAP_S` between them. A sung line. Words never straddle a phrase
 boundary.
 
+**Swallow**. Folding several consecutive slots into one before planning, for
+`--swallow LO-HI`, so one bank syllable sounds across several of the
+original's rapped syllables instead of one. Built for rap, where the analysis
+gives a slot to nearly every syllable and a bank syllable on each one comes
+out as far too many words, far too fast. A group never crosses a phrase, ends
+at the widest gap among the sizes it is allowed to be (the nearest thing to a
+word boundary a run of rapped syllables offers), and takes its pitch from its
+longest slot, the one the rapper actually leant on. `swallow_slots` in
+`mapping.py`; off by default. See `docs/WORKFLOWS.md`.
+
 **Unit**. One clip from the bank, and the thing actually placed on the melody.
 A unit may be one word (`bravo`), several words the singer ran together
 (`tango+delta+tango`), a shout (`aah`), or a word spelled from syllable clips.
