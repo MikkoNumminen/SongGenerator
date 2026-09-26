@@ -242,14 +242,18 @@ def detect(vocal: np.ndarray, sr: int, notes: list[dict],
     return from_labels(centres, labels, duration)
 
 
-def fingerprint(vocal: np.ndarray, notes: list[dict] | None = None) -> str:
-    """Which vocal stem, and which notes in it, the turns were measured on.
+def fingerprint(vocal: np.ndarray) -> str:
+    """Which vocal stem the turns were measured on.
 
     The settings alone cannot say: separating a song again, with --force or
     another separator, writes new stems to the same paths, and turns measured
-    on the old stem would then be laid over the new one without a word. The
-    notes decide which windows are embedded at all, so a change in the melody
-    analysis measures again too.
+    on the old stem would then be laid over the new one without a word.
+
+    The notes are left out on purpose, although they decide which windows are
+    embedded. The melody analysis runs again on every render and is not
+    bit-stable: one song came back with 1004, 998 and 988 notes on three runs.
+    Keyed on them, the turns were measured again on every render and every
+    hand edit moved aside each time.
 
     Every 64th sample rather than all of them: a stem is a hundred megabytes,
     this runs on every multi-voice render, and a stem separated again differs
@@ -257,11 +261,8 @@ def fingerprint(vocal: np.ndarray, notes: list[dict] | None = None) -> str:
     """
     import hashlib
 
-    digest = hashlib.sha1(np.ascontiguousarray(
-        np.asarray(vocal, dtype=np.float32)[..., ::64]).tobytes())
-    for n in notes or []:
-        digest.update(f"{n['onset_s']:.3f}:{n['dur_s']:.3f};".encode())
-    return digest.hexdigest()
+    return hashlib.sha1(np.ascontiguousarray(
+        np.asarray(vocal, dtype=np.float32)[..., ::64]).tobytes()).hexdigest()
 
 
 def _read_turns(path: Path, saved) -> list[Turn]:
@@ -304,10 +305,11 @@ def load_or_detect(work: Path, vocal: np.ndarray, sr: int, notes: list[dict],
     Returns the turns, whether they came from the cache, and where the file
     they replaced was moved when they did not. The file is documented as
     editable by hand, so measuring again never simply writes over it: the
-    one before goes to turns.previous.json, hand edits and all.
+    one before goes to turns.previous.json, or the next free
+    turns.previousN.json, hand edits and all.
     """
     path = Path(work) / TURNS_FILE
-    stem = fingerprint(vocal, notes)
+    stem = fingerprint(vocal)
     if path.is_file():
         try:
             saved = json.loads(path.read_text(encoding="utf-8"))
@@ -321,7 +323,13 @@ def load_or_detect(work: Path, vocal: np.ndarray, sr: int, notes: list[dict],
                    model_dir=Path(work).parent / "models" / "spkrec")
     previous = None
     if path.is_file():
+        # Numbered rather than one name reused, so a second measurement does
+        # not write over the hand edits the first one moved aside.
         previous = path.with_name("turns.previous.json")
+        k = 2
+        while previous.exists():
+            previous = path.with_name(f"turns.previous{k}.json")
+            k += 1
         path.replace(previous)
     tmp = path.with_name(f".{path.name}.tmp")
     tmp.write_text(json.dumps({"settings": settings(), "vocal": stem,

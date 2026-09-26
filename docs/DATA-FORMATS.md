@@ -204,13 +204,17 @@ against the same song and the same config.
 
 `vocal` is a SHA-1 of the vocal stem the turns were measured on (every 64th
 sample, since a stem is a hundred megabytes and this runs on every multi-voice
-render) and of the notes the melody analysis found in it, which decide which
-windows are embedded at all. Separating a song again (`--force`, or another
-separator) writes new stems to the same paths, and turns measured on the old
-stem would otherwise be laid over the new one. A different stem or different
-notes are measured again. The file it replaces is never written over: it is
-moved to `turns.previous.json` beside it, hand edits and all, and the run says
-so, so a boundary moved by hand can be copied across into the new file.
+render). Separating a song again (`--force`, or another separator) writes new
+stems to the same paths, and turns measured on the old stem would otherwise be
+laid over the new one. The notes are left out of it on purpose, although they
+decide which windows are embedded: the melody analysis runs again on every
+render and is not bit-stable (one song gave 1004, 998 and 988 notes on three
+runs), and keyed on them the turns were measured again every time.
+
+A file that is measured again is never written over: it is moved to
+`turns.previous.json`, or the next free `turns.previousN.json`, hand edits and
+all, and the run says where, so a boundary moved by hand can be copied across
+into the new file.
 
 A hand edit that cannot be used is refused with an error naming the file:
 a turn missing `start_s`, `end_s` or `speaker`, a value that is not a number,

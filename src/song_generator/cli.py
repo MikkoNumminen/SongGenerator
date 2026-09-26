@@ -63,14 +63,16 @@ def swallow_range(text: str) -> tuple[str | None, float, float]:
     because that is how the words to swallow are naturally described.
     """
     voice, _, spec = text.rpartition("=")
-    lo, _, hi = spec.partition("-")
+    lo, dash, hi = spec.partition("-")
     try:
+        if dash and not hi:
+            raise ValueError("a range with no end")
         lo_f, hi_f = float(lo), float(hi or lo)
     except ValueError:
         raise argparse.ArgumentTypeError(
             f"expected a word count, a range like 2-4, or VOICE=2.4,"
             f" got {text!r}") from None
-    if not 0 < lo_f <= hi_f:
+    if not (0 < lo_f <= hi_f < float("inf")):
         raise argparse.ArgumentTypeError(f"expected 0 < LO <= HI, got {text!r}")
     return (voice or None), lo_f, hi_f
 
@@ -297,26 +299,40 @@ def arrange_voices(voices, voice_slots, turns, level: str, seed: int,
     take and nothing else, so its log reads as what was heard.
     """
     n = len(voices)
-    # A voice that owns no turn, when fewer turns were found than there are
-    # voices, would be judged on nothing and spend every redraw on it.
-    heard = {k % n for k in range(len(turns))} if n > 1 else {0}
-    plans, whole, draws = [], [], []
-    for v, (name, voice_dir, singing_from, units) in enumerate(voices):
-        if v not in heard:
-            silent = Plan()
-            plans.append(silent)
-            whole.append(arrange.describe(silent, song, str(singing_from),
-                                          level, seed))
-            draws.append(0)
+    # How long each voice sings. A voice that owns no turn, when fewer turns
+    # were found than there are voices, would be judged on nothing and spend
+    # every redraw on it, so it is not planned.
+    owned = [sum(t.end_s - t.start_s for k, t in enumerate(turns) if k % n == v)
+             for v in range(n)] if n > 1 else [1.0]
+    plans: list = [None] * n
+    whole: list = [None] * n
+    draws = [0] * n
+    # Coverage is for the take, not for each voice: the voice singing longest
+    # is asked for every required word, and each after it only for what the
+    # voices before it have not said.
+    said: set[str] = set()
+    paired = False
+    for v in sorted(range(n), key=lambda i: -owned[i]):
+        name, voice_dir, singing_from, units = voices[v]
+        if owned[v] <= 0:
+            plans[v] = Plan()
+            whole[v] = arrange.describe(plans[v], song, str(singing_from),
+                                        level, seed)
             continue
         sings = None if n == 1 else (
             lambda t, v=v: take.voice_of(turns, n, t) == v)
         plan, described, tries = arrange.build(
             voice_slots[name], units, level, seed, song=song,
-            bank=str(singing_from), bank_dir=voice_dir, sings=sings)
-        plans.append(plan)
-        whole.append(described)
-        draws.append(tries)
+            bank=str(singing_from), bank_dir=voice_dir, sings=sings,
+            wanted=None if n == 1 else set(arrange.required_words()) - said,
+            pairing=not paired)
+        plans[v], whole[v], draws[v] = plan, described, tries
+        if n > 1:
+            sung = arrange.describe(
+                Plan(placements=[p for p in plan.placements if sings(p.onset_s)]),
+                song, str(singing_from), level, seed)
+            said |= sung.words_used()
+            paired = paired or sung.has_pairing()
     if n == 1:
         return plans[0], whole, draws, [0] * len(plans[0].placements)
 
@@ -782,7 +798,6 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  swallow{who}  each bank word over {words:g} of the song's"
                   f" words: {per:.2f} notes per bank syllable,"
                   f" {len(slots)} -> {len(voice_slots[name])} slots")
-    slots = voice_slots[names[0]]
 
     unreachable = {name: arrange.unreachable_words(voice_units)
                    for name, _, _, voice_units in voices}

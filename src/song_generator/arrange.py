@@ -404,7 +404,9 @@ def render_text(arr: Arrangement) -> str:
         # --swallow reads exactly as every log before this line existed.
         words = ("" if arr.swallow_words is None
                  else f" from {arr.swallow_words:g} words")
-        out.append(f"#   swallow {arr.swallow:.4f}{words}")
+        # Written in full: rebuilt from a rounded figure, round(n / per)
+        # could land a phrase near a half on the other side and move a slot.
+        out.append(f"#   swallow {arr.swallow!r}{words}")
     phrase = None
     for line in arr.lines:
         if line.phrase != phrase:
@@ -591,7 +593,8 @@ def unit_for(words: list[str], pool: list[Unit], by_word: dict[str, list[Unit]],
 def build(slots, units: list[Unit], level: str, seed: int,
           song: str = "", bank: str = "",
           bank_dir: Path | None = None,
-          sings=None) -> tuple[Plan, Arrangement, int]:
+          sings=None, wanted: set[str] | None = None,
+          pairing: bool = True) -> tuple[Plan, Arrangement, int]:
     """One arrangement, redrawn until it says every required word.
 
     Coverage is checked after the fact rather than forced during planning,
@@ -615,6 +618,12 @@ def build(slots, units: list[Unit], level: str, seed: int,
     placements that will sing, the redraws and the relaxing of preferences
     below work on the coverage that matters. The plan returned is still the
     whole song's.
+
+    wanted and pairing narrow what counts as covered, for a voice whose
+    turns are one of several: the words the voices before it have already
+    said need not be said again, and neither does the pairing once one of
+    them has it. Asking every voice for every word in its own turns made a
+    voice with one short turn spend every draw and relax every preference.
     """
     from . import banks
     from .mapping import plan_sequence, plan_words
@@ -667,7 +676,7 @@ def build(slots, units: list[Unit], level: str, seed: int,
         # so a write into the module dict would leak this bank's taste into
         # every later song.
         params.update(banks.overrides_for(bank_dir, level))
-    wanted = set(required_words())
+    wanted = set(required_words()) if wanted is None else set(wanted)
     tries = max(1, int(config.PLAY_COVERAGE_TRIES))
 
     # A word no clip contains cannot be found by redrawing, and spending the
@@ -680,7 +689,7 @@ def build(slots, units: list[Unit], level: str, seed: int,
     # The pairing counts as coverage, not as an aesthetic preference. It is the
     # one thing the bank is built around, and a song without it anywhere reads
     # as a song missing its payoff rather than as a song that varied.
-    possible = any(u.is_shout_pairing for u in units)
+    possible = pairing and any(u.is_shout_pairing for u in units)
 
     def scored(arrangement) -> tuple[int, int]:
         return (len(wanted & arrangement.words_used()),
