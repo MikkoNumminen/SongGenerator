@@ -228,12 +228,12 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   agent its own working tree otherwise, per the standing rule on that.
 - **A converted voice can be wrong while every measurement says it is right.**
   The Keskisarja bank converted cleanly toward his reference and sounded
-  right. The Isoäiti bank converted toward a reference that was measurably
-  correct (0.81 cosine similarity to the voice's own other reference) and at
-  close to her own pitch (her reference speaks at MIDI 52.8, the converted
-  clips measured 53.3), and it did not sound like her at all. The embedding score only agreed with the ear
-  after the fact, once a different route was tried: 0.40 similarity for the
-  voice-conversion clips that failed by ear, 0.53 for the text-to-speech
+  right. The Isoäiti bank was converted toward a reference that was
+  measurably hers (0.81 cosine similarity to her other reference), at her
+  own pitch (her reference speaks at MIDI 52.8, the converted clips measured
+  53.3), and it did not sound like her at all. The embedding score only
+  agreed with the ear after a different route was tried: 0.40 similarity for
+  the voice-conversion clips that failed by ear, 0.53 for the text-to-speech
   clips that worked. An embedding number is not a pass/fail test for a
   converted or synthesised voice; listen before building the bank. See
   `docs/WORKFLOWS.md`, "Make a voice-converted copy of a bank".
