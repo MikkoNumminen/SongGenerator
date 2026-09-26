@@ -353,9 +353,12 @@ Inside every range the original vocal stem goes back onto the bed with a
 make that hold whatever the planner does, and none of them cuts a word:
 
 - A slot that touches a range at all is dropped, and the range is widened to
-  cover that slot whole. The singer's note is then put back from where it
-  started, instead of leaving a stretch with neither a word nor the original
-  and then the note coming in halfway.
+  cover that slot whole, repeatedly, until no slot touches the widened range.
+  The singer's note is then put back from where it started, instead of leaving
+  a stretch with neither a word nor the original and then the note coming in
+  halfway. Two ranges closer together than their two fades are joined, since
+  faded separately they dipped to neither the original nor a word between
+  them.
 - The first slot after a range is a hard break (`Slot.hard_break`), which
   `group_phrases` and `swallow_slots` both respect. Without it `--swallow`
   folded the last note before a range and the first after it into one slot
@@ -383,9 +386,18 @@ The files are tagged `keep` plus a short hash of the merged ranges, e.g.
 and the same ranges typed again replace the take they made, which is kept in
 `previous/`. A range starting after the song ends is refused as the typo it
 is, and so is `--no-words`, which writes the band alone. The `.arr` log
-records the ranges in a `keep` header line, and `--arrangement` brings them
-back with it; an explicit `--keep-original` that disagrees with the log is
-refused, since the lines were laid over the slots the log's ranges left.
+records the ranges exactly in a `keep` header line, and `--arrangement` brings
+them back with it, checked against the song's length like any other; an
+explicit `--keep-original` that disagrees with the log is refused, since the
+lines were laid over the slots the log's ranges left.
+
+**Known limits, left as they are.** A bank that recites (`sequence` or
+`shuffled` in its `bank.json`) loses the unit that would ring into a kept
+range, and for such a bank the order is the content, so the recitation skips a
+line at each range. Replaying such a take also re-lays the remaining units end
+to end, so it does not come back exactly. Keeping the line would mean ending
+the recitation cursor at the range and pacing the unit into the time left,
+which is planner work that no song has needed yet.
 
 **The ranges are given by hand, on purpose.** A detector was tried: whistling
 is close to a pure tone, so frames with at least 60% of their 150 Hz to 8 kHz

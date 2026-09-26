@@ -232,3 +232,54 @@ class TestReplay:
         text = text.replace("# Words available", "#   keep    24-soon\n# Words available")
         with pytest.raises(arrange.ArrangementError, match="kept ranges"):
             arrange.parse_text(text)
+
+
+class TestThirdReview:
+    def test_ranges_closer_than_their_fades_are_joined(self):
+        """Faded separately, two ranges 50 ms apart dipped to neither the
+        original nor a word between them."""
+        _, _, widened = keep.outside([], [(60.0, 69.0), (69.05, 78.0)])
+        assert widened == [(60.0, 78.0)]
+
+    def test_a_slot_taken_in_by_the_widening_is_dropped_too(self):
+        """B does not touch the range as given, but lies inside the stretch
+        the straddling slot A widened it to."""
+        a = Slot(0.9, 1.1, 60, 0)
+        b = Slot(0.85, 0.95, 60, 0)
+        kept, dropped, widened = keep.outside([b, a], [(1.0, 2.0)])
+        assert kept == [] and dropped == 2
+        assert widened == [(0.85, 2.0)]
+
+    def test_the_log_keeps_the_ranges_exactly(self):
+        """Rounded, an edge could move past a slot's end and a replay would
+        cut a different set of slots than the take."""
+        from song_generator import arrange
+        word = list(config.WORD_SYLLABLES)[0]
+        arr = arrange.Arrangement("song", "bank", "wild", 7, [
+            arrange.Line(0, 1.0, 1, [word])], keep=[(24.004, 30.0)])
+        assert arrange.parse_text(arrange.render_text(arr)).keep == [(24.004, 30.0)]
+
+    def test_words_that_ring_in_are_not_counted_as_sung(self, monkeypatch):
+        """Dropped after planning, their slots came off the report too."""
+        from factories import make_unit
+        from song_generator import arrange
+        from song_generator.mapping import Placement, Plan
+        word = list(config.WORD_SYLLABLES)[0]
+
+        def placement(at, length):
+            return Placement(unit=make_unit([word], per_word=length), onset_s=at,
+                             slot_span_s=length, play_s=length, n_slots=2,
+                             phrase=0, split=False, target_s=length)
+
+        def build(slots, units, level, seed, song="", bank="", bank_dir=None,
+                  sings=None):
+            plan = Plan(placements=[placement(0.0, 0.5), placement(0.8, 0.6)],
+                        slots_used=4, slots_total=10)
+            return plan, arrange.describe(plan, song, bank, level, seed), 1
+
+        monkeypatch.setattr(arrange, "build", build)
+        plan, _, _, _ = cli.arrange_voices(
+            [("a", None, "a", [])], {"a": []}, [], "wild", 1, "song",
+            kept=[(1.0, 2.0)])
+        assert [p.onset_s for p in plan.placements] == [0.0]
+        assert plan.slots_used == 2

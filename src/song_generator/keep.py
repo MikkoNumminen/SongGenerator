@@ -82,10 +82,12 @@ def parse_ranges(text: str) -> list[tuple[float, float]]:
     return merge(ranges)
 
 
-def merge(ranges: Sequence[tuple[float, float]]) -> list[tuple[float, float]]:
+def merge(ranges: Sequence[tuple[float, float]],
+          gap: float = 0.0) -> list[tuple[float, float]]:
+    """Sorted, with overlapping ranges joined, and any closer than gap."""
     out: list[list[float]] = []
     for s, e in sorted(ranges):
-        if out and s <= out[-1][1]:
+        if out and s <= out[-1][1] + gap:
             out[-1][1] = max(out[-1][1], e)
         else:
             out.append([s, e])
@@ -118,13 +120,21 @@ def outside(slots: list, ranges: Sequence[tuple[float, float]]
     The kept slots are renumbered into phrases that never span a range, so no
     planner can join the notes on either side of one.
     """
-    kept, spans = [], list(ranges)
-    for s in slots:
-        if any(s.onset_s < e and s.offset_s > b for b, e in ranges):
-            spans.append((s.onset_s, s.offset_s))
-        else:
-            kept.append(s)
-    widened = merge(spans)
+    # Two ranges closer than their two fades would dip to neither the
+    # original nor a word between them, so they are joined.
+    join = 2 * config.KEEP_ORIGINAL_FADE_S
+    widened = merge(ranges, join)
+    kept = list(slots)
+    # Widening can take in a slot that did not touch the ranges as given (a
+    # slot overlapping the one that straddled the edge), so the drop is
+    # repeated against the widened ranges until nothing more is taken in.
+    while True:
+        touching = [s for s in kept
+                    if any(s.onset_s < e and s.offset_s > b for b, e in widened)]
+        if not touching:
+            break
+        widened = merge(widened + [(s.onset_s, s.offset_s) for s in touching], join)
+        kept = [s for s in kept if s not in touching]
 
     renumbered, phrase, previous = [], -1, None
     for s in kept:

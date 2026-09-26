@@ -411,7 +411,9 @@ def render_text(arr: Arrangement) -> str:
         # could land a phrase near a half on the other side and move a slot.
         out.append(f"#   swallow {arr.swallow!r}{words}")
     if arr.keep:
-        out.append("#   keep    " + ",".join(f"{s:.2f}-{e:.2f}" for s, e in arr.keep))
+        # Written exactly: rounded, a range edge could move past a slot's end
+        # and the replay would cut a different set of slots than the take.
+        out.append("#   keep    " + ",".join(f"{s!r}-{e!r}" for s, e in arr.keep))
     phrase = None
     for line in arr.lines:
         if line.phrase != phrase:

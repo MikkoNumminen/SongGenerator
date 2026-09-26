@@ -340,9 +340,12 @@ def arrange_voices(voices, voice_slots, turns, level: str, seed: int,
                                         level, seed)
             continue
 
+        def heard(p):
+            return not (kept and keep.rings_into(p, kept))
+
         def sings(p, v=v):
             return ((n == 1 or take.voice_of(turns, n, p.onset_s) == v)
-                    and not (kept and keep.rings_into(p, kept)))
+                    and heard(p))
         plan, described, tries = arrange.build(
             voice_slots[name], units, level, seed, song=song,
             bank=str(singing_from), bank_dir=voice_dir,
@@ -350,8 +353,11 @@ def arrange_voices(voices, voice_slots, turns, level: str, seed: int,
             wanted=None if n == 1 else set(arrange.required_words()) - said,
             pairing=not paired)
         if kept:
-            plan.placements = [p for p in plan.placements
-                               if not keep.rings_into(p, kept)]
+            # The same rule coverage was judged by, so what is counted as
+            # heard is what is rendered.
+            silent = [p for p in plan.placements if not heard(p)]
+            plan.placements = [p for p in plan.placements if heard(p)]
+            plan.slots_used -= sum(p.n_slots for p in silent)
         plans[v], whole[v], draws[v] = plan, described, tries
         if n > 1:
             sung = arrange.describe(
@@ -841,8 +847,10 @@ def main(argv: list[str] | None = None) -> int:
             return EXIT_ERROR
         logged = replayed.keep or None
         given = args.keep_original or None
-        if given is not None and logged != [(round(a, 2), round(b, 2))
-                                             for a, b in given]:
+        if given is not None and (
+                logged is None or len(logged) != len(given)
+                or any(abs(a - c) > 1e-6 or abs(b - d) > 1e-6
+                       for (a, b), (c, d) in zip(logged, given))):
             print(f"error: {args.arrangement} was made with kept ranges"
                   f" {logged or 'none'}, and this run asks for {given}. The"
                   " lines were laid over the slots those ranges left; leave"
@@ -850,6 +858,12 @@ def main(argv: list[str] | None = None) -> int:
                   file=sys.stderr)
             return EXIT_ERROR
         args.keep_original = logged
+        if logged:
+            try:
+                keep.refuse_past_the_end(logged, duration)
+            except keep.KeepError as exc:
+                print(f"error: {args.arrangement} keeps {exc}", file=sys.stderr)
+                return EXIT_ERROR
 
     kept_ranges: list[tuple[float, float]] = []
     word_gate = None
