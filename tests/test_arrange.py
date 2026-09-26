@@ -804,3 +804,27 @@ class TestMalformedLinesAreRefusedByNumber:
         arrangement = parse_text("phrase 0\n  0:00.00  x2  delta\n")
         assert arrangement.seed == 0
         assert len(arrangement.lines) == 1
+
+
+def test_coverage_is_judged_on_the_moments_the_voice_sings(bank, slots):
+    """With --voices a build is told which moments it will be heard in. A
+    voice heard nowhere covers nothing, so every draw is spent, and the best
+    it found still comes back stamped with the bank's shift cap."""
+    calls = []
+
+    def sings(t):
+        calls.append(t)
+        return False
+
+    plan, _, _ = build(slots, bank, "wild", 5, sings=sings)
+    # Every draw was judged and none covered, so every draw was spent.
+    assert len(calls) >= max(1, int(config.PLAY_COVERAGE_TRIES)) * 5
+    assert plan.placements
+    assert all(p.shift_cap is not None for p in plan.placements)
+
+
+def test_heard_everywhere_is_the_same_as_not_saying(bank, slots):
+    a, _, draws_a = build(slots, bank, "wild", 5)
+    b, _, draws_b = build(slots, bank, "wild", 5, sings=lambda t: True)
+    assert draws_a == draws_b
+    assert [p.onset_s for p in a.placements] == [p.onset_s for p in b.placements]

@@ -67,8 +67,362 @@ costs is the files.
 | `--seed 42` | Fix the arrangement seed; otherwise a new one each run |
 | `--raw-clips` | Ignore the standardised tier, sing the recordings as they are |
 | `--no-shift` | Words at their own recorded pitch |
+| `--swallow 2-4` | Fold 2-4 of the original's words into one bank syllable, for rap; see below |
 | `--rows 30` | Print more of the extracted note table |
 | `--json` | Machine-readable summary |
+
+---
+
+## Sing a song with several voices taking turns
+
+```powershell
+.\.venv\Scripts\song-generator.exe input\song.mp4 --voices ppbank isoaiti
+```
+
+For a posse cut where several people sing: each turn is sung by the next bank
+in the list, cycling, switching wherever the original singer changes. Not one
+voice per singer. With more singers than voices, mapping singers to voices can
+put two different singers next to each other in the same voice, and the
+listener never hears the change; alternating at every turn is what makes the
+switch audible regardless of how many people are actually on the track.
+
+Needs the optional extra: `pip install -e .[voices]`. It installs
+`speechbrain`, which measures who is singing when.
+
+Output lands in `output/<song>/<bankA+bankB>/`, named by every voice joined
+with `+`, so a turn-taking render never lands in one of its own banks' folders
+and overwrites that bank's plain take. Still two files, conservative and wild,
+both at full mimicry.
+
+The first `--voices` render of a rap posse cut ("SMC Hoodrats") came back with
+too many words far too fast: a bank syllable on every rapped syllable is a
+machine gun of words at rap tempo. `--swallow`, below the render section for
+rap material, is what turned that into something melodic.
+
+Refused rather than attempted: fewer than two distinct banks (use `--bank` for
+one), a bank named twice (turns go round the list, so a repeat puts one voice
+on two turns in a row where the list wraps), `--bank` beside `--voices`,
+`--words-dir` (`--voices` names banks from the bank table), and
+`--arrangement` (a `--voices` run writes one log per voice and there is no
+replay of a multi-voice run yet). Banks whose `bank.json` declare different
+`word_bus_lufs` are refused too, since the voices share one word bus.
+
+Required words are judged on what the take will actually sing. Each voice is
+arranged over the whole song and then loses every placement outside its turns,
+so coverage judged over the whole song was met at the first draw while the
+words that met it went to the other voice. `arrange.build` takes `sings`, the
+placements its voice is heard in, and its own redraws and its relaxing of
+preferences work on those. The voices are planned longest-singing first: the
+first is asked for every required word, and each after it (`wanted`,
+`pairing`) only for what the voices before it have not said. Asking every
+voice for every word in its own turns made a voice with one short turn spend
+every draw and relax every preference. A first version redrew the whole set
+from outside instead, which cost up to 288 planner runs a level and never let
+the relaxation see the coverage that mattered. The run prints its own seed,
+and `--seed` with it brings the whole take back.
+
+At a handover the voices were planned apart, so the incoming voice's first
+words could start while the outgoing voice's last word was still sounding, for
+a second or more when the two swallow at different paces. Those incoming words
+are dropped whole until the outgoing word has finished; nothing is cut.
+
+When fewer turns are found than there are voices (one singer, or one cluster
+for several), the voices past the last turn own nothing. They are not planned
+at all, and the run says which of them sings nothing, instead of spending
+every coverage redraw on a voice nobody hears.
+
+**Known limits, left as they are.** Each was found in review and judged not
+worth its cost yet:
+
+- `--voices` and `--swallow` take several values, so they swallow the song's
+  path when written before it. Put the song first:
+  `song-generator.exe input\song.mp4 --voices a b`.
+- Coverage is judged on the placements whose onset is in a voice's turn, so a
+  required word placed in the first moment of a turn and then dropped at the
+  handover still counts as said; the report's line of words never said is
+  the check.
+- Arrangement logs are named by seed and level only, so a swallowed and an
+  unswallowed run at the same `--seed` write the same `.arr`.
+- The run report adds both banks' units together, so two banks holding a clip
+  of the same label print it as one.
+- A reciting bank (`sequence` or `shuffled`) is recited over the whole song
+  and then cut to its turns, so in its second turn it picks up the text where
+  it would have been had it read through the other voice's turn. Reciting
+  only on the voice's own turn slots would fix it.
+
+**How turns are found.** The vocal stem is cut into overlapping windows and
+each becomes a speaker embedding; windows cluster by voice, and a run of
+windows shorter than `TURN_MIN_S` is folded into its neighbours rather than
+treated as its own singer. The result is cached as `work/<song>/turns.json`
+together with the settings that produced it, and reused while a run's settings
+still match. See `docs/DATA-FORMATS.md` for the file.
+
+**Tuning `TURN_DISTANCE`.** This is the knob to reach for first, in
+`config.py`'s `STAGE 4b` block. It is the cosine distance at which two voices
+stop being merged into one cluster. Measured on a 5:43 rap posse cut (521
+voiced windows):
+
+| `TURN_DISTANCE` | Result |
+|---|---|
+| 0.6 | five turns, matching the track by ear: 40-91, 91-132, 132-234, 234-285, 285-306 s |
+| 0.55 | the same five turns, with more short blips absorbed |
+| 0.5 | 27 clusters: single verses split into pieces |
+| 0.4 | 74 clusters, about one per line |
+
+Raise it when two different singers come out as one turn; lower it when one
+singer's turn keeps splitting. `TURN_MIN_S` (4.0 s as shipped) is the second
+knob: it decides how short a stretch has to be before it is folded into its
+neighbours rather than counted as a singer of its own.
+
+**Correcting a boundary by hand.** Turns are cached, so a boundary that is a
+few hundred milliseconds off can be fixed once rather than re-detected every
+run: open `work/<song>/turns.json`, move a `start_s` or `end_s`, and rerun with
+the same `--voices` and the same config. The file is read back as long as its
+`settings` block still matches what the current config would measure with;
+editing a turn's own times does not touch `settings`, so the edit sticks.
+Delete the file, or change one of the `STAGE 4b` constants, to force a fresh
+measurement.
+
+### Make a voice-converted copy of a bank
+
+For turning an existing bank into a second voice that says the same words with
+the same takes and the same sung delivery, only in a different timbre. Voice
+conversion keeps the delivery; text-to-speech would not, which is why it is
+the first thing to try. It worked by ear for a male voice, Keskisarja, on this
+material. It did not for a female one, Isoäiti, even though nothing about the
+recipe below measured as wrong; see "When it does not sound like the voice"
+below before assuming a converted bank is fine because the numbers are.
+
+1. Start from the bank's **source** clips, the hand-named recordings a bank
+   was built from (for `ppbank`, that is `words_hq`), not the built bank
+   itself: `build_bank` parses word identity out of the source filenames, so
+   converting the source and re-running `build_bank` on the result keeps every
+   name.
+2. Convert each source clip toward a reference recording of the target voice
+   with `ChatterboxVC` (from the `chatterbox` project, run in a venv that has
+   it installed):
+
+   ```python
+   from chatterbox.vc import ChatterboxVC
+
+   model = ChatterboxVC.from_pretrained(device="cuda")
+   wav = model.generate(audio=source_clip_path, target_voice_path=reference_wav)
+   # resample wav from the model's 24 kHz to the source clip's own rate
+   # before writing it under the source clip's own filename
+   ```
+
+   Write the converted audio into a sibling `words_<voice>_src/candidates/`
+   directory, one file per source clip, same filenames. The model's output
+   pitch does not need to match the source: `build_bank` measures pitch from
+   the audio it is given, and the renderer re-pitches every clip to its slot
+   regardless.
+3. Build the bank from the converted candidates:
+
+   ```powershell
+   python -m song_generator.build_bank --candidates words_<voice>_src/candidates --out words_<voice>
+   ```
+
+Durations should come back within tens of milliseconds of the source clips;
+much more than that means the conversion changed the pacing and the syllable
+boundaries `build_bank` measures will be off. Register the new bank in
+`vocabulary_local.py` (bank names are local, kept out of this repository) or
+point `--words-dir` at it directly.
+
+**When it does not sound like the voice.** The Isoäiti bank, converted by the
+recipe above, measured fine and did not sound like her at all. Checked and
+ruled out, in order:
+
+- **The reference file.** `assets/voices/grandmom_reference.wav` and
+  AudiobookMaker's own Finnish path (`samples/reference_finnish.wav`, cloned
+  from the `Finnish-NLP/Chatterbox-Finnish` HF cache) measure 0.81 cosine
+  similarity apart, so they are the same voice; the reference was not the
+  cause. Redoing the conversion against `reference_finnish.wav` still only
+  reached 0.40 similarity to her own reference, against 0.45 for Keskisarja's
+  voice-converted clips.
+- **Pitch.** Her reference speaks at MIDI 52.8 (E3); the converted clips
+  measured 53.3, close to it and nowhere near the song's own median of 49.7
+  (D3).
+
+Text-to-speech through AudiobookMaker's own Finnish path came closer than
+voice conversion of the sung source, and it took two tries to get clean
+words out of it. It still did not give her voice: the owner heard the third
+Isoäiti bank, the one made as described below, as wrong too. See the open
+item in [TODO.md](TODO.md).
+
+**The dead end.** Speaking several phrases as sentences in one 60-200
+character chunk, then cutting each word back out at the longest measured
+silence, failed on all 8 chunks after 6 rolls each. Her sentence pauses are
+not longer than her comma pauses, so the cuts landed in the wrong places, and
+faster-whisper hallucinated a trailing "Kiitos." onto the silence after the
+last piece. Abandoned rather than tuned further.
+
+**Clean words, not yet her voice.** AudiobookMaker already has the tool for this,
+`scripts/build_word_bank.py`, but only in its git history: commit `3658909`
+("say the word in a sentence, then cut it back out") on branch
+`feat/word-bank-generator`, not on its current checkout. It says each word
+inside a carrier sentence written for the expression asked for (`"Paska!
+Kuuletko sinä minua?"`, `"Paska? Oliko se todella niin?"`), locates the word
+by faster-whisper's own word timestamps, snaps each end to the quietest point
+nearby, trims it out, and verifies the cut by its own transcript; a word with
+no surviving carrier take falls back to rendering it alone and verifies that
+instead. Deliberately skips AudiobookMaker's audiobook post-processing (7 kHz
+low-pass, -20 dBFS), because a sample that is going to be transposed should
+not be muffled going in.
+
+1. Take the script out of history into a scratch directory:
+   `git show 3658909:scripts/build_word_bank.py`.
+2. Point its own repo-root path at the AudiobookMaker checkout (it imports
+   `_load_engine` from there), and run it with AudiobookMaker's
+   `.venv-chatterbox` python:
+
+   ```
+   python build_word_bank.py --words paska,perse,pillu,pornolehti,paviaani \
+       --language fi \
+       --presets scream,shout,urgent,excited,command,bright,narrate,asking \
+       --whisper-device cuda --out words_isoaiti_src --no-contact-sheet
+   ```
+
+   It calls `ensure_alignment_empty_guard`, which patches a source file in
+   the `chatterbox` checkout it runs against
+   (`models/t3/inference/alignment_stream_analyzer.py`); check whether the
+   patch is already applied there before running, since this writes into
+   another repo.
+3. Result: 40 of 40 kept (5 words times 8 presets), three of them via the
+   word-alone fallback (`pornolehti_excited`, `pornolehti_asking`,
+   `paviaani_command`). Clips land at
+   `words_isoaiti_src/fi/roots/<word>_<preset>.wav`.
+4. `build_bank --candidates words_isoaiti_src/fi/roots --out words_isoaiti`.
+
+Isoäiti says only real words this way: no "eee" shout and no "au", which the
+Finnish model cannot say. Those stay with whichever voice already has them; a
+word one voice of `--voices` lacks is not reported as missing from the song
+as long as another voice can say it.
+
+Speaker-embedding similarity to her reference does not rank these routes
+the way the ear did: 0.40 for the voice conversion, 0.53 for the
+phrase-by-phrase text-to-speech clips that failed by ear, 0.48 for the
+carrier-sentence clips that replaced them. An embedding score is not a
+pass/fail test for a converted or synthesised voice; listen before building
+the bank.
+
+**Never ask the Finnish model for a fragment under 60 characters.**
+AudiobookMaker's own minimum-fragment guard, 60 characters
+(`scripts/generate_chatterbox_audiobook.py`), exists because the model
+rambles or repeats on a shorter fragment, and it is only enforced upstream of
+the audiobook path. Asking it directly for a bare phrase like `"Paska!"` (3
+to 25 characters) skips that guard: one earlier attempt at this bank did
+exactly that, and Whisper large-v3, run as a hint on the clips afterwards,
+shows what came back: `paska_2.wav` said "Aukumaala", `perse-eee_2` said
+"Perse. Ei, ei, ei." (the shout written "Eeeeee!" comes back as "ei, ei,
+ei"), `au_1` said "Vähä", and `perse-pillu_1` said "Ainet. Pillu" against
+`pillu_2`'s "Joo, pillu". The carrier-sentence route above never hits this,
+because every utterance sent to the model is a full sentence.
+
+**A bank of generated or converted speech needs `never_split` before its
+first render, not after.** Without it, `arrange.build` cuts the speech into
+syllables and each is re-pitched and time-stretched to its own slot like a
+sung recording, and generated or converted speech survives that far worse
+than a real singer's take: a first Isoäiti render (built with no
+`bank.json`, so no `never_split` declared) came back sounding like a computer
+voice, fit at 0.59x natural speed, about 1.7x slower than she actually spoke.
+See "Tune a bank of generated voices" below, which already says this; the
+bank was built without reading it. `words_isoaiti/bank.json` now declares
+`{"never_split": true}`, which is what makes `arrange.build` set
+`target_s = play_s`: the clip sounds at its own length or faster and is never
+slowed, a long swallowed slot leaves a pause after the word instead of
+stretching it, and her own intonation carries through, shifted by one
+constant.
+
+---
+
+## Slow rap down before singing it: `--swallow`
+
+```powershell
+.\.venv\Scripts\song-generator.exe input\song.mp4 --swallow 2.6
+.\.venv\Scripts\song-generator.exe input\song.mp4 --voices keskisarja isoaiti --swallow 2.6 keskisarja=2.05
+```
+
+For rap and anything else where the melody gives close to one note per sung
+syllable. A bank syllable placed on every one of them is a machine gun of
+words at rap tempo, far more than the genre can carry as singing. `--swallow`
+folds several of the original's words into one bank syllable before the words
+are planned, so that syllable sounds for as long as the words it swallowed and
+is pronounced along with them, which is what reads as melodic rather than
+rushed. Off by default: this is for material dense enough to need it.
+
+`--swallow` is asked in *words* of the original song, because that is how a
+pace is naturally described. `2.6` swallows that many words per bank
+syllable; `2-4` is accepted too, but only its mean is used as the pace, so
+`2-4` and `3` render the same. Several values may be given at once: one
+unnamed value for every voice singing, plus a named value, `keskisarja=2.05`,
+for any voice of `--voices` that should move at its own pace; the voice's own
+value wins over the general one. Refused rather than resolved: two unnamed
+values, the same voice named twice, and a voice not singing in this run.
+The filename lists the values in a fixed order (everybody's first, then each
+voice's own by name), so the same request always writes the same file.
+
+A swallowed take's `.arr` log records the grid in a `swallow` header line, and
+`--arrangement` rebuilds that grid from it, so the take comes back without
+`--swallow` being typed again. An explicit `--swallow` that disagrees with the
+log is refused: replayed on the unswallowed notes, every line would land at
+more than twice the pace it was planned for.
+
+A swallowed run needs its bank plans laid over fewer, wider slots, so it also
+places fewer, longer units. Filenames carry the setting,
+`smc_hoodrats.conservative.swallow2p6.mp3`, a named voice's own pace appended
+after it (`swallow2p6-keskisarja2p05`), combined with any other tag by
+`join_tags` (`mim0p60.swallow2p6`), so a swallowed take never lands on top of
+a plain one.
+
+**Words to notes.** The analysis measures notes, roughly one per sung
+syllable, but `--swallow` is asked in words. The word count is converted to
+notes per bank syllable as `words * RAP_WORD_SYLLABLES / (bank's mean
+syllables per word)`, floored at one note, since a bank syllable cannot sound
+on part of one. `RAP_WORD_SYLLABLES` (2.5 in `config.py`) is an estimate for
+Finnish rap, not a measurement. The run report prints the notes-per-syllable
+figure each voice actually used, so it can be checked against the ear rather
+than the word count typed on the command line.
+
+**What is actually folded.** `swallow_slots` in `mapping.py` keeps the mean
+exactly, because the mean is the pace: a phrase of N notes becomes
+`round(N / per_syllable)` slots, split as evenly as the notes allow. Each
+boundary can then move up to `SWALLOW_SNAP_NOTES` (1) note toward the widest
+gap within reach, the nearest thing to a word boundary a run of sung
+syllables offers. A group never crosses a phrase. The group's slot takes its
+onset from the first note, its offset from the last, and its pitch from the
+longest note in it, the one the rapper actually leant on. Each voice of
+`--voices` gets its own slots, folded at its own pace.
+
+Keeping the mean exactly is what makes a percentage change possible to ask
+for at all. An earlier version of `swallow_slots` chose each group's size by
+widest gap within a whole-number range and did not hold the mean: asked for
+`2-4` (meant as 3.54 notes per bank syllable, against Keskisarja's bank),
+it actually delivered 3.09 (998 notes folded to 323 slots), so there was no
+number to move by a known percentage.
+
+**Measured on "SMC Hoodrats", Keskisarja's bank (2.12 syllables per word),
+988 notes after cleanup:**
+
+| `--swallow` | slots |
+|---|---|
+| 2.0 | 422 |
+| 2.1 | 396 |
+| 2.2 | 383 |
+| 2.6 | 323 |
+| 3.0 | 282 |
+
+323 slots is the pace that had already been heard and judged too slow; the
+owner asked for 25% faster, i.e. not swallowing that many words. `2.05`
+gives about 409 slots, roughly +26% against 323. Note melody extraction
+re-runs on every render and gave 1004, 998 and 988 notes across three runs of
+the same song, so a slot count moves by about 1% between otherwise identical
+runs; treat a count near a table value as a match rather than expecting it
+exactly.
+
+**Replaying an arrangement.** A saved arrangement is laid over the slots it
+was drawn against, so replaying it with `--arrangement` needs the same
+`--swallow` value the render was made with. A different value folds the
+slots differently and the arrangement no longer lines up with them.
 
 ---
 

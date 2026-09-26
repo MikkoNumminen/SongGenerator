@@ -286,6 +286,75 @@ values that were settled are written down instead of living in one session.
 
 ---
 
+### Iteration 8, what the multi-voice feature left unwritten: not rescored
+
+Building `--voices` surfaced several things that were true the whole session
+but nowhere an agent picking this up cold could find them. None of them are a
+code defect, so this entry does not touch the rubric; it records what got
+written down so the next session does not rediscover it by trial.
+
+The voices a bank can be converted into are not in this repository. They live
+in `AudiobookMaker`, a separate repo kept read-only from here, as named voice
+packs and one built-in reference recording. Grepping this repo for a voice
+name finds nothing, and nothing here said to look elsewhere. That is now in
+`AGENTS.md`.
+
+Voice conversion, not text-to-speech, is what makes "this bank, another
+voice" work, because it keeps the takes and the delivery and only swaps the
+timbre; the recipe (source clips, not the built bank, because filenames carry
+identity) is now in `docs/WORKFLOWS.md`.
+
+The speaker model `--voices` needs was not installed in the render venv, and
+installing it was a small, well-scoped change (`speechbrain` and four light
+dependencies, torch untouched) that nothing in the repo said to expect. Also
+unwritten: `--no-words` leaves a stray mp3 in the output library rather than
+just printing a report, which cost a manual cleanup this session.
+
+One request was ambiguous in a way no doc could have caught: "render this
+song" arrived with no file attached, and it would have been possible to guess
+from a recent render or from a multi-singer song sitting in `input/` instead
+of asking. The owner confirmed it was a slip, not a real reference. That is a
+process note rather than a repository fact, and it went into `AGENTS.md`
+anyway because a future agent can hit the same ambiguity.
+
+None of this moves a dimension. Onboarding and runbooks are already scored on
+what a fresh agent needs, and what changed is their content, not whether the
+category exists. The score stands at 8.9 until something in the next session
+argues it should move.
+
+A later session found a second thing worth recording here: a voice-converted
+bank can be wrong while every measurement says it is right. The Isoäiti bank
+converted cleanly toward a reference that turned out to be the correct voice
+(0.81 cosine similarity to AudiobookMaker's own Finnish reference) and at
+close to the right pitch, and it still did not sound like her. Only listening
+caught it; the embedding and pitch numbers agreed with the ear only after the
+fact, once text-to-speech through AudiobookMaker's Finnish path was tried
+instead and worked. That recipe, and the numbers behind ruling out the
+reference and the pitch first, are now in `docs/WORKFLOWS.md`; the trap is now
+in `AGENTS.md`. Same as above: this is what got written down, not a rubric
+argument, so the score stands at 8.9, still not rescored.
+
+A third round, listening to that text-to-speech bank once it was actually
+rendered into a song, found two gaps this repository's own runbook should
+have closed and did not. First, `docs/WORKFLOWS.md` already carried a tuning
+procedure, "Tune a bank of generated voices", that says in as many words that
+`never_split` is not optional for spoken or generated material; the Isoäiti
+bank was built without reading it, shipped with no `bank.json` at all, and
+came back sounding like a computer voice. A runbook that exists is not the
+same as a runbook that gets followed, and nothing here checked that it had
+been. Second, the tool that actually builds a clean word bank for a generated
+voice, `build_word_bank.py`, existed the whole time, but only in the git
+history of a different repository, on a branch nobody here had reason to
+know about; reaching it took an owner naming AudiobookMaker's history by
+commit rather than an agent finding it. The dead end tried first, cutting
+sentences at their longest silences, cost a full round of rolls before that
+was found. Both are now written where the next agent building a generated
+bank will read them before starting rather than after: the trap and the
+tool's location in `AGENTS.md`, the recipe in `docs/WORKFLOWS.md`. Still not
+a rubric argument; the score stands at 8.9.
+
+---
+
 ## Current: 8.9
 
 | # | Dimension | 0 | now |

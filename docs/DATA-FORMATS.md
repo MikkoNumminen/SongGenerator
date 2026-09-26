@@ -168,6 +168,73 @@ a bank that declares nothing is pinned by `tests/test_determinism.py`.
 
 ---
 
+## `work/<song>/turns.json`
+
+Who is singing when, for `--voices`. Written and read by `turns.py`.
+
+```jsonc
+{
+  "settings": {
+    "model": "speechbrain/spkrec-ecapa-voxceleb",
+    "window_s": 2.0,
+    "hop_s": 0.5,
+    "min_voiced": 0.4,
+    "distance": 0.6,
+    "min_turn_s": 4.0
+  },
+  "vocal": "3f1c...e9",
+  "turns": [
+    { "start_s": 0.0, "end_s": 91.4, "speaker": 0 },
+    { "start_s": 91.4, "end_s": 132.8, "speaker": 1 }
+  ]
+}
+```
+
+The first and last turn always reach to the start and end of the song, so
+every moment belongs to somebody. `speaker` is a cluster index, not a voice:
+`take_turns` hands turn 0 to the first `--voices` bank, turn 1 to the second,
+and cycles, regardless of which speaker cluster a turn carries.
+
+`settings` records what a measurement was made with. It is checked, not just
+stored: a run reuses the file only when every value still matches
+`turns.settings()`, and re-measures otherwise. That is what makes a boundary
+moved by hand stick: editing `start_s` or `end_s` on a turn changes nothing
+`settings` looks at, so the edited file is still read back on the next run
+against the same song and the same config.
+
+`vocal` is a SHA-1 of the vocal stem the turns were measured on (every 64th
+sample, since a stem is a hundred megabytes and this runs on every multi-voice
+render). Separating a song again (`--force`, or another separator) writes new
+stems to the same paths, and turns measured on the old stem would otherwise be
+laid over the new one. The notes are left out of it on purpose, although they
+decide which windows are embedded: the melody analysis runs again on every
+render and is not bit-stable (one song gave 1004, 998 and 988 notes on three
+runs), and keyed on them the turns were measured again every time.
+
+A file that is measured again is never written over: it is moved to
+`turns.previous.json`, or the next free `turns.previousN.json`, hand edits and
+all, and the run says where, so a boundary moved by hand can be copied across
+into the new file.
+
+A hand edit that cannot be used is refused with an error naming the file:
+a turn missing `start_s`, `end_s` or `speaker`, a value that is not a number,
+a turn that starts before the song or does not end after it starts, turns out
+of order or overlapping, or no turns at all. Extra fields are ignored.
+
+---
+
+## `work/<song>/voices/<bank>/arrangements/<seed>-<level>.arr`
+
+Where a `--voices` run's arrangement logs land, one folder per bank so two
+voices at the same seed and level do not share a filename. Otherwise this is
+the same `.arr` format described next. Each log holds only the lines that voice
+sings in the take: every voice is arranged over the whole song, but a log of
+that whole-song arrangement read as a take in one voice that nobody heard.
+Its seed header is the seed that voice's draw survived on; the run's own seed,
+printed as `play <level>, seed N`, is the one that brings the whole take back.
+
+---
+
 ## `work/<song>/arrangements/<seed>-<level>.arr`
 
 What gets sung where, for one run. Written by `arrange.py` on every render,
@@ -202,6 +269,15 @@ heard, this one records what the tool sang to.
 The span is written because it cannot always be derived: a word may be held
 across a leftover slot, which widens what it is given without adding a note to
 land on. Omit it in a hand-written file and the slots decide.
+
+A take made with `--swallow` carries one more header line after the others,
+`#   swallow 3.0600 from 2.6 words`: the notes per bank syllable its slots were
+folded to, and the `--swallow` value that grid came from. The lines are laid
+over that grid, and `--arrangement` rebuilds it from the figure in the log, so
+`--swallow` need not be typed again; the filename is tagged from the words
+figure. An explicit `--swallow` that disagrees with the log is refused rather
+than winning. A log without the line was made on unswallowed notes, which is
+every log written before the line existed.
 
 **Two-way on purpose.** The tool writes it and a person can edit it and feed
 it back:

@@ -187,6 +187,86 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   stored light theme that flashed dark on every load. Check a front-end change
   in a browser, at a narrow width, with the keyboard, in both themes. See
   `docs/AI-FIRST.md`, dimension 12.
+- **The other voices for `--voices` are not in this repo.** They live in
+  `AudiobookMaker`, a separate repo kept as read-only source material here and
+  never edited from this one. Its chatterbox_grandmom engine is "Isoäiti", with
+  two reference recordings of her that are both actually her voice:
+  `assets/voices/grandmom_reference.wav`, and the Finnish path's own
+  `samples/reference_finnish.wav` in the `Finnish-NLP/Chatterbox-Finnish` HF
+  cache, which it clones from. The two measure 0.81 cosine similarity apart,
+  so either is a correct reference; how the Isoäiti bank was actually made
+  (text-to-speech, not voice conversion, for reasons that had nothing to do
+  with which reference was used) is in `docs/WORKFLOWS.md`, "Make a
+  voice-converted copy of a bank". Named voice packs are zips under
+  `.local/ÄänipaketitÄpillä/` (keskisarja, lotta_harala, lotta_interview_host,
+  roni_arvonen, reader_00, reader_01), each `<name>.abvpack.zip` holding
+  `<name>/reference.wav`, `sample.wav` and `meta.yaml`. Unzip into a scratch
+  directory, never into `AudiobookMaker` itself. Searching this repo for a
+  voice name finds nothing; searching `AudiobookMaker` finds them.
+- **`--voices` needs a speaker model this repo does not ship.**
+  `pip install -e .[voices]` adds `speechbrain` plus four small dependencies
+  (HyperPyYAML, ruamel.yaml, ruamel.yaml.clib, sentencepiece) and leaves torch
+  untouched. The `speechbrain/spkrec-ecapa-voxceleb` weights it needs are not
+  gated, unlike the pyannote models already sitting in `AudiobookMaker`'s
+  chatterbox venv, which is why `turns.py` uses that model instead. speechbrain
+  wants the device spelled `"cuda:0"`; a bare `"cuda"` logs a parse warning and
+  falls back to device 0 anyway. `turns.py` fetches the model into
+  `work/models/spkrec` by copying: speechbrain's default links out of the
+  Hugging Face cache, which Windows refuses without Developer Mode.
+- **Turns are measured on sliding windows, not on `analysis.json`'s phrases,
+  on purpose.** A phrase can run long in rap: one measured posse cut had 31
+  phrases, several over 25 seconds, and one of them spanned an actual
+  handover between singers. A phrase is not a safe proxy for a turn.
+- **`--no-words` writes into the library, not just to stdout.** It writes an
+  instrumental-only mp3 to `output/<song>/<bank>/`, so reaching for it only to
+  force separation ahead of a real render leaves a file behind that has to be
+  found and deleted by hand.
+- **"This song" with nothing attached means the attachment did not arrive.**
+  Ask which song rather than guessing from a recent render or from whichever
+  multi-singer song happens to be sitting in `input/`.
+- **Two agents in one checkout stash and commit over each other.** Working
+  the same checkout concurrently is only safe when the files being touched do
+  not overlap and neither side runs a state-changing git command; give each
+  agent its own working tree otherwise, per the standing rule on that.
+- **A converted voice can be wrong while every measurement says it is right.**
+  The Keskisarja bank converted cleanly toward his reference and sounded
+  right. The Isoäiti bank was converted toward a reference that was
+  measurably hers (0.81 cosine similarity to her other reference), at her
+  own pitch (her reference speaks at MIDI 52.8, the converted clips measured
+  53.3), and it did not sound like her at all. The embedding score never
+  tracked the ear: 0.40 for the voice-conversion clips, 0.53 for the
+  phrase-by-phrase text-to-speech clips that came next and also failed by
+  ear (a computer voice, and words the model invented), and 0.48 for the
+  carrier-sentence clips that replaced both. An embedding number is not a
+  pass/fail test for a converted or synthesised voice; listen before
+  building the bank. See
+  `docs/WORKFLOWS.md`, "Make a voice-converted copy of a bank".
+- **Generated Finnish speech must never be asked for a fragment under 60
+  characters.** AudiobookMaker's Finnish model rambles or repeats on a
+  fragment shorter than its own minimum-fragment guard, 60 characters
+  (`scripts/generate_chatterbox_audiobook.py`), and that guard only sits
+  upstream of the audiobook path; asking the model directly for a bare word
+  or phrase skips it. An Isoäiti take built by asking for short phrases like
+  `"Paska!"` (3-25 characters) came back saying things nobody wrote: "Paska!"
+  as "Aukumaala", "Eeeeee!" as "Ei, ei, ei.". Say the word inside a full
+  sentence instead; see `docs/WORKFLOWS.md`, "Make a voice-converted copy of
+  a bank".
+- **A bank of generated or converted speech needs `never_split` before its
+  first render, not after.** Without it, a spoken or synthesised clip is cut
+  into syllables and stretched to its slot exactly like sung material, and it
+  survives that far worse: an Isoäiti bank built with no `bank.json` at all
+  came back sounding like a computer voice, its clips fit at 0.59x natural
+  speed. `docs/WORKFLOWS.md`, "Tune a bank of generated voices", already says
+  `never_split` is not optional for spoken material; the bank was built
+  without reading it first.
+- **`AudiobookMaker`'s word-bank tool exists only in its own git history.**
+  `scripts/build_word_bank.py` says a word inside a carrier sentence and cuts
+  it back out by its own recognised timing, which is what a generated word
+  bank should be built from; it lives on commit `3658909` of branch
+  `feat/word-bank-generator` in that repo, not on its current checkout. Take
+  it with `git show 3658909:scripts/build_word_bank.py` rather than
+  rediscovering the need for it by trial. See `docs/WORKFLOWS.md`, "Make a
+  voice-converted copy of a bank".
 - **A float WAV is not a pure function of its samples.** libsndfile writes a
   PEAK chunk holding the wall-clock time of the write, at byte 60. Two runs
   producing bit-identical audio therefore produce files that differ by that one

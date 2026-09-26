@@ -393,6 +393,57 @@ def clean_slots(notes: list[dict]) -> tuple[list[Slot], int, int]:
     return final, merged, split
 
 
+def swallow_slots(slots: list[Slot], per_syllable: float) -> list[Slot]:
+    """Fold the original's notes so each slot holds per_syllable of them.
+
+    Rap gives a note to every syllable, and a bank syllable on every one of
+    them comes out as a machine gun of words at rap speed. Swallowing hands
+    each bank syllable several of the original's syllables instead: it sounds
+    for as long as they did, takes its onset from the first and its pitch from
+    the longest of them, which is the one the rapper leant on. The word still
+    lands where the rapper's words did; there are just fewer of it.
+
+    The mean is kept exactly, because it is the pace: a phrase of N notes
+    becomes round(N / per_syllable) slots, split as evenly as the notes allow.
+    Asking for a quarter fewer notes per syllable then gives a quarter more
+    syllables, which a range of whole numbers could not promise once rounded.
+    Each boundary then moves up to SWALLOW_SNAP_NOTES notes to the widest gap
+    within reach, the nearest thing to a word boundary a stream of syllables
+    offers. Groups never cross a phrase.
+    """
+    if per_syllable < 1.0:
+        raise ValueError(f"swallow needs at least one note per syllable,"
+                         f" got {per_syllable}")
+    reach = config.SWALLOW_SNAP_NOTES
+    out: list[Slot] = []
+    i = 0
+    while i < len(slots):
+        j = i
+        while j + 1 < len(slots) and slots[j + 1].phrase == slots[i].phrase:
+            j += 1
+        phrase = slots[i:j + 1]
+        n = len(phrase)
+        groups = max(1, round(n / per_syllable))
+        edges = [0]
+        for k in range(1, groups):
+            ideal = round(k * n / groups)
+            # Room for at least one note on each side of every boundary.
+            lo = max(edges[-1] + 1, ideal - reach)
+            hi = min(n - (groups - k), ideal + reach)
+            edges.append(max(range(lo, hi + 1),
+                             key=lambda e: (phrase[e].onset_s
+                                            - phrase[e - 1].offset_s,
+                                            -abs(e - ideal))))
+        edges.append(n)
+        for a, b in zip(edges, edges[1:]):
+            g = phrase[a:b]
+            longest = max(g, key=lambda s: s.dur_s)
+            out.append(Slot(g[0].onset_s, g[-1].offset_s, longest.midi,
+                            g[0].phrase, max(s.rms_db for s in g)))
+        i = j + 1
+    return out
+
+
 def _split_long(group: list[Slot]) -> list[list[Slot]]:
     """Break a phrase that runs longer than a phrase should, at its widest gap.
 
@@ -1408,6 +1459,23 @@ def build_segments(p: Placement) -> tuple[list, float]:
 
     p.shifts = shifts
     return segments, max(cursor, 1e-3)
+
+
+def sounding_s(p: Placement) -> float:
+    """How long a placement actually sounds, whichever way it renders.
+
+    Not out_dur_s and not slot_span_s, which are what was asked for: see
+    "What a segment is asked to do is not what it sounds" in AGENTS.md. The
+    shifted render lasts as long as build_segments says; the unshifted one
+    plays the clip up to play_s. The longer of the two, so anything asking
+    whether this placement reaches a later moment errs towards yes.
+    """
+    segments, total = build_segments(p)
+    if not segments:
+        # No syllable had a pitch to move to, and a shifted render then plays
+        # the clip whole.
+        return p.unit.duration_s
+    return max(total, min(p.play_s, p.unit.duration_s))
 
 
 def precompute_shifted(plan: Plan, sr: int = config.SAMPLE_RATE,
