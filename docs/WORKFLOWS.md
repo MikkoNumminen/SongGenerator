@@ -68,6 +68,7 @@ costs is the files.
 | `--raw-clips` | Ignore the standardised tier, sing the recordings as they are |
 | `--no-shift` | Words at their own recorded pitch |
 | `--swallow 2-4` | Fold 2-4 of the original's words into one bank syllable, for rap; see below |
+| `--keep-original "0:24-0:30"` | Leave the original vocal in those stretches, for whistling and anything else that is not words; see below |
 | `--rows 30` | Print more of the extracted note table |
 | `--json` | Machine-readable summary |
 
@@ -332,6 +333,107 @@ bank was built without reading it. `words_isoaiti/bank.json` now declares
 slowed, a long swallowed slot leaves a pause after the word instead of
 stretching it, and her own intonation carries through, shifted by one
 constant.
+
+---
+
+## Keep whistling, or anything else that is not words: `--keep-original`
+
+The separator sends whatever sounds like a voice into the vocal stem, and
+whistling sounds like one. On "Kielinuppu - Suomalainen metsä" the whistling
+came out in the vocal stem, the analysis found notes in it, and the render sang
+swear words over it. The owner's verdict: the whistling is part of the song and
+has to stay.
+
+```powershell
+.\.venv\Scripts\song-generator.exe input\song.mp4 --keep-original "0:24-0:30,1:03-1:09"
+```
+
+Inside every range the original vocal stem goes back onto the bed with a
+`KEEP_ORIGINAL_FADE_S` fade inside each edge, and no word sounds. Four things
+make that hold whatever the planner does, and none of them cuts a word:
+
+- A slot that touches a range at all is dropped, and the range is widened to
+  cover that slot whole, repeatedly, until no slot touches the widened range.
+  The singer's note is then put back from where it started, instead of leaving
+  a stretch with neither a word nor the original and then the note coming in
+  halfway. Two ranges closer together than their two fades are joined, since
+  faded separately they dipped to neither the original nor a word between
+  them.
+- The first slot after a range is a hard break (`Slot.hard_break`), which
+  `group_phrases` and `swallow_slots` both respect. Without it `--swallow`
+  folded the last note before a range and the first after it into one slot
+  spanning the range, and `group_phrases`, which rebuilds phrases from gaps,
+  joined the two sides of any range narrower than `PHRASE_GAP_S`.
+- A word that would still be sounding inside a range, typically the last word
+  of a phrase ringing on past its slot, is dropped whole. It is measured with
+  `mapping.sounding_s`, what the render will play, and judged as not singing
+  inside `arrange.build`, so the redraws find its required word somewhere else
+  instead of the report counting a word nobody hears.
+- The word bus is gated inside the ranges before mixing, as the last
+  guarantee. After the three above it removes nothing; a first version relied
+  on it alone and chopped the words it caught.
+
+The bed is levelled on the band alone (`mix(level_from=...)`). Levelled whole,
+a bed holding a minute of kept vocal turned the band down everywhere, and the
+words sat louder over the verses than in a plain render of the same song. The
+final peak ceiling still scales the whole mix when the sum passes it, as it
+does for any render; measured with the original vocal added back, the band
+peaked at -2.6, 0.1 and -4.5 dBFS on the three songs tried, so the ceiling
+engaged only on "Suomalainen metsä", whose band alone already peaks at -0.2.
+
+The files are tagged `keep` plus a short hash of the merged ranges, e.g.
+`.keep3fa9c1`, so two sets of ranges on one song are two pieces side by side,
+and the same ranges typed again replace the take they made, which is kept in
+`previous/`. A range starting after the song ends is refused as the typo it
+is, and so is `--no-words`, which writes the band alone. The `.arr` log
+records the ranges to the microsecond in a `keep` header line, and
+`--arrangement` brings them back with it, read by the same parser as
+`--keep-original` and checked against the song's length; an explicit
+`--keep-original` that disagrees with the log is refused, since the lines were
+laid over the slots the log's ranges left. A replayed line that would sound
+inside a kept range (edited by hand, or re-laid by a reciting bank) is left
+out whole, as a fresh take's would be, and the run says how many.
+
+**Known limits, left as they are.** A bank that recites (`sequence` or
+`shuffled` in its `bank.json`) loses the unit that would ring into a kept
+range, and for such a bank the order is the content, so the recitation skips a
+line at each range. Replaying such a take also re-lays the remaining units end
+to end, so it does not come back exactly. Keeping the line would mean ending
+the recitation cursor at the range and pacing the unit into the time left,
+which is planner work that no song has needed yet.
+
+**The ranges are given by hand, on purpose.** A detector was tried: whistling
+is close to a pure tone, so frames with at least 60% of their 150 Hz to 8 kHz
+energy within two bins of one peak above 500 Hz, and nothing 4 dB near it an
+octave below, were marked. On this song it found steady tones near 785 Hz, but
+a child's voice held on one note is nearly as pure, and across 40 other cached
+songs it fired on long sung notes: 88 seconds of Avantasia's "Ghostlights", 40
+of "Kalasatamaan", 34 of "Through the Fire and Flames". Run by default it would
+put real singing back into renders across the library. Listen to the song, or
+to its `work/<song>/vocal.wav`, and write down where the whistling is.
+
+**Keeping the choruses original.** The same flag makes a piece that is half
+the original song: the owner's call on "Suomalainen metsä" was that the
+choruses are good places for the original voice, with the bank singing the
+verses. What it takes is where the choruses are, found like this:
+
+1. Transcribe `work/<song>/vocal.wav` with Whisper as a hint, only to learn
+   which line repeats. Pass `condition_on_previous_text=False`: with it on,
+   large-v3 locked into the chorus line after 83 seconds and printed it for
+   every remaining second of the song.
+2. Take one chorus the transcript places cleanly as a template, and slide its
+   chroma (`librosa.feature.chroma_cqt`, cosine similarity per frame) over the
+   whole vocal stem. Every chorus is a peak. On this song all seven came out
+   at 0.88 to 1.00, 19.6 seconds apart, where the transcript's word timings
+   had put the fifth one four seconds early.
+3. Start each range just before the chorus's first note and end it after the
+   chorus's measured length (9.0 s here). Snapping the edges to gaps between
+   notes does not work on legato singing: the analysis found no gap at all at
+   most chorus edges.
+
+Ranges from different reasons can go in one `--keep-original`; overlapping
+ones merge. The chorus piece and the whistling piece get different tags, so
+both stay in the song's folder.
 
 ---
 

@@ -112,6 +112,11 @@ class Slot:
     midi: float
     phrase: int
     rms_db: float = -30.0
+    # True when no planner may join this slot to the one before it, however
+    # small the gap. --keep-original sets it on the first slot after a kept
+    # range; group_phrases would otherwise rebuild one phrase across a range
+    # narrower than PHRASE_GAP_S and a word could be planned straight over it.
+    hard_break: bool = False
 
     @property
     def dur_s(self) -> float:
@@ -439,7 +444,8 @@ def swallow_slots(slots: list[Slot], per_syllable: float) -> list[Slot]:
             g = phrase[a:b]
             longest = max(g, key=lambda s: s.dur_s)
             out.append(Slot(g[0].onset_s, g[-1].offset_s, longest.midi,
-                            g[0].phrase, max(s.rms_db for s in g)))
+                            g[0].phrase, max(s.rms_db for s in g),
+                            hard_break=g[0].hard_break))
         i = j + 1
     return out
 
@@ -487,7 +493,8 @@ def group_phrases(slots: list[Slot]) -> list[list[Slot]]:
     """
     groups: list[list[Slot]] = []
     for slot in slots:
-        if groups and slot.onset_s - groups[-1][-1].offset_s <= config.PHRASE_GAP_S:
+        if (groups and not slot.hard_break
+                and slot.onset_s - groups[-1][-1].offset_s <= config.PHRASE_GAP_S):
             groups[-1].append(slot)
         else:
             groups.append([slot])
@@ -1578,25 +1585,41 @@ def render(plan: Plan, n_samples: int, sr: int = config.SAMPLE_RATE,
 
 
 def _normalise(audio: np.ndarray, target_lufs: float, sr: int) -> np.ndarray:
+    return (audio * _gain_to(audio, target_lufs, sr)).astype(np.float32)
+
+
+def _gain_to(audio: np.ndarray, target_lufs: float, sr: int) -> float:
+    """The linear gain that brings audio to target_lufs, 1.0 when silent."""
     from .detect import integrated_lufs
 
     loudness = integrated_lufs(audio, sr)
-    if not np.isfinite(loudness):
-        return audio
-    return (audio * (10 ** ((target_lufs - loudness) / 20))).astype(np.float32)
+    return 1.0 if not np.isfinite(loudness) else 10 ** ((target_lufs - loudness) / 20)
 
 
 def mix(word_bus: np.ndarray, instrumental: np.ndarray,
         sr: int = config.SAMPLE_RATE,
-        word_bus_lufs: float | None = None) -> np.ndarray:
+        word_bus_lufs: float | None = None,
+        level_from: np.ndarray | None = None) -> np.ndarray:
     """Words over the bed. word_bus_lufs lets a bank sit at its own level.
 
     None keeps config.WORD_BUS_LUFS, which is what every bank did before one
     of them needed to be louder, so passing nothing changes nothing.
+
+    level_from is the audio whose loudness sets the bed's gain, when the bed
+    holds more than the band. --keep-original puts stretches of the original
+    vocal into the bed, and levelling that bed as a whole turned the band down
+    everywhere by an amount that grew with the seconds kept, so the words sat
+    louder over the verses than in a plain render. Measured on the band
+    alone, the band sits where it always does and the kept vocal sits against
+    it as it did in the original.
     """
     target = config.WORD_BUS_LUFS if word_bus_lufs is None else word_bus_lufs
     words = _normalise(word_bus, target, sr)
-    bed = _normalise(instrumental, config.INSTRUMENTAL_LUFS, sr)
+    if level_from is None:
+        bed = _normalise(instrumental, config.INSTRUMENTAL_LUFS, sr)
+    else:
+        gain = _gain_to(level_from, config.INSTRUMENTAL_LUFS, sr)
+        bed = (instrumental * gain).astype(np.float32)
 
     n = min(words.shape[1], bed.shape[1])
     out = words[:, :n] + bed[:, :n]

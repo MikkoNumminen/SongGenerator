@@ -812,8 +812,8 @@ def test_coverage_is_judged_on_the_moments_the_voice_sings(bank, slots):
     it found still comes back stamped with the bank's shift cap."""
     calls = []
 
-    def sings(t):
-        calls.append(t)
+    def sings(p):
+        calls.append(p.onset_s)
         return False
 
     plan, _, _ = build(slots, bank, "wild", 5, sings=sings)
@@ -825,6 +825,6 @@ def test_coverage_is_judged_on_the_moments_the_voice_sings(bank, slots):
 
 def test_heard_everywhere_is_the_same_as_not_saying(bank, slots):
     a, _, draws_a = build(slots, bank, "wild", 5)
-    b, _, draws_b = build(slots, bank, "wild", 5, sings=lambda t: True)
+    b, _, draws_b = build(slots, bank, "wild", 5, sings=lambda p: True)
     assert draws_a == draws_b
     assert [p.onset_s for p in a.placements] == [p.onset_s for p in b.placements]

@@ -562,8 +562,8 @@ class TestReviewFixes:
         turns_ = [Turn(0.0, 5.0, 0), Turn(5.0, 10.0, 1)]
         plan, drawn, draws, owners = cli.arrange_voices(
             voices, {"a": [], "b": []}, turns_, "wild", 100, "song")
-        assert seen["a"](1.0) and not seen["a"](6.0)
-        assert seen["b"](6.0) and not seen["b"](1.0)
+        assert seen["a"](_placement(1.0)) and not seen["a"](_placement(6.0))
+        assert seen["b"](_placement(6.0)) and not seen["b"](_placement(1.0))
         assert draws == [1, 1]
         assert [p.onset_s for p in plan.placements] == [1.0, 6.0]
         assert owners == [0, 1]

@@ -332,6 +332,9 @@ class Arrangement:
     # The --swallow words that grid came from, so a refused replay can say
     # what to pass rather than a notes figure --swallow does not take.
     swallow_words: float | None = None
+    # The --keep-original ranges the take was made with, in seconds, or None.
+    # They decide which slots existed, so a replay brings them back with it.
+    keep: list[tuple[float, float]] | None = None
 
     def words_used(self) -> set[str]:
         return {w for line in self.lines for w in line.words}
@@ -407,6 +410,11 @@ def render_text(arr: Arrangement) -> str:
         # Written in full: rebuilt from a rounded figure, round(n / per)
         # could land a phrase near a half on the other side and move a slot.
         out.append(f"#   swallow {arr.swallow!r}{words}")
+    if arr.keep:
+        # To the microsecond, fixed-point: rounded to hundredths an edge could
+        # move past a slot's end and a replay cut a different set of slots,
+        # and repr turns a tiny value into 1e-05, which splits on its minus.
+        out.append("#   keep    " + ",".join(f"{s:.6f}-{e:.6f}" for s, e in arr.keep))
     phrase = None
     for line in arr.lines:
         if line.phrase != phrase:
@@ -445,7 +453,7 @@ def parse_text(text: str, bank_words: set[str] | None = None) -> Arrangement:
     if bank_words:
         known |= set(bank_words)
     meta = {"song": "", "bank": "", "level": config.PLAY_DEFAULT_LEVEL, "seed": "0",
-            "swallow": ""}
+            "swallow": "", "keep": ""}
     # Where each header was read, so a refusal can name its line like every
     # other refusal in this parser does.
     meta_lines: dict[str, int] = {}
@@ -549,8 +557,21 @@ def parse_text(text: str, bank_words: set[str] | None = None) -> Arrangement:
                 f"line {meta_lines['swallow']}: cannot read the swallow "
                 f"{meta['swallow']!r}. It records the grid the lines were laid "
                 "over, and replay refuses any other.") from exc
+    keep = None
+    if meta["keep"]:
+        # Read by the parser --keep-original uses, so a hand-edited header is
+        # held to the same rules: in order, merged, forwards, finite.
+        from .keep import KeepError, parse_ranges
+
+        try:
+            keep = parse_ranges(meta["keep"])
+        except KeepError as exc:
+            raise ArrangementError(
+                f"line {meta_lines['keep']}: cannot read the kept ranges "
+                f"{meta['keep']!r} ({exc}). They decide which slots the lines"
+                " were laid over, so replay cannot guess them.") from exc
     return Arrangement(meta["song"], meta["bank"], meta["level"], seed, lines,
-                       swallow, swallow_words)
+                       swallow, swallow_words, keep)
 
 
 def unit_for(words: list[str], pool: list[Unit], by_word: dict[str, list[Unit]],
@@ -610,14 +631,15 @@ def build(slots, units: list[Unit], level: str, seed: int,
     a directory with no bank.json, is the behaviour every bank had before
     banks could declare anything.
 
-    sings, when given, says which moments this plan will actually be heard
-    in: a callable taking a placement's onset. --voices arranges every voice
-    over the whole song and keeps each one's placements inside its own turns,
-    so coverage judged over the whole song was met at the first draw while
-    the words that met it were handed to another voice. Judged on the
-    placements that will sing, the redraws and the relaxing of preferences
-    below work on the coverage that matters. The plan returned is still the
-    whole song's.
+    sings, when given, says which placements will actually be heard: a
+    callable taking a placement. --voices arranges every voice over the whole
+    song and keeps each one's placements inside its own turns, and
+    --keep-original drops any word that would sound inside a kept range, so
+    coverage judged on the whole plan was met at the first draw while the
+    words that met it were never heard. Judged on the placements that will
+    sing, the redraws and the relaxing of preferences below work on the
+    coverage that matters. The plan returned is still the whole one; the
+    caller drops what does not sing.
 
     wanted and pairing narrow what counts as covered, for a voice whose
     turns are one of several: the words the voices before it have already
@@ -735,7 +757,7 @@ def build(slots, units: list[Unit], level: str, seed: int,
                 placement.target_s = placement.play_s
         arrangement = describe(plan, song, bank, level, this_seed)
         judged = arrangement if sings is None else describe(
-            Plan(placements=[p for p in plan.placements if sings(p.onset_s)]),
+            Plan(placements=[p for p in plan.placements if sings(p)]),
             song, bank, level, this_seed)
 
         covered = wanted <= judged.words_used()

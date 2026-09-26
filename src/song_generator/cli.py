@@ -12,6 +12,7 @@ from pathlib import Path
 import numpy as np
 
 from . import __version__, arrange, audio_io, banks, config
+from . import keep
 from . import turns as take
 from .analysis import analyse, report as analysis_report
 from .detect import detect_vocal
@@ -53,6 +54,14 @@ If you believe this song DOES have vocals, the numbers above show which test
 drew the line -- the thresholds are all in src/song_generator/config.py under
 "STAGE 1b".\
 """
+
+
+def keep_ranges(text: str) -> list[tuple[float, float]]:
+    """--keep-original's value, refused by argparse when it does not parse."""
+    try:
+        return keep.parse_ranges(text)
+    except keep.KeepError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from None
 
 
 def swallow_range(text: str) -> tuple[str | None, float, float]:
@@ -169,6 +178,12 @@ def build_parser() -> argparse.ArgumentParser:
                         "syllable is far too many words. 2-4 for everybody, "
                         "VOICE=2.4 for one voice of --voices: 2-4 "
                         "keskisarja=2.4 makes keskisarja a quarter quicker")
+    p.add_argument("--keep-original", type=keep_ranges, default=None,
+                   metavar="RANGES",
+                   help="leave the original vocal alone in these stretches, "
+                        "e.g. \"0:24-0:30,1:03-1:09\": no words there, and "
+                        "the original put back over the band. For whistling "
+                        "and anything else in the vocal stem that is not words")
     p.add_argument("--raw-clips", action="store_true",
                    help="sing from the recorded clips even when a standardised "
                         "tier exists beside them")
@@ -282,7 +297,7 @@ def refuse_contradicting_swallow(parser: argparse.ArgumentParser,
 
 
 def arrange_voices(voices, voice_slots, turns, level: str, seed: int,
-                   song: str):
+                   song: str, kept=()):
     """Every voice's arrangement, and the one plan they sing together.
 
     Returns (plan, one Arrangement per voice, draws per voice, the voice of
@@ -297,6 +312,11 @@ def arrange_voices(voices, voice_slots, turns, level: str, seed: int,
 
     The Arrangement returned per voice describes what that voice sings in the
     take and nothing else, so its log reads as what was heard.
+
+    kept is the --keep-original ranges. A word that would still be sounding
+    inside one, the last word of a phrase ringing past its slot, is not
+    heard: it is judged as not singing, so coverage is found elsewhere, and
+    dropped whole from the plan rather than cut at the range.
     """
     n = len(voices)
     # How long each voice sings. A voice that owns no turn, when fewer turns
@@ -312,6 +332,10 @@ def arrange_voices(voices, voice_slots, turns, level: str, seed: int,
     # voices before it have not said.
     said: set[str] = set()
     paired = False
+
+    def heard(p):
+        return not (kept and keep.rings_into(p, kept))
+
     for v in sorted(range(n), key=lambda i: -owned[i]):
         name, voice_dir, singing_from, units = voices[v]
         if owned[v] <= 0:
@@ -319,21 +343,33 @@ def arrange_voices(voices, voice_slots, turns, level: str, seed: int,
             whole[v] = arrange.describe(plans[v], song, str(singing_from),
                                         level, seed)
             continue
-        sings = None if n == 1 else (
-            lambda t, v=v: take.voice_of(turns, n, t) == v)
+
+        def sings(p, v=v):
+            return ((n == 1 or take.voice_of(turns, n, p.onset_s) == v)
+                    and heard(p))
         plan, described, tries = arrange.build(
             voice_slots[name], units, level, seed, song=song,
-            bank=str(singing_from), bank_dir=voice_dir, sings=sings,
+            bank=str(singing_from), bank_dir=voice_dir,
+            sings=sings if (n > 1 or kept) else None,
             wanted=None if n == 1 else set(arrange.required_words()) - said,
             pairing=not paired)
+        if kept:
+            # The same rule coverage was judged by, so what is counted as
+            # heard is what is rendered.
+            verdicts = [(p, heard(p)) for p in plan.placements]
+            plan.placements = [p for p, ok in verdicts if ok]
+            plan.slots_used -= sum(p.n_slots for p, ok in verdicts if not ok)
         plans[v], whole[v], draws[v] = plan, described, tries
         if n > 1:
             sung = arrange.describe(
-                Plan(placements=[p for p in plan.placements if sings(p.onset_s)]),
+                Plan(placements=[p for p in plan.placements if sings(p)]),
                 song, str(singing_from), level, seed)
             said |= sung.words_used()
             paired = paired or sung.has_pairing()
     if n == 1:
+        if kept:
+            whole = [arrange.describe(plans[0], song, whole[0].bank, level,
+                                      whole[0].seed)]
         return plans[0], whole, draws, [0] * len(plans[0].placements)
 
     plan, owners = take.take_turns(
@@ -456,8 +492,18 @@ def variant_tag(args: argparse.Namespace) -> str | None:
     ladder gives its own top rung.
     """
     if args.arrangement:
-        return join_tags("replay", swallow_word(args))
-    return join_tags(_shift_tag(args), swallow_word(args))
+        return join_tags("replay", swallow_word(args), keep_word(args))
+    return join_tags(_shift_tag(args), swallow_word(args), keep_word(args))
+
+
+def keep_word(args: argparse.Namespace) -> str | None:
+    """--keep-original in a filename: keep and a short hash of the ranges.
+
+    A bare "keep" had the chorus piece replace the whistling piece of the same
+    song. Different ranges are a different piece and get a different name;
+    the same ranges typed again replace the take they made before.
+    """
+    return keep.tag(args.keep_original) if args.keep_original else None
 
 
 def join_tags(*tags: str | None) -> str | None:
@@ -626,6 +672,9 @@ def main(argv: list[str] | None = None) -> int:
                      f"with {named[0]}, which names one")
     refuse_contradicting_voices(parser, args)
     refuse_contradicting_swallow(parser, args)
+    if args.keep_original and args.no_words:
+        parser.error("--no-words writes the band alone, so it cannot keep the "
+                     "original vocal anywhere; leave out one of the two")
     # --bank has no default in the parser so that naming it beside --voices
     # can be told apart from not naming it. Resolved here, after the check.
     if args.bank is None:
@@ -649,6 +698,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         mix = audio_io.decode(args.input)
         duration = mix.shape[1] / config.SAMPLE_RATE
+        if args.keep_original:
+            keep.refuse_past_the_end(args.keep_original, duration)
 
         if not args.json:
             print(f"  song      {args.input.name}  ({fmt_duration(duration)})")
@@ -670,6 +721,9 @@ def main(argv: list[str] | None = None) -> int:
         return EXIT_ERROR
     except audio_io.AudioError as exc:
         print(f"error: {exc}", file=sys.stderr)
+        return EXIT_ERROR
+    except keep.KeepError as exc:
+        print(f"error: --keep-original {exc}", file=sys.stderr)
         return EXIT_ERROR
 
     payload = {
@@ -781,8 +835,53 @@ def main(argv: list[str] | None = None) -> int:
     units = [u for _, _, _, voice_units in voices for u in voice_units]
 
     slots, merged, split = clean_slots([n.__dict__ for n in analysis.notes])
+    bed = stems.instrumental
+    # A replay's log records the ranges its take was made with, and they decide
+    # which slots exist, so the log is read before the slots are cut.
+    replayed = None
+    if args.arrangement:
+        try:
+            replayed = arrange.load(
+                args.arrangement, bank_words={w for u in units for w in u.words})
+        except arrange.ArrangementError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return EXIT_ERROR
+        logged = replayed.keep or None
+        given = args.keep_original or None
+        if given is not None and (
+                logged is None or len(logged) != len(given)
+                or any(abs(a - c) > 1e-6 or abs(b - d) > 1e-6
+                       for (a, b), (c, d) in zip(logged, given))):
+            print(f"error: {args.arrangement} was made with kept ranges"
+                  f" {logged or 'none'}, and this run asks for {given}. The"
+                  " lines were laid over the slots those ranges left; leave"
+                  " --keep-original out and the log's own come back.",
+                  file=sys.stderr)
+            return EXIT_ERROR
+        args.keep_original = logged
+        if logged:
+            try:
+                keep.refuse_past_the_end(logged, duration)
+            except keep.KeepError as exc:
+                print(f"error: {args.arrangement} keeps {exc}", file=sys.stderr)
+                return EXIT_ERROR
+
+    kept_ranges: list[tuple[float, float]] = []
+    word_gate = None
+    if args.keep_original:
+        slots, dropped, kept_ranges = keep.outside(slots, args.keep_original)
+        bed = keep.with_original(stems.instrumental, stems.vocal, kept_ranges,
+                                 config.SAMPLE_RATE)
+        word_gate = keep.word_gate(kept_ranges, stems.instrumental.shape[1],
+                                   config.SAMPLE_RATE)
+        if not args.json:
+            held = sum(max(0.0, min(e, duration) - s) for s, e in kept_ranges)
+            print(f"  keep      original vocal in {len(kept_ranges)}"
+                  f" stretches, {held:.1f}s; {dropped} slots left without words")
     base_slots = slots
+
     # Each voice may swallow at its own pace, so each gets its own slots.
+    # After the kept ranges, whose phrase breaks stop any group spanning one.
     voice_slots = {}
     swallow_per: dict[str, float] = {}
     for name, _, _, voice_units in voices:
@@ -858,9 +957,7 @@ def main(argv: list[str] | None = None) -> int:
                 # and the bank decides what words exist: a bank cut with
                 # build_bank --raw calls every unit "raw", which no
                 # vocabulary holds, and its own log has to replay.
-                described = arrange.load(
-                    args.arrangement,
-                    bank_words={w for u in units for w in u.words})
+                described = replayed
                 # The log records the grid it was laid over, so replay
                 # rebuilds that grid rather than asking for it to be retyped.
                 # Only an explicit --swallow that disagrees is refused.
@@ -879,13 +976,27 @@ def main(argv: list[str] | None = None) -> int:
                 # than re-pitched per syllable and cut to its slots.
                 word_plan = arrange.realise(described, slots, units,
                                             bank_dir=words_dir)
+                if kept_ranges:
+                    # A line edited by hand, or re-laid by a reciting bank,
+                    # can reach into a kept range: dropped whole, as a fresh
+                    # take's would be, rather than cut there by the gate.
+                    ringing = [p for p in word_plan.placements
+                               if keep.rings_into(p, kept_ranges)]
+                    gone = {id(p) for p in ringing}
+                    word_plan.placements = [p for p in word_plan.placements
+                                            if id(p) not in gone]
+                    word_plan.slots_used -= sum(p.n_slots for p in ringing)
+                    if ringing and not args.json:
+                        print(f"  keep      {len(ringing)} replayed line(s)"
+                              " would sound inside a kept range, left out")
                 label = described.level or "replay"
                 if not args.json:
                     print(f"  arrangement replayed from {args.arrangement}")
             else:
                 seed = args.seed if args.seed is not None else random.randrange(1, 1_000_000)
                 word_plan, drawn, draws, owners = arrange_voices(
-                    voices, voice_slots, turns, level, seed, args.input.stem)
+                    voices, voice_slots, turns, level, seed, args.input.stem,
+                    kept=kept_ranges)
                 if len(voices) > 1 and not args.json:
                     # The run's own seed, which brings the whole take back.
                     # Each voice's log records the seed its draw survived on.
@@ -896,6 +1007,8 @@ def main(argv: list[str] | None = None) -> int:
                     # pace without a word.
                     described.swallow = swallow_per.get(name)
                     described.swallow_words = swallow_words(args, name)
+                    described.keep = (list(args.keep_original)
+                                      if args.keep_original else None)
                     # One log per voice, in a folder per voice: two banks at
                     # one seed and level would otherwise share a filename.
                     saved = arrange.save(
@@ -953,16 +1066,18 @@ def main(argv: list[str] | None = None) -> int:
                 # seven files have to be told apart from each other, and
                 # mim1p00 is what the ladder has always called that file.
                 path = versioned_name(output, label, tag=join_tags(
-                    rung_word(target), swallow_word(args)))
+                    rung_word(target), swallow_word(args), keep_word(args)))
 
             word_bus = render(word_plan, stems.instrumental.shape[1], config.SAMPLE_RATE,
                               shift=not args.no_shift, engine=args.engine, cache=cache)
             # Immediately before the write, so nothing can reach the encoder
             # without the take that was there being kept first.
             keep_the_one_it_replaces(path)
-            audio_io.encode_mp3(path, mix_buses(word_bus, stems.instrumental,
-                                                config.SAMPLE_RATE,
-                                                word_bus_lufs=bus_lufs))
+            if word_gate is not None:
+                word_bus = word_bus * word_gate
+            audio_io.encode_mp3(path, mix_buses(
+                word_bus, bed, config.SAMPLE_RATE, word_bus_lufs=bus_lufs,
+                level_from=stems.instrumental if kept_ranges else None))
             written.append((path, label, mimicry(word_plan),
                             sum(1 for p in word_plan.placements if p.do_shift)))
 
