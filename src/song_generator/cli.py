@@ -17,6 +17,7 @@ from .analysis import analyse, report as analysis_report
 from .detect import detect_vocal
 from .mapping import (
     BankError,
+    Plan,
     clean_slots,
     swallow_slots,
     decide_shifts,
@@ -282,57 +283,45 @@ def arrange_voices(voices, voice_slots, turns, level: str, seed: int,
                    song: str):
     """Every voice's arrangement, and the one plan they sing together.
 
-    Returns (plan, one Arrangement per voice, draws, the voice of each
-    placement). One voice is arrange.build and nothing more.
+    Returns (plan, one Arrangement per voice, draws per voice, the voice of
+    each placement). One voice is arrange.build and nothing more.
 
-    Several voices are arranged over the whole song from one seed and
-    take_turns keeps each voice's placements inside its own turns. Each
-    build checks its own coverage over the whole song, and half of every
-    build is then handed to other voices, so a required word each voice said
-    only in the other's turns disappears from the song. Coverage is a rule
-    (see arrange.build), so it is checked again on the plan that is actually
-    sung and the seed redrawn, up to PLAY_COVERAGE_TRIES, keeping the best.
-    A word no voice can say is not asked for, and neither is the pairing when
-    no voice holds one.
+    Several voices are each arranged over the whole song from the one seed,
+    and take_turns keeps each voice's placements inside its own turns. Each
+    build is told which moments its voice sings, so its redraws and its
+    relaxing of preferences for a missing word judge the coverage that will
+    be heard, not coverage the other voice's turns then take away. The same
+    seed brings the whole take back.
+
+    The Arrangement returned per voice describes what that voice sings in the
+    take and nothing else, so its log reads as what was heard.
     """
-    if len(voices) == 1:
-        name, voice_dir, singing_from, units = voices[0]
+    n = len(voices)
+    plans, whole, draws = [], [], []
+    for v, (name, voice_dir, singing_from, units) in enumerate(voices):
+        sings = None if n == 1 else (
+            lambda t, v=v: take.voice_of(turns, n, t) == v)
         plan, described, tries = arrange.build(
             voice_slots[name], units, level, seed, song=song,
-            bank=str(singing_from), bank_dir=voice_dir)
-        return plan, [described], tries, [0] * len(plan.placements)
+            bank=str(singing_from), bank_dir=voice_dir, sings=sings)
+        plans.append(plan)
+        whole.append(described)
+        draws.append(tries)
+    if n == 1:
+        return plans[0], whole, draws, [0] * len(plans[0].placements)
 
-    unsayable = [set(arrange.unreachable_words(units)) for *_, units in voices]
-    wanted = {w for w in arrange.required_words()
-              if any(w not in lacks for lacks in unsayable)}
-    possible = any(u.is_shout_pairing for *_, units in voices for u in units)
-    together = "+".join(name for name, *_ in voices)
-    best = None
-    tries = max(1, int(config.PLAY_COVERAGE_TRIES))
-    for attempt in range(tries):
-        this_seed = seed + attempt
-        plans, drawn = [], []
-        for name, voice_dir, singing_from, units in voices:
-            plan, described, _ = arrange.build(
-                voice_slots[name], units, level, this_seed, song=song,
-                bank=str(singing_from), bank_dir=voice_dir)
-            plans.append(plan)
-            drawn.append(described)
-        plan, owners = take.take_turns(
-            plans, turns, [voice_slots[name] for name, *_ in voices])
-        sung = arrange.describe(plan, song, together, level, this_seed)
-        score = (len(wanted & sung.words_used()),
-                 sung.has_pairing() or not possible)
-        if best is None or score > best[0]:
-            best = (score, plan, drawn, attempt + 1, owners)
-        if score == (len(wanted), True):
-            break
-    _, plan, drawn, draws, owners = best
-    return plan, drawn, draws, owners
+    plan, owners = take.take_turns(
+        plans, turns, [voice_slots[name] for name, *_ in voices])
+    sung = [arrange.describe(
+                Plan(placements=[p for p, o in zip(plan.placements, owners)
+                                 if o == v]),
+                song, whole[v].bank, level, whole[v].seed)
+            for v in range(n)]
+    return plan, sung, draws, owners
 
 
 def refuse_other_grid(logged: float | None, current: float | None,
-                      path: Path) -> None:
+                      path: Path, logged_words: float | None = None) -> None:
     """A replayed log on a slot grid it was not made on.
 
     Replay anchors each line to the nearest slot and its recorded slot count,
@@ -349,10 +338,16 @@ def refuse_other_grid(logged: float | None, current: float | None,
             else f"{logged:.4f} notes per bank syllable")
     now = ("unswallowed notes" if current is None
            else f"{current:.4f} notes per bank syllable")
+    if logged_words is not None:
+        advice = (f"It was made with --swallow {logged_words:g}. If this run was"
+                  " given that too, the bank has changed since the log was"
+                  " written, and its lines no longer fit the notes.")
+    else:
+        advice = ("Replay it with the --swallow it was made with, so every "
+                  "line lands on the notes it was planned over.")
     raise arrange.ArrangementError(
-        f"{path} was arranged on {made}, and this run folds {now}.\n"
-        "    Give --swallow the value the log was made with, so every line "
-        "lands on the notes it was planned over.")
+        f"{path} was arranged on {made}, and this run folds {now}.\n    "
+        + advice)
 
 
 def drives_its_own_shift(args: argparse.Namespace) -> bool:
@@ -834,7 +829,7 @@ def main(argv: list[str] | None = None) -> int:
                     args.arrangement,
                     bank_words={w for u in units for w in u.words})
                 refuse_other_grid(described.swallow, swallow_per.get(names[0]),
-                                  args.arrangement)
+                                  args.arrangement, described.swallow_words)
                 # The bank's declaration travels into replay too, so a
                 # sequence bank's own log comes back whole and paced rather
                 # than re-pitched per syllable and cut to its slots.
@@ -847,24 +842,29 @@ def main(argv: list[str] | None = None) -> int:
                 seed = args.seed if args.seed is not None else random.randrange(1, 1_000_000)
                 word_plan, drawn, draws, owners = arrange_voices(
                     voices, voice_slots, turns, level, seed, args.input.stem)
-                for (name, *_), described in zip(voices, drawn):
+                if len(voices) > 1 and not args.json:
+                    # The run's own seed, which brings the whole take back.
+                    # Each voice's log records the seed its draw survived on.
+                    print(f"  play      {level}, seed {seed}")
+                for (name, *_), described, tries in zip(voices, drawn, draws):
                     # Written down before saving, so a replay can refuse a
                     # grid the log was not made on instead of doubling the
                     # pace without a word.
-                    per = swallow_per.get(name)
-                    described.swallow = per
+                    described.swallow = swallow_per.get(name)
+                    described.swallow_words = swallow_words(args, name)
                     # One log per voice, in a folder per voice: two banks at
                     # one seed and level would otherwise share a filename.
                     saved = arrange.save(
                         described, work if len(voices) == 1
                         else work / config.VOICES_LOG_DIR / name)
                     if not args.json:
-                        who = f" ({name})" if len(voices) > 1 else ""
-                        print(f"  play      {level}{who}, seed {described.seed}")
+                        redrawn = ("" if tries == 1
+                                   else f", redrawn {tries - 1}x for coverage")
+                        if len(voices) == 1:
+                            print(f"  play      {level}, seed {described.seed}{redrawn}")
+                        else:
+                            print(f"  voice     {name}{redrawn}")
                         print(f"  words     {saved}")
-                if not args.json and draws > 1:
-                    print(f"  redrawn   {draws - 1}x for coverage"
-                          + (" across the voices" if len(voices) > 1 else ""))
                 label = level
                 if len(voices) > 1 and not args.json:
                     for v, (name, *_) in enumerate(voices):

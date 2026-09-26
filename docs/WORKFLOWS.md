@@ -107,12 +107,20 @@ on two turns in a row where the list wraps), `--bank` beside `--voices`,
 replay of a multi-voice run yet). Banks whose `bank.json` declare different
 `word_bus_lufs` are refused too, since the voices share one word bus.
 
-Required words are checked on the plan the voices sing together, not only on
-each voice's own arrangement. Each voice is arranged over the whole song and
-then loses every placement outside its turns, so a word each voice happened to
-say only in the other's turns would drop out of the song. When that happens
-the seed is drawn again, up to `PLAY_COVERAGE_TRIES`, and the report says
-`redrawn Nx for coverage across the voices`.
+Required words are judged on what each voice will actually sing. Each voice is
+arranged over the whole song and then loses every placement outside its turns,
+so coverage judged over the whole song was met at the first draw while the
+words that met it went to the other voice. `arrange.build` takes `sings`, the
+moments its voice is heard in, and its own redraws and its relaxing of
+preferences work on those; a first version redrew the whole set from outside
+instead, which cost up to 288 planner runs a level and never let the
+relaxation see the coverage that mattered. The run prints its own seed, and
+`--seed` with it brings the whole take back.
+
+At a handover the voices were planned apart, so the incoming voice's first
+words could start while the outgoing voice's last word was still sounding, for
+a second or more when the two swallow at different paces. Those incoming words
+are dropped whole until the outgoing word has finished; nothing is cut.
 
 **How turns are found.** The vocal stem is cut into overlapping windows and
 each becomes a speaker embedding; windows cluster by voice, and a run of

@@ -1461,6 +1461,20 @@ def build_segments(p: Placement) -> tuple[list, float]:
     return segments, max(cursor, 1e-3)
 
 
+def sounding_s(p: Placement) -> float:
+    """How long a placement actually sounds, whichever way it renders.
+
+    Not out_dur_s and not slot_span_s, which are what was asked for: see
+    "What a segment is asked to do is not what it sounds" in AGENTS.md. The
+    shifted render lasts as long as build_segments says; the unshifted one
+    plays the clip up to play_s. The longer of the two, so anything asking
+    whether this placement reaches a later moment errs towards yes.
+    """
+    segments, total = build_segments(p)
+    natural = min(p.play_s, p.unit.duration_s)
+    return max(total if segments else 0.0, natural)
+
+
 def precompute_shifted(plan: Plan, sr: int = config.SAMPLE_RATE,
                        engine: str | None = None) -> dict[int, np.ndarray]:
     """Shift every unit once, whether or not this variant will use it.

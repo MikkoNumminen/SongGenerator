@@ -42,7 +42,7 @@ from typing import Sequence
 import numpy as np
 
 from . import config
-from .mapping import Placement, Plan
+from .mapping import Placement, Plan, sounding_s
 
 TURNS_FILE = "turns.json"
 
@@ -208,10 +208,22 @@ def detect(vocal: np.ndarray, sr: int, notes: list[dict],
             " whose voice it is, so there are no turns to take."
         )
 
+    from speechbrain.utils.fetching import LocalStrategy
+
     # speechbrain names a device "cuda:0"; a bare "cuda" gets a warning.
     run_on = "cuda:0" if device == "cuda" else device
-    model = EncoderClassifier.from_hparams(
-        source=config.TURN_MODEL, run_opts={"device": run_on})
+    # Fetched into the work directory by copying, never linking. Its default
+    # links out of the Hugging Face cache, which Windows refuses without
+    # Developer Mode, and a relative default would land in whatever directory
+    # the command was run from.
+    try:
+        model = EncoderClassifier.from_hparams(
+            source=config.TURN_MODEL, run_opts={"device": run_on},
+            savedir=str(Path(config.WORK_DIR) / "models" / "spkrec"),
+            local_strategy=LocalStrategy.COPY)
+    except OSError as exc:
+        raise TurnError(f"could not load the speaker model {config.TURN_MODEL}:"
+                        f" {exc}") from exc
     width = int(config.TURN_WINDOW_S * _EMBED_SR)
     chunks = [mono[int(s * _EMBED_SR):int(s * _EMBED_SR) + width] for s in starts]
     embeddings = []
@@ -229,17 +241,26 @@ def detect(vocal: np.ndarray, sr: int, notes: list[dict],
     return from_labels(centres, labels, duration)
 
 
-def fingerprint(vocal: np.ndarray) -> str:
-    """Which vocal stem the turns were measured on.
+def fingerprint(vocal: np.ndarray, notes: list[dict] | None = None) -> str:
+    """Which vocal stem, and which notes in it, the turns were measured on.
 
     The settings alone cannot say: separating a song again, with --force or
     another separator, writes new stems to the same paths, and turns measured
-    on the old stem would then be laid over the new one without a word.
+    on the old stem would then be laid over the new one without a word. The
+    notes decide which windows are embedded at all, so a change in the melody
+    analysis measures again too.
+
+    Every 64th sample rather than all of them: a stem is a hundred megabytes,
+    this runs on every multi-voice render, and a stem separated again differs
+    everywhere, not in one sample in sixty-four.
     """
     import hashlib
 
-    return hashlib.sha1(np.ascontiguousarray(vocal, dtype=np.float32)
-                        .tobytes()).hexdigest()
+    digest = hashlib.sha1(np.ascontiguousarray(
+        np.asarray(vocal, dtype=np.float32)[..., ::64]).tobytes())
+    for n in notes or []:
+        digest.update(f"{n['onset_s']:.3f}:{n['dur_s']:.3f};".encode())
+    return digest.hexdigest()
 
 
 def _read_turns(path: Path, saved) -> list[Turn]:
@@ -259,6 +280,11 @@ def _read_turns(path: Path, saved) -> list[Turn]:
             " to measure the turns again.") from exc
     if not turns:
         raise TurnError(f"{path} holds no turns. Delete it to measure again.")
+    for t in turns:
+        if t.start_s < 0 or t.end_s <= t.start_s:
+            raise TurnError(
+                f"{path}: the turn from {t.start_s:g}s to {t.end_s:g}s does not"
+                " run forwards from the start of the song.")
     for a, b in zip(turns, turns[1:]):
         if not (a.start_s < a.end_s <= b.start_s):
             raise TurnError(
@@ -276,7 +302,7 @@ def load_or_detect(work: Path, vocal: np.ndarray, sr: int, notes: list[dict],
     Returns the turns and whether they came from the cache.
     """
     path = Path(work) / TURNS_FILE
-    stem = fingerprint(vocal)
+    stem = fingerprint(vocal, notes)
     if path.is_file():
         try:
             saved = json.loads(path.read_text(encoding="utf-8"))
@@ -317,8 +343,11 @@ def take_turns(plans: list[Plan], turns: list[Turn],
     one voice's leftovers.
 
     A placement is owned by where it starts. A word begun just before a
-    handover finishes in its own voice; cutting it at the boundary would chop
-    the word, and a moment of overlap at a handover is what two singers do.
+    handover finishes in its own voice, whole. Each voice was planned so that
+    none of its own words runs into its next one, but the voices were planned
+    apart, so the incoming voice's first words can start while that word is
+    still sounding; on grids swallowed at different paces, for a second or
+    more. Those are dropped, whole, until the outgoing word has finished.
 
     slots, one list per voice, is the grid each voice was planned on. Voices
     swallowing at different paces plan on different grids, so the slots the
@@ -332,14 +361,31 @@ def take_turns(plans: list[Plan], turns: list[Turn],
         kept += [(p, v) for p in plan.placements
                  if voice_of(turns, len(plans), p.onset_s) == v]
     kept.sort(key=lambda pv: pv[0].onset_s)
+    clear: list[tuple[Placement, int]] = []
+    until = {}   # voice -> when its last kept word stops sounding
+    for p, v in kept:
+        others = [end for w, end in until.items() if w != v]
+        if others and p.onset_s < max(others):
+            continue
+        clear.append((p, v))
+        until[v] = max(until.get(v, 0.0), p.onset_s + sounding_s(p))
+    kept = clear
+
+    def owned(v: int, slot) -> bool:
+        return voice_of(turns, len(plans), slot.onset_s) == v
+
+    # Used and total on one basis: each voice's own slots inside its own
+    # turns. A placement starting just before a handover covers slots in the
+    # next turn, and counting its n_slots whole put used above total.
     if slots is not None:
-        total = sum(1 for v, grid in enumerate(slots) for s in grid
-                    if voice_of(turns, len(plans), s.onset_s) == v)
+        total = sum(1 for v, grid in enumerate(slots) for s in grid if owned(v, s))
     else:
         total = plans[0].slots_total if plans else 0
+    used = sum(sum(1 for s in p.slots if owned(v, s)) if p.slots else p.n_slots
+               for p, v in kept)
     combined = Plan(
         placements=[p for p, _ in kept],
-        slots_used=sum(p.n_slots for p, _ in kept),
+        slots_used=used,
         slots_total=total,
         # slots_dropped is counted per arrangement and cannot be attributed to
         # a turn afterwards, so it is left out rather than estimated.

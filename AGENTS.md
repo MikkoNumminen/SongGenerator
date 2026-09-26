@@ -210,7 +210,9 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   gated, unlike the pyannote models already sitting in `AudiobookMaker`'s
   chatterbox venv, which is why `turns.py` uses that model instead. speechbrain
   wants the device spelled `"cuda:0"`; a bare `"cuda"` logs a parse warning and
-  falls back to device 0 anyway.
+  falls back to device 0 anyway. `turns.py` fetches the model into
+  `work/models/spkrec` by copying: speechbrain's default links out of the
+  Hugging Face cache, which Windows refuses without Developer Mode.
 - **Turns are measured on sliding windows, not on `analysis.json`'s phrases,
   on purpose.** A phrase can run long in rap: one measured posse cut had 31
   phrases, several over 25 seconds, and one of them spanned an actual

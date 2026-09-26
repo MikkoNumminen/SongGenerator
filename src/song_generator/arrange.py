@@ -329,6 +329,9 @@ class Arrangement:
     # when they were not. The lines are laid over that grid, so replay needs
     # the same one; cli refuses a replay on any other.
     swallow: float | None = None
+    # The --swallow words that grid came from, so a refused replay can say
+    # what to pass rather than a notes figure --swallow does not take.
+    swallow_words: float | None = None
 
     def words_used(self) -> set[str]:
         return {w for line in self.lines for w in line.words}
@@ -399,7 +402,9 @@ def render_text(arr: Arrangement) -> str:
     if arr.swallow is not None:
         # After the header rather than inside it, so a log made without
         # --swallow reads exactly as every log before this line existed.
-        out.append(f"#   swallow {arr.swallow:.4f}")
+        words = ("" if arr.swallow_words is None
+                 else f" from {arr.swallow_words:g} words")
+        out.append(f"#   swallow {arr.swallow:.4f}{words}")
     phrase = None
     for line in arr.lines:
         if line.phrase != phrase:
@@ -530,17 +535,20 @@ def parse_text(text: str, bank_words: set[str] | None = None) -> Arrangement:
             f"{meta['seed']!r}. Replay rebuilds its pool from this number, so "
             "guessing one would play a different arrangement than this file "
             "records.") from exc
-    swallow = None
+    swallow = swallow_words = None
     if meta["swallow"]:
         try:
-            swallow = float(meta["swallow"])
-        except ValueError as exc:
+            fields = meta["swallow"].split()
+            swallow = float(fields[0])
+            if len(fields) >= 3 and fields[1] == "from":
+                swallow_words = float(fields[2])
+        except (ValueError, IndexError) as exc:
             raise ArrangementError(
                 f"line {meta_lines['swallow']}: cannot read the swallow "
                 f"{meta['swallow']!r}. It records the grid the lines were laid "
                 "over, and replay refuses any other.") from exc
     return Arrangement(meta["song"], meta["bank"], meta["level"], seed, lines,
-                       swallow)
+                       swallow, swallow_words)
 
 
 def unit_for(words: list[str], pool: list[Unit], by_word: dict[str, list[Unit]],
@@ -582,7 +590,8 @@ def unit_for(words: list[str], pool: list[Unit], by_word: dict[str, list[Unit]],
 
 def build(slots, units: list[Unit], level: str, seed: int,
           song: str = "", bank: str = "",
-          bank_dir: Path | None = None) -> tuple[Plan, Arrangement, int]:
+          bank_dir: Path | None = None,
+          sings=None) -> tuple[Plan, Arrangement, int]:
     """One arrangement, redrawn until it says every required word.
 
     Coverage is checked after the fact rather than forced during planning,
@@ -597,6 +606,15 @@ def build(slots, units: list[Unit], level: str, seed: int,
     there can pick the strategy per level and lean its parameters. None, or
     a directory with no bank.json, is the behaviour every bank had before
     banks could declare anything.
+
+    sings, when given, says which moments this plan will actually be heard
+    in: a callable taking a placement's onset. --voices arranges every voice
+    over the whole song and keeps each one's placements inside its own turns,
+    so coverage judged over the whole song was met at the first draw while
+    the words that met it were handed to another voice. Judged on the
+    placements that will sing, the redraws and the relaxing of preferences
+    below work on the coverage that matters. The plan returned is still the
+    whole song's.
     """
     from . import banks
     from .mapping import plan_sequence, plan_words
@@ -707,17 +725,21 @@ def build(slots, units: list[Unit], level: str, seed: int,
                 placement.split = False
                 placement.target_s = placement.play_s
         arrangement = describe(plan, song, bank, level, this_seed)
+        judged = arrangement if sings is None else describe(
+            Plan(placements=[p for p in plan.placements if sings(p.onset_s)]),
+            song, bank, level, this_seed)
 
-        covered = wanted <= arrangement.words_used()
-        paired = arrangement.has_pairing() or not possible
+        covered = wanted <= judged.words_used()
+        paired = judged.has_pairing() or not possible
         if covered and paired:
             return _stamp_cap(plan, bank_dir, cap), arrangement, attempt + 1
-        if best is None or scored(arrangement) > scored(best[1]):
-            best = (plan, arrangement, attempt + 1)
+        if best is None or scored(judged) > best[0]:
+            best = (scored(judged), plan, arrangement, attempt + 1)
 
     # tries is clamped to at least one, so the loop ran and recorded a best.
     assert best is not None
-    return best
+    _, plan, arrangement, draws = best
+    return _stamp_cap(plan, bank_dir, cap), arrangement, draws
 
 
 def unreachable_words(units: list[Unit]) -> list[str]:

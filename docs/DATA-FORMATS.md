@@ -202,16 +202,19 @@ moved by hand stick: editing `start_s` or `end_s` on a turn changes nothing
 `settings` looks at, so the edited file is still read back on the next run
 against the same song and the same config.
 
-`vocal` is a SHA-1 of the vocal stem the turns were measured on. Separating a
-song again (`--force`, or another separator) writes new stems to the same
-paths, and turns measured on the old stem would otherwise be laid over the
-new one. A different stem is measured again, which also discards any hand
-edits made against the old one.
+`vocal` is a SHA-1 of the vocal stem the turns were measured on (every 64th
+sample, since a stem is a hundred megabytes and this runs on every multi-voice
+render) and of the notes the melody analysis found in it, which decide which
+windows are embedded at all. Separating a song again (`--force`, or another
+separator) writes new stems to the same paths, and turns measured on the old
+stem would otherwise be laid over the new one. A different stem or different
+notes are measured again, which also discards any hand edits made against the
+old ones.
 
 A hand edit that cannot be used is refused with an error naming the file:
 a turn missing `start_s`, `end_s` or `speaker`, a value that is not a number,
-turns out of order or overlapping, or no turns at all. Extra fields are
-ignored.
+a turn that starts before the song or does not end after it starts, turns out
+of order or overlapping, or no turns at all. Extra fields are ignored.
 
 ---
 
@@ -219,9 +222,11 @@ ignored.
 
 Where a `--voices` run's arrangement logs land, one folder per bank so two
 voices at the same seed and level do not share a filename. Otherwise this is
-the same `.arr` format described next: each voice is arranged over the whole
-song on its own, and `take_turns` afterwards keeps each voice's placements
-only inside the turns it owns.
+the same `.arr` format described next. Each log holds only the lines that voice
+sings in the take: every voice is arranged over the whole song, but a log of
+that whole-song arrangement read as a take in one voice that nobody heard.
+Its seed header is the seed that voice's draw survived on; the run's own seed,
+printed as `play <level>, seed N`, is the one that brings the whole take back.
 
 ---
 
@@ -261,10 +266,13 @@ across a leftover slot, which widens what it is given without adding a note to
 land on. Omit it in a hand-written file and the slots decide.
 
 A take made with `--swallow` carries one more header line after the others,
-`#   swallow 3.0600`: the notes per bank syllable its slots were folded to. The
-lines are laid over that grid, so a replay on any other is refused, and the
-error names the value to pass. A log without the line was made on unswallowed
-notes, which is every log written before the line existed.
+`#   swallow 3.0600 from 2.6 words`: the notes per bank syllable its slots were
+folded to, and the `--swallow` value that grid came from. The lines are laid
+over that grid, so a replay on any other is refused, and the error names the
+`--swallow` value to pass. When that value no longer gives the same grid, the
+bank itself has changed since the log was written, and the error says so. A
+log without the line was made on unswallowed notes, which is every log written
+before the line existed.
 
 **Two-way on purpose.** The tool writes it and a person can edit it and feed
 it back:

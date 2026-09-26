@@ -221,10 +221,11 @@ class TestTakeTurns:
 
         onsets = [p.onset_s for p in combined.placements]
         assert onsets == sorted(onsets)
-        assert onsets == [0.0, 2.0, 4.9, 5.0, 7.0, 9.0]
-        assert owners == [0, 0, 0, 1, 1, 1]
+        # 5.0 is voice 1's, but voice 0's word from 4.9 is still sounding.
+        assert onsets == [0.0, 2.0, 4.9, 7.0, 9.0]
+        assert owners == [0, 0, 0, 1, 1]
         assert combined.slots_used == sum(p.n_slots for p in combined.placements)
-        assert combined.slots_used == 6
+        assert combined.slots_used == 5
 
     def test_a_placement_just_before_a_handover_is_kept_whole_by_the_earlier_voice(self):
         """Not dropped for straddling the boundary, and not duplicated by the
@@ -336,6 +337,20 @@ class TestLoadOrDetect:
         assert cached is False
         assert got == fresh
 
+    def test_different_notes_are_measured_again(self, tmp_path, monkeypatch):
+        """The notes decide which windows are embedded at all."""
+        notes = [{"onset_s": 1.0, "dur_s": 0.5}]
+        (tmp_path / "turns.json").write_text(json.dumps({
+            "settings": settings(),
+            "vocal": turns_mod.fingerprint(VOCAL, notes),
+            "turns": [{"start_s": 0.0, "end_s": 5.0, "speaker": 0}],
+        }), encoding="utf-8")
+        fresh = [Turn(0.0, 9.0, 1)]
+        monkeypatch.setattr("song_generator.turns.detect", lambda *a, **kw: fresh)
+        got, cached = load_or_detect(tmp_path, vocal=VOCAL, sr=16000,
+                                     notes=[{"onset_s": 2.0, "dur_s": 0.5}])
+        assert cached is False and got == fresh
+
     def test_a_different_vocal_stem_is_measured_again(self, tmp_path, monkeypatch):
         """Stems separated again land at the same paths; turns measured on
         the old stem must not be laid over the new one."""
@@ -351,6 +366,9 @@ class TestLoadOrDetect:
         assert got == fresh
 
     @pytest.mark.parametrize("turns", [
+        [{"start_s": 0.0, "end_s": 5.0, "speaker": 0},
+         {"start_s": 300.0, "end_s": 290.0, "speaker": 1}],
+        [{"start_s": -1.0, "end_s": 5.0, "speaker": 0}],
         [{"start": 0.0, "end_s": 5.0, "speaker": 0}],
         [{"start_s": 0.0, "end_s": 5.0}],
         [{"start_s": "soon", "end_s": 5.0, "speaker": 0}],
@@ -488,36 +506,97 @@ class TestReviewFixes:
         combined, _ = take_turns([Plan(), Plan()], turns_, [coarse, fine])
         assert combined.slots_total == 5 + 10
 
-    def test_coverage_is_checked_on_what_is_sung_together(self, monkeypatch):
-        """Each voice says the required word only in the other's turns on the
-        first draw; the plan sung together would never say it, so the seed is
-        drawn again."""
+    def test_each_voice_is_judged_on_the_turns_it_sings(self, monkeypatch):
+        """Coverage judged over the whole song was met at the first draw while
+        the words that met it went to the other voice. Each build is told
+        which moments its voice sings, so its own redraws judge those."""
         from song_generator import arrange, cli
-        word = list(config.WORD_SYLLABLES)[0]
-        other = list(config.WORD_SYLLABLES)[1]
-        monkeypatch.setattr(arrange, "required_words", lambda: (word,))
+        seen = {}
 
-        def build(slots, units, level, seed, song="", bank="", bank_dir=None):
-            voice = 0 if bank == "a" else 1
-            own = 1.0 if voice == 0 else 6.0
-            elsewhere = 6.0 if voice == 0 else 1.0
-            at = elsewhere if seed == 100 else own
-            plan = Plan(placements=[
-                Placement(unit=make_unit([word]), onset_s=at, slot_span_s=0.5,
-                          play_s=0.5, n_slots=1, phrase=0),
-                Placement(unit=make_unit([other]), onset_s=own + 1.0,
-                          slot_span_s=0.5, play_s=0.5, n_slots=1, phrase=0)])
+        def build(slots, units, level, seed, song="", bank="", bank_dir=None,
+                  sings=None):
+            seen[bank] = sings
+            plan = Plan(placements=[_placement(1.0), _placement(6.0)])
             return plan, arrange.describe(plan, song, bank, level, seed), 1
 
         monkeypatch.setattr(arrange, "build", build)
-        voices = [("a", None, "a", [make_unit([word])]),
-                  ("b", None, "b", [make_unit([word])])]
+        voices = [("a", None, "a", []), ("b", None, "b", [])]
         turns_ = [Turn(0.0, 5.0, 0), Turn(5.0, 10.0, 1)]
         plan, drawn, draws, owners = cli.arrange_voices(
             voices, {"a": [], "b": []}, turns_, "wild", 100, "song")
-        assert draws == 2
-        assert word in {w for p in plan.placements for w in p.unit.words}
-        assert len(drawn) == 2 and len(owners) == len(plan.placements)
+        assert seen["a"](1.0) and not seen["a"](6.0)
+        assert seen["b"](6.0) and not seen["b"](1.0)
+        assert draws == [1, 1]
+        assert [p.onset_s for p in plan.placements] == [1.0, 6.0]
+        assert owners == [0, 1]
+
+    def test_each_voice_s_log_holds_what_that_voice_sang(self, monkeypatch):
+        """Not its whole-song arrangement, half of which the other voice sang."""
+        from song_generator import arrange, cli
+
+        def build(slots, units, level, seed, song="", bank="", bank_dir=None,
+                  sings=None):
+            plan = Plan(placements=[_placement(1.0), _placement(6.0)])
+            return plan, arrange.describe(plan, song, bank, level, seed), 1
+
+        monkeypatch.setattr(arrange, "build", build)
+        voices = [("a", None, "a", []), ("b", None, "b", [])]
+        turns_ = [Turn(0.0, 5.0, 0), Turn(5.0, 10.0, 1)]
+        _, drawn, _, _ = cli.arrange_voices(
+            voices, {"a": [], "b": []}, turns_, "wild", 100, "song")
+        assert [line.onset_s for line in drawn[0].lines] == [1.0]
+        assert [line.onset_s for line in drawn[1].lines] == [6.0]
+
+    def test_one_voice_is_arrange_build_alone(self, monkeypatch):
+        from song_generator import arrange, cli
+        calls = []
+
+        def build(slots, units, level, seed, song="", bank="", bank_dir=None,
+                  sings=None):
+            calls.append(sings)
+            plan = Plan(placements=[_placement(1.0)])
+            return plan, arrange.describe(plan, song, bank, level, seed), 3
+
+        monkeypatch.setattr(arrange, "build", build)
+        plan, drawn, draws, owners = cli.arrange_voices(
+            [("a", None, "a", [])], {"a": []}, [], "wild", 100, "song")
+        assert calls == [None] and draws == [3] and owners == [0]
+
+
+class TestHandover:
+    def test_the_incoming_voice_waits_for_the_outgoing_word_to_finish(self):
+        """Voices planned apart can overlap at a handover; the incoming
+        voice's words that start while the outgoing one sounds are dropped
+        whole, and the first one after it is kept."""
+        turns_ = [Turn(0.0, 5.0, 0), Turn(5.0, 10.0, 1)]
+        long_word = Placement(unit=_unit(), onset_s=4.8, slot_span_s=1.5,
+                              play_s=1.5, n_slots=1, phrase=0)
+        plan0 = Plan(placements=[long_word])
+        plan1 = Plan(placements=[_placement(5.0), _placement(5.1),
+                                 _placement(5.3)])
+        combined, owners = take_turns([plan0, plan1], turns_)
+        assert [p.onset_s for p in combined.placements] == [4.8, 5.3]
+        assert owners == [0, 1]
+
+    def test_a_voice_s_own_words_are_not_held_back_by_itself(self):
+        turns_ = [Turn(0.0, 10.0, 0), Turn(10.0, 20.0, 1)]
+        plan0 = Plan(placements=[_placement(1.0), _placement(1.2)])
+        combined, _ = take_turns([plan0, Plan()], turns_)
+        assert [p.onset_s for p in combined.placements] == [1.0, 1.2]
+
+    def test_used_never_exceeds_total(self):
+        """A placement covering slots across a handover counts only the slots
+        in its own voice's turns."""
+        from song_generator.mapping import Slot
+        turns_ = [Turn(0.0, 5.0, 0), Turn(5.0, 10.0, 1)]
+        grid = [Slot(t, t + 1.0, 60, 0) for t in range(10)]
+        spanning = Placement(unit=_unit(), onset_s=4.0, slot_span_s=2.0,
+                             play_s=0.5, n_slots=2, phrase=0,
+                             slots=[grid[4], grid[5]])
+        combined, _ = take_turns([Plan(placements=[spanning]), Plan()],
+                                 turns_, [grid, grid])
+        assert combined.slots_used == 1
+        assert combined.slots_used <= combined.slots_total
 
 
 class TestSwallowRecordedInTheLog:
@@ -525,9 +604,17 @@ class TestSwallowRecordedInTheLog:
         from song_generator import arrange
         word = list(config.WORD_SYLLABLES)[0]
         arr = arrange.Arrangement("song", "bank", "wild", 7, [
-            arrange.Line(0, 1.0, 1, [word])], swallow=2.4123)
+            arrange.Line(0, 1.0, 1, [word])], swallow=2.4123, swallow_words=2.6)
         back = arrange.parse_text(arrange.render_text(arr))
         assert back.swallow == pytest.approx(2.4123)
+        assert back.swallow_words == pytest.approx(2.6)
+
+    def test_a_refused_replay_names_the_value_to_pass(self, tmp_path):
+        """The log's figure is notes per syllable, which --swallow does not
+        take; the message names the words the log was made with."""
+        from song_generator import arrange, cli
+        with pytest.raises(arrange.ArrangementError, match="--swallow 2.6"):
+            cli.refuse_other_grid(3.06, None, tmp_path / "w.arr", 2.6)
 
     def test_a_log_without_it_reads_as_unswallowed(self):
         from song_generator import arrange
