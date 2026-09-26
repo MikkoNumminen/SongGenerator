@@ -198,8 +198,11 @@ ruled out, in order:
   measured 53.3, close to it and nowhere near the song's own median of 49.7
   (D3).
 
-What worked instead was text-to-speech through AudiobookMaker's own Finnish
-path, not voice conversion of the sung source, and it took two tries.
+Text-to-speech through AudiobookMaker's own Finnish path came closer than
+voice conversion of the sung source, and it took two tries to get clean
+words out of it. It still did not give her voice: the owner heard the third
+Isoäiti bank, the one made as described below, as wrong too. See the open
+item in [TODO.md](TODO.md).
 
 **The dead end.** Speaking several phrases as sentences in one 60-200
 character chunk, then cutting each word back out at the longest measured
@@ -208,7 +211,7 @@ not longer than her comma pauses, so the cuts landed in the wrong places, and
 faster-whisper hallucinated a trailing "Kiitos." onto the silence after the
 last piece. Abandoned rather than tuned further.
 
-**What worked.** AudiobookMaker already has the tool for this,
+**Clean words, not yet her voice.** AudiobookMaker already has the tool for this,
 `scripts/build_word_bank.py`, but only in its git history: commit `3658909`
 ("say the word in a sentence, then cut it back out") on branch
 `feat/word-bank-generator`, not on its current checkout. It says each word
