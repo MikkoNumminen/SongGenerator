@@ -114,7 +114,10 @@ def swallow_word(args: argparse.Namespace) -> str | None:
     if not args.swallow:
         return None
     parts = []
-    for who, lo, hi in args.swallow:
+    # Everybody's value first, then each voice's own in name order, so the
+    # same request is one filename however its values were typed.
+    for who, lo, hi in sorted(args.swallow, key=lambda s: (s[0] is not None,
+                                                           s[0] or "")):
         span = _number_word(lo) if lo == hi else f"{_number_word(lo)}-{_number_word(hi)}"
         parts.append(f"{who}{span}" if who else span)
     return "swallow" + "-".join(parts)
@@ -146,7 +149,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--slim", action="store_true",
                    help="omit the raw F0 contour from analysis.json (stage 4 needs it)")
     p.add_argument("--rows", type=int, default=12, help="how many extracted notes to print")
-    p.add_argument("--bank", default=config.DEFAULT_BANK, choices=sorted(config.BANKS),
+    p.add_argument("--bank", default=None, choices=sorted(config.BANKS),
                    help="which prebuilt bank to sing with")
     p.add_argument("--words-dir", type=Path, default=None,
                    help="a bank directory directly, overriding --bank")
@@ -214,6 +217,15 @@ def refuse_contradicting_voices(parser: argparse.ArgumentParser,
     if len(set(args.voices)) < 2:
         parser.error("--voices takes turns between at least two different "
                      "banks; for one, use --bank")
+    repeated = sorted({v for v in args.voices if args.voices.count(v) > 1})
+    if repeated:
+        # Turns go round the list, so a bank named twice lands on two turns
+        # in a row wherever the list wraps, and that change of singer is
+        # sung in one voice: the thing alternation exists to prevent.
+        parser.error(f"--voices names {', '.join(repeated)} more than once")
+    if args.bank is not None:
+        parser.error("--voices names its banks itself, so it cannot be "
+                     "combined with --bank, which names one")
     if args.words_dir is not None:
         parser.error("--voices names its banks from the bank table, so it "
                      "cannot be combined with --words-dir, which names one")
@@ -223,14 +235,22 @@ def refuse_contradicting_voices(parser: argparse.ArgumentParser,
                      "combined")
 
 
+def singing_names(args: argparse.Namespace) -> list[str]:
+    """Who sings in this run: every voice, or the one bank, or the directory
+    --words-dir points at. One definition, because the output folder, the
+    --swallow check and the render all have to agree on it."""
+    if args.voices:
+        return list(args.voices)
+    return [args.words_dir.name if args.words_dir
+            else args.bank or config.DEFAULT_BANK]
+
+
 def output_bank_name(args: argparse.Namespace) -> str:
     """The name outputs are filed under: the chosen bank, the directory itself
     when --words-dir bypasses the bank table, or every voice joined by "+" when
     several take turns, so a turn-taking render never lands in the folder of
     one of its banks and replaces that bank's own take."""
-    if args.voices:
-        return "+".join(args.voices)
-    return args.words_dir.name if args.words_dir else args.bank
+    return "+".join(singing_names(args))
 
 
 def refuse_contradicting_swallow(parser: argparse.ArgumentParser,
@@ -251,12 +271,88 @@ def refuse_contradicting_swallow(parser: argparse.ArgumentParser,
     repeated = sorted({n for n in named if named.count(n) > 1})
     if repeated:
         parser.error(f"--swallow names {', '.join(repeated)} more than once")
-    singing = set(args.voices or [args.words_dir.name if args.words_dir
-                                  else args.bank])
+    singing = set(singing_names(args))
     unknown = sorted(set(named) - singing)
     if unknown:
         parser.error(f"--swallow names {', '.join(unknown)}, which is not "
                      f"singing in this run ({', '.join(sorted(singing))})")
+
+
+def arrange_voices(voices, voice_slots, turns, level: str, seed: int,
+                   song: str):
+    """Every voice's arrangement, and the one plan they sing together.
+
+    Returns (plan, one Arrangement per voice, draws, the voice of each
+    placement). One voice is arrange.build and nothing more.
+
+    Several voices are arranged over the whole song from one seed and
+    take_turns keeps each voice's placements inside its own turns. Each
+    build checks its own coverage over the whole song, and half of every
+    build is then handed to other voices, so a required word each voice said
+    only in the other's turns disappears from the song. Coverage is a rule
+    (see arrange.build), so it is checked again on the plan that is actually
+    sung and the seed redrawn, up to PLAY_COVERAGE_TRIES, keeping the best.
+    A word no voice can say is not asked for, and neither is the pairing when
+    no voice holds one.
+    """
+    if len(voices) == 1:
+        name, voice_dir, singing_from, units = voices[0]
+        plan, described, tries = arrange.build(
+            voice_slots[name], units, level, seed, song=song,
+            bank=str(singing_from), bank_dir=voice_dir)
+        return plan, [described], tries, [0] * len(plan.placements)
+
+    unsayable = [set(arrange.unreachable_words(units)) for *_, units in voices]
+    wanted = {w for w in arrange.required_words()
+              if any(w not in lacks for lacks in unsayable)}
+    possible = any(u.is_shout_pairing for *_, units in voices for u in units)
+    together = "+".join(name for name, *_ in voices)
+    best = None
+    tries = max(1, int(config.PLAY_COVERAGE_TRIES))
+    for attempt in range(tries):
+        this_seed = seed + attempt
+        plans, drawn = [], []
+        for name, voice_dir, singing_from, units in voices:
+            plan, described, _ = arrange.build(
+                voice_slots[name], units, level, this_seed, song=song,
+                bank=str(singing_from), bank_dir=voice_dir)
+            plans.append(plan)
+            drawn.append(described)
+        plan, owners = take.take_turns(
+            plans, turns, [voice_slots[name] for name, *_ in voices])
+        sung = arrange.describe(plan, song, together, level, this_seed)
+        score = (len(wanted & sung.words_used()),
+                 sung.has_pairing() or not possible)
+        if best is None or score > best[0]:
+            best = (score, plan, drawn, attempt + 1, owners)
+        if score == (len(wanted), True):
+            break
+    _, plan, drawn, draws, owners = best
+    return plan, drawn, draws, owners
+
+
+def refuse_other_grid(logged: float | None, current: float | None,
+                      path: Path) -> None:
+    """A replayed log on a slot grid it was not made on.
+
+    Replay anchors each line to the nearest slot and its recorded slot count,
+    so the same log on a grid swallowed differently sings every word over a
+    different number of notes: without --swallow a swallowed log comes back
+    at more than twice its pace. The log records the grid; a mismatch stops.
+    """
+    same = (logged is None and current is None) or (
+        logged is not None and current is not None
+        and abs(logged - current) < 1e-3)
+    if same:
+        return
+    made = ("unswallowed notes" if logged is None
+            else f"{logged:.4f} notes per bank syllable")
+    now = ("unswallowed notes" if current is None
+           else f"{current:.4f} notes per bank syllable")
+    raise arrange.ArrangementError(
+        f"{path} was arranged on {made}, and this run folds {now}.\n"
+        "    Give --swallow the value the log was made with, so every line "
+        "lands on the notes it was planned over.")
 
 
 def drives_its_own_shift(args: argparse.Namespace) -> bool:
@@ -508,6 +604,10 @@ def main(argv: list[str] | None = None) -> int:
                      f"with {named[0]}, which names one")
     refuse_contradicting_voices(parser, args)
     refuse_contradicting_swallow(parser, args)
+    # --bank has no default in the parser so that naming it beside --voices
+    # can be told apart from not naming it. Resolved here, after the check.
+    if args.bank is None:
+        args.bank = config.DEFAULT_BANK
 
     if args.rollback:
         # Before anything expensive. Rolling back needs neither stems nor a
@@ -610,7 +710,7 @@ def main(argv: list[str] | None = None) -> int:
     # One voice unless --voices named several. Each is (name, directory the
     # run was pointed at, directory actually sung from, its units); a plain
     # run is a list of one, so everything below serves both.
-    names = args.voices or [args.words_dir.name if args.words_dir else args.bank]
+    names = singing_names(args)
     voices: list[tuple[str, Path, Path, list]] = []
     bus_levels: set[float | None] = set()
     for name in names:
@@ -661,12 +761,14 @@ def main(argv: list[str] | None = None) -> int:
     slots, merged, split = clean_slots([n.__dict__ for n in analysis.notes])
     # Each voice may swallow at its own pace, so each gets its own slots.
     voice_slots = {}
+    swallow_per: dict[str, float] = {}
     for name, _, _, voice_units in voices:
         words = swallow_words(args, name)
         if words is None:
             voice_slots[name] = slots
             continue
         per = swallow_notes(words, voice_units)
+        swallow_per[name] = per
         voice_slots[name] = swallow_slots(slots, per)
         if not args.json:
             who = f" ({name})" if len(voices) > 1 else ""
@@ -731,6 +833,8 @@ def main(argv: list[str] | None = None) -> int:
                 described = arrange.load(
                     args.arrangement,
                     bank_words={w for u in units for w in u.words})
+                refuse_other_grid(described.swallow, swallow_per.get(names[0]),
+                                  args.arrangement)
                 # The bank's declaration travels into replay too, so a
                 # sequence bank's own log comes back whole and paced rather
                 # than re-pitched per syllable and cut to its slots.
@@ -741,22 +845,14 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"  arrangement replayed from {args.arrangement}")
             else:
                 seed = args.seed if args.seed is not None else random.randrange(1, 1_000_000)
-                # Every voice is arranged over the whole song from the same
-                # seed, and take_turns then keeps each one's placements inside
-                # its own turns. A plain run is one voice and keeps them all.
-                plans = []
-                for name, voice_dir, singing_from, voice_units in voices:
-                    voice_plan, described, tries = arrange.build(
-                        voice_slots[name], voice_units, level, seed,
-                        song=args.input.stem, bank=str(singing_from),
-                        # The directory the run was pointed at, tier or bank.
-                        # banks resolves a tier back to the bank beside it, so
-                        # the settings are always the bank's as declared: a
-                        # standardised tier is a derivative of the bank, and
-                        # reading settings from the tier made every one of them
-                        # vanish the moment a tier was built or named.
-                        bank_dir=voice_dir)
-                    plans.append(voice_plan)
+                word_plan, drawn, draws, owners = arrange_voices(
+                    voices, voice_slots, turns, level, seed, args.input.stem)
+                for (name, *_), described in zip(voices, drawn):
+                    # Written down before saving, so a replay can refuse a
+                    # grid the log was not made on instead of doubling the
+                    # pace without a word.
+                    per = swallow_per.get(name)
+                    described.swallow = per
                     # One log per voice, in a folder per voice: two banks at
                     # one seed and level would otherwise share a filename.
                     saved = arrange.save(
@@ -764,18 +860,16 @@ def main(argv: list[str] | None = None) -> int:
                         else work / config.VOICES_LOG_DIR / name)
                     if not args.json:
                         who = f" ({name})" if len(voices) > 1 else ""
-                        redrawn = "" if tries == 1 else f", redrawn {tries - 1}x for coverage"
-                        print(f"  play      {level}{who}, seed {described.seed}{redrawn}")
+                        print(f"  play      {level}{who}, seed {described.seed}")
                         print(f"  words     {saved}")
+                if not args.json and draws > 1:
+                    print(f"  redrawn   {draws - 1}x for coverage"
+                          + (" across the voices" if len(voices) > 1 else ""))
                 label = level
-                if len(voices) == 1:
-                    word_plan = plans[0]
-                else:
-                    word_plan, owners = take.take_turns(plans, turns)
-                    if not args.json:
-                        for v, (name, _, _, _) in enumerate(voices):
-                            print(f"  voice     {name} sings "
-                                  f"{owners.count(v)} of {len(owners)} units")
+                if len(voices) > 1 and not args.json:
+                    for v, (name, *_) in enumerate(voices):
+                        print(f"  voice     {name} sings "
+                              f"{owners.count(v)} of {len(owners)} units")
         except arrange.ArrangementError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return EXIT_ERROR

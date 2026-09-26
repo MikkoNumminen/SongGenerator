@@ -8,10 +8,12 @@ from __future__ import annotations
 
 import json
 
+import numpy as np
 import pytest
 
 from factories import make_unit
 from song_generator import config
+from song_generator import turns as turns_mod
 from song_generator.cli import (
     build_parser,
     output_bank_name,
@@ -285,11 +287,15 @@ class TestVoicedWindows:
 # load_or_detect() cache behaviour
 # ---------------------------------------------------------------------------
 
+VOCAL = np.zeros((2, 100), dtype=np.float32)
+
+
 class TestLoadOrDetect:
     def test_matching_settings_return_the_cache_without_detecting(self, tmp_path, monkeypatch):
         cached_turns = [{"start_s": 0.0, "end_s": 5.0, "speaker": 0}]
         (tmp_path / "turns.json").write_text(json.dumps({
             "settings": settings(),
+            "vocal": turns_mod.fingerprint(VOCAL),
             "turns": cached_turns,
         }), encoding="utf-8")
 
@@ -298,7 +304,7 @@ class TestLoadOrDetect:
 
         monkeypatch.setattr("song_generator.turns.detect", _boom)
 
-        got, cached = load_or_detect(tmp_path, vocal=None, sr=16000, notes=[])
+        got, cached = load_or_detect(tmp_path, vocal=VOCAL, sr=16000, notes=[])
 
         assert cached is True
         assert got == [Turn(0.0, 5.0, 0)]
@@ -312,7 +318,7 @@ class TestLoadOrDetect:
         fresh = [Turn(0.0, 3.0, 0)]
         monkeypatch.setattr("song_generator.turns.detect", lambda *a, **kw: fresh)
 
-        got, cached = load_or_detect(tmp_path, vocal=None, sr=16000, notes=[])
+        got, cached = load_or_detect(tmp_path, vocal=VOCAL, sr=16000, notes=[])
 
         assert cached is False
         assert got == fresh
@@ -325,10 +331,49 @@ class TestLoadOrDetect:
         fresh = [Turn(0.0, 2.0, 0)]
         monkeypatch.setattr("song_generator.turns.detect", lambda *a, **kw: fresh)
 
-        got, cached = load_or_detect(tmp_path, vocal=None, sr=16000, notes=[])
+        got, cached = load_or_detect(tmp_path, vocal=VOCAL, sr=16000, notes=[])
 
         assert cached is False
         assert got == fresh
+
+    def test_a_different_vocal_stem_is_measured_again(self, tmp_path, monkeypatch):
+        """Stems separated again land at the same paths; turns measured on
+        the old stem must not be laid over the new one."""
+        (tmp_path / "turns.json").write_text(json.dumps({
+            "settings": settings(),
+            "vocal": turns_mod.fingerprint(VOCAL),
+            "turns": [{"start_s": 0.0, "end_s": 5.0, "speaker": 0}],
+        }), encoding="utf-8")
+        fresh = [Turn(0.0, 9.0, 1)]
+        monkeypatch.setattr("song_generator.turns.detect", lambda *a, **kw: fresh)
+        got, cached = load_or_detect(tmp_path, vocal=VOCAL + 1.0, sr=16000, notes=[])
+        assert cached is False
+        assert got == fresh
+
+    @pytest.mark.parametrize("turns", [
+        [{"start": 0.0, "end_s": 5.0, "speaker": 0}],
+        [{"start_s": 0.0, "end_s": 5.0}],
+        [{"start_s": "soon", "end_s": 5.0, "speaker": 0}],
+        [{"start_s": 0.0, "end_s": 5.0, "speaker": 0},
+         {"start_s": 4.0, "end_s": 9.0, "speaker": 1}],
+        [],
+    ])
+    def test_a_hand_edit_that_cannot_be_used_is_refused_by_name(self, tmp_path, turns):
+        """The file is documented as editable, so a typo in it is an error
+        naming the file, never a traceback."""
+        (tmp_path / "turns.json").write_text(json.dumps({
+            "settings": settings(), "vocal": turns_mod.fingerprint(VOCAL),
+            "turns": turns}), encoding="utf-8")
+        with pytest.raises(TurnError, match="turns.json"):
+            load_or_detect(tmp_path, vocal=VOCAL, sr=16000, notes=[])
+
+    def test_an_extra_field_in_a_hand_edit_is_ignored(self, tmp_path):
+        (tmp_path / "turns.json").write_text(json.dumps({
+            "settings": settings(), "vocal": turns_mod.fingerprint(VOCAL),
+            "turns": [{"start_s": 0.0, "end_s": 5.0, "speaker": 0, "note": "x"}]}),
+            encoding="utf-8")
+        got, cached = load_or_detect(tmp_path, vocal=VOCAL, sr=16000, notes=[])
+        assert cached and got == [Turn(0.0, 5.0, 0)]
 
     def test_invalid_json_raises_turn_error(self, tmp_path, monkeypatch):
         (tmp_path / "turns.json").write_text("{not json", encoding="utf-8")
@@ -339,7 +384,7 @@ class TestLoadOrDetect:
         monkeypatch.setattr("song_generator.turns.detect", _boom)
 
         with pytest.raises(TurnError):
-            load_or_detect(tmp_path, vocal=None, sr=16000, notes=[])
+            load_or_detect(tmp_path, vocal=VOCAL, sr=16000, notes=[])
 
 
 # ---------------------------------------------------------------------------
@@ -413,3 +458,98 @@ class TestOutputBankName:
     def test_otherwise_it_falls_back_to_bank(self):
         got = output_bank_name(parse())
         assert got == config.DEFAULT_BANK
+
+
+class TestReviewFixes:
+    """Holes a review found in turn-taking, each pinned where it was closed."""
+
+    def test_a_bank_named_twice_is_refused(self):
+        """Turns go round the list, so a repeat puts one voice on two turns in
+        a row wherever the list wraps."""
+        a, b = list(config.BANKS)[:2]
+        parser = build_parser()
+        args = parser.parse_args(["song.mp4", "--voices", a, b, a])
+        with pytest.raises(SystemExit):
+            refuse_contradicting_voices(parser, args)
+
+    def test_bank_named_beside_voices_is_refused(self):
+        a, b, c = list(config.BANKS)[:3]
+        parser = build_parser()
+        args = parser.parse_args(["song.mp4", "--voices", a, b, "--bank", c])
+        with pytest.raises(SystemExit):
+            refuse_contradicting_voices(parser, args)
+
+    def test_slot_totals_come_from_each_voice_s_own_grid(self):
+        """Voices swallowing at different paces plan on different grids."""
+        from song_generator.mapping import Slot
+        turns_ = [Turn(0.0, 5.0, 0), Turn(5.0, 10.0, 1)]
+        coarse = [Slot(t, t + 1.0, 60, 0) for t in range(10)]
+        fine = [Slot(t / 2, t / 2 + 0.5, 60, 0) for t in range(20)]
+        combined, _ = take_turns([Plan(), Plan()], turns_, [coarse, fine])
+        assert combined.slots_total == 5 + 10
+
+    def test_coverage_is_checked_on_what_is_sung_together(self, monkeypatch):
+        """Each voice says the required word only in the other's turns on the
+        first draw; the plan sung together would never say it, so the seed is
+        drawn again."""
+        from song_generator import arrange, cli
+        word = list(config.WORD_SYLLABLES)[0]
+        other = list(config.WORD_SYLLABLES)[1]
+        monkeypatch.setattr(arrange, "required_words", lambda: (word,))
+
+        def build(slots, units, level, seed, song="", bank="", bank_dir=None):
+            voice = 0 if bank == "a" else 1
+            own = 1.0 if voice == 0 else 6.0
+            elsewhere = 6.0 if voice == 0 else 1.0
+            at = elsewhere if seed == 100 else own
+            plan = Plan(placements=[
+                Placement(unit=make_unit([word]), onset_s=at, slot_span_s=0.5,
+                          play_s=0.5, n_slots=1, phrase=0),
+                Placement(unit=make_unit([other]), onset_s=own + 1.0,
+                          slot_span_s=0.5, play_s=0.5, n_slots=1, phrase=0)])
+            return plan, arrange.describe(plan, song, bank, level, seed), 1
+
+        monkeypatch.setattr(arrange, "build", build)
+        voices = [("a", None, "a", [make_unit([word])]),
+                  ("b", None, "b", [make_unit([word])])]
+        turns_ = [Turn(0.0, 5.0, 0), Turn(5.0, 10.0, 1)]
+        plan, drawn, draws, owners = cli.arrange_voices(
+            voices, {"a": [], "b": []}, turns_, "wild", 100, "song")
+        assert draws == 2
+        assert word in {w for p in plan.placements for w in p.unit.words}
+        assert len(drawn) == 2 and len(owners) == len(plan.placements)
+
+
+class TestSwallowRecordedInTheLog:
+    def test_the_grid_survives_a_round_trip(self):
+        from song_generator import arrange
+        word = list(config.WORD_SYLLABLES)[0]
+        arr = arrange.Arrangement("song", "bank", "wild", 7, [
+            arrange.Line(0, 1.0, 1, [word])], swallow=2.4123)
+        back = arrange.parse_text(arrange.render_text(arr))
+        assert back.swallow == pytest.approx(2.4123)
+
+    def test_a_log_without_it_reads_as_unswallowed(self):
+        from song_generator import arrange
+        word = list(config.WORD_SYLLABLES)[0]
+        arr = arrange.Arrangement("song", "bank", "wild", 7, [
+            arrange.Line(0, 1.0, 1, [word])])
+        assert arrange.parse_text(arrange.render_text(arr)).swallow is None
+
+    @pytest.mark.parametrize("logged, now", [(2.4, None), (None, 2.4), (2.4, 3.0)])
+    def test_a_replay_on_another_grid_is_refused(self, logged, now, tmp_path):
+        from song_generator import arrange, cli
+        with pytest.raises(arrange.ArrangementError, match="--swallow"):
+            cli.refuse_other_grid(logged, now, tmp_path / "w.arr")
+
+    @pytest.mark.parametrize("logged, now", [(None, None), (2.4, 2.40001)])
+    def test_the_same_grid_replays(self, logged, now, tmp_path):
+        from song_generator import cli
+        cli.refuse_other_grid(logged, now, tmp_path / "w.arr")
+
+    def test_the_swallow_tag_does_not_depend_on_argument_order(self):
+        from song_generator import cli
+        a, b = list(config.BANKS)[:2]
+        one = parse("--voices", a, b, "--swallow", "2.6", f"{b}=2")
+        two = parse("--voices", a, b, "--swallow", f"{b}=2", "2.6")
+        assert cli.swallow_word(one) == cli.swallow_word(two)

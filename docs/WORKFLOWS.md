@@ -100,10 +100,19 @@ machine gun of words at rap tempo. `--swallow`, below the render section for
 rap material, is what turned that into something melodic.
 
 Refused rather than attempted: fewer than two distinct banks (use `--bank` for
-one), `--words-dir` (`--voices` names banks from the bank table), and
+one), a bank named twice (turns go round the list, so a repeat puts one voice
+on two turns in a row where the list wraps), `--bank` beside `--voices`,
+`--words-dir` (`--voices` names banks from the bank table), and
 `--arrangement` (a `--voices` run writes one log per voice and there is no
 replay of a multi-voice run yet). Banks whose `bank.json` declare different
 `word_bus_lufs` are refused too, since the voices share one word bus.
+
+Required words are checked on the plan the voices sing together, not only on
+each voice's own arrangement. Each voice is arranged over the whole song and
+then loses every placement outside its turns, so a word each voice happened to
+say only in the other's turns would drop out of the song. When that happens
+the seed is drawn again, up to `PLAY_COVERAGE_TRIES`, and the report says
+`redrawn Nx for coverage across the voices`.
 
 **How turns are found.** The vocal stem is cut into overlapping windows and
 each becomes a speaker embedding; windows cluster by voice, and a run of
@@ -313,6 +322,13 @@ unnamed value for every voice singing, plus a named value, `keskisarja=2.05`,
 for any voice of `--voices` that should move at its own pace; the voice's own
 value wins over the general one. Refused rather than resolved: two unnamed
 values, the same voice named twice, and a voice not singing in this run.
+The filename lists the values in a fixed order (everybody's first, then each
+voice's own by name), so the same request always writes the same file.
+
+A swallowed take's `.arr` log records the grid in a `swallow` header line, and
+`--arrangement` refuses to replay it on any other grid: without the same
+`--swallow`, every line would land on the unswallowed notes at more than twice
+the pace it was planned for.
 
 A swallowed run needs its bank plans laid over fewer, wider slots, so it also
 places fewer, longer units. Filenames carry the setting,

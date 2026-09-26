@@ -182,6 +182,7 @@ Who is singing when, for `--voices`. Written and read by `turns.py`.
     "distance": 0.6,
     "min_turn_s": 4.0
   },
+  "vocal": "3f1c...e9",
   "turns": [
     { "start_s": 0.0, "end_s": 91.4, "speaker": 0 },
     { "start_s": 91.4, "end_s": 132.8, "speaker": 1 }
@@ -200,6 +201,17 @@ stored: a run reuses the file only when every value still matches
 moved by hand stick: editing `start_s` or `end_s` on a turn changes nothing
 `settings` looks at, so the edited file is still read back on the next run
 against the same song and the same config.
+
+`vocal` is a SHA-1 of the vocal stem the turns were measured on. Separating a
+song again (`--force`, or another separator) writes new stems to the same
+paths, and turns measured on the old stem would otherwise be laid over the
+new one. A different stem is measured again, which also discards any hand
+edits made against the old one.
+
+A hand edit that cannot be used is refused with an error naming the file:
+a turn missing `start_s`, `end_s` or `speaker`, a value that is not a number,
+turns out of order or overlapping, or no turns at all. Extra fields are
+ignored.
 
 ---
 
@@ -247,6 +259,12 @@ heard, this one records what the tool sang to.
 The span is written because it cannot always be derived: a word may be held
 across a leftover slot, which widens what it is given without adding a note to
 land on. Omit it in a hand-written file and the slots decide.
+
+A take made with `--swallow` carries one more header line after the others,
+`#   swallow 3.0600`: the notes per bank syllable its slots were folded to. The
+lines are laid over that grid, so a replay on any other is refused, and the
+error names the value to pass. A log without the line was made on unswallowed
+notes, which is every log written before the line existed.
 
 **Two-way on purpose.** The tool writes it and a person can edit it and feed
 it back:

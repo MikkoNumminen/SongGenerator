@@ -325,6 +325,10 @@ class Arrangement:
     level: str
     seed: int
     lines: list[Line] = dataclasses.field(default_factory=list)
+    # Notes per bank syllable when the slots were swallowed (--swallow), None
+    # when they were not. The lines are laid over that grid, so replay needs
+    # the same one; cli refuses a replay on any other.
+    swallow: float | None = None
 
     def words_used(self) -> set[str]:
         return {w for line in self.lines for w in line.words}
@@ -392,6 +396,10 @@ def render_text(arr: Arrangement) -> str:
     out = [HEADER.format(song=arr.song, bank=arr.bank, level=arr.level, seed=arr.seed,
                          vocabulary=", ".join(sorted(config.WORD_SYLLABLES)),
                          required=", ".join(required_words()))]
+    if arr.swallow is not None:
+        # After the header rather than inside it, so a log made without
+        # --swallow reads exactly as every log before this line existed.
+        out.append(f"#   swallow {arr.swallow:.4f}")
     phrase = None
     for line in arr.lines:
         if line.phrase != phrase:
@@ -429,7 +437,8 @@ def parse_text(text: str, bank_words: set[str] | None = None) -> Arrangement:
     known = set(config.WORD_SYLLABLES)
     if bank_words:
         known |= set(bank_words)
-    meta = {"song": "", "bank": "", "level": config.PLAY_DEFAULT_LEVEL, "seed": "0"}
+    meta = {"song": "", "bank": "", "level": config.PLAY_DEFAULT_LEVEL, "seed": "0",
+            "swallow": ""}
     # Where each header was read, so a refusal can name its line like every
     # other refusal in this parser does.
     meta_lines: dict[str, int] = {}
@@ -521,7 +530,17 @@ def parse_text(text: str, bank_words: set[str] | None = None) -> Arrangement:
             f"{meta['seed']!r}. Replay rebuilds its pool from this number, so "
             "guessing one would play a different arrangement than this file "
             "records.") from exc
-    return Arrangement(meta["song"], meta["bank"], meta["level"], seed, lines)
+    swallow = None
+    if meta["swallow"]:
+        try:
+            swallow = float(meta["swallow"])
+        except ValueError as exc:
+            raise ArrangementError(
+                f"line {meta_lines['swallow']}: cannot read the swallow "
+                f"{meta['swallow']!r}. It records the grid the lines were laid "
+                "over, and replay refuses any other.") from exc
+    return Arrangement(meta["song"], meta["bank"], meta["level"], seed, lines,
+                       swallow)
 
 
 def unit_for(words: list[str], pool: list[Unit], by_word: dict[str, list[Unit]],

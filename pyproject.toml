@@ -39,7 +39,9 @@ roformer = ["audio-separator[gpu]"]
 
 # Telling singers apart for --voices (turns.py). Optional because only a
 # turn-taking render needs a speaker model; everything else runs without it.
-voices = ["speechbrain>=1.1"]
+# scikit-learn is named although librosa brings it: the clustering asks for
+# metric="cosine", which only exists from 1.2, and librosa's floor is lower.
+voices = ["speechbrain>=1.1", "scikit-learn>=1.2"]
 
 # The HTTP edge under api/. Optional so installing the pipeline to use from the
 # command line, which is most installs, does not drag in a web framework.

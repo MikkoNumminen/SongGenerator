@@ -24,8 +24,9 @@ two different singers next to each other in the same voice, and then the
 change the listener is supposed to hear does not happen.
 
 The measurement is cached as turns.json beside the stems, together with the
-settings that produced it. It is reused while those settings match, so a
-boundary moved by hand in the file stays moved.
+settings that produced it and a fingerprint of the vocal stem it was measured
+on. It is reused while both match, so a boundary moved by hand in the file
+stays moved, and stems separated again are measured again.
 
 Only detect() needs the model. Everything else is plain arithmetic on times
 and is what the tests exercise.
@@ -228,24 +229,66 @@ def detect(vocal: np.ndarray, sr: int, notes: list[dict],
     return from_labels(centres, labels, duration)
 
 
+def fingerprint(vocal: np.ndarray) -> str:
+    """Which vocal stem the turns were measured on.
+
+    The settings alone cannot say: separating a song again, with --force or
+    another separator, writes new stems to the same paths, and turns measured
+    on the old stem would then be laid over the new one without a word.
+    """
+    import hashlib
+
+    return hashlib.sha1(np.ascontiguousarray(vocal, dtype=np.float32)
+                        .tobytes()).hexdigest()
+
+
+def _read_turns(path: Path, saved) -> list[Turn]:
+    """The turns in a cache file, refused by name when they cannot be used.
+
+    The file is documented as editable by hand, so a missing key, a misspelt
+    field or a boundary moved past its neighbour is a person's typo and gets
+    an error naming the file, not a traceback.
+    """
+    try:
+        turns = [Turn(float(t["start_s"]), float(t["end_s"]), int(t["speaker"]))
+                 for t in saved["turns"]]
+    except (KeyError, TypeError, ValueError) as exc:
+        raise TurnError(
+            f"{path} cannot be read as turns ({exc!r}).\n"
+            "    Each turn needs start_s, end_s and speaker. Delete the file"
+            " to measure the turns again.") from exc
+    if not turns:
+        raise TurnError(f"{path} holds no turns. Delete it to measure again.")
+    for a, b in zip(turns, turns[1:]):
+        if not (a.start_s < a.end_s <= b.start_s):
+            raise TurnError(
+                f"{path}: the turn starting at {a.start_s:g}s ends at"
+                f" {a.end_s:g}s, which does not come before the next one at"
+                f" {b.start_s:g}s. Turns must be in order and not overlap.")
+    return turns
+
+
 def load_or_detect(work: Path, vocal: np.ndarray, sr: int, notes: list[dict],
                    device: str = "cpu") -> tuple[list[Turn], bool]:
-    """The cached turns when they were measured the way config says, else fresh.
+    """The cached turns when they were measured the way config says on this
+    vocal stem, else fresh.
 
     Returns the turns and whether they came from the cache.
     """
     path = Path(work) / TURNS_FILE
+    stem = fingerprint(vocal)
     if path.is_file():
         try:
             saved = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
             raise TurnError(f"{path} is not valid JSON: {exc}") from exc
-        if saved.get("settings") == settings():
-            return [Turn(**t) for t in saved["turns"]], True
+        if (isinstance(saved, dict) and saved.get("settings") == settings()
+                and saved.get("vocal") == stem):
+            return _read_turns(path, saved), True
 
     turns = detect(vocal, sr, notes, device)
     tmp = path.with_name(f".{path.name}.tmp")
-    tmp.write_text(json.dumps({"settings": settings(),
+    tmp.write_text(json.dumps({"settings": settings(), "vocal": stem,
                                "turns": [asdict(t) for t in turns]}, indent=2),
                    encoding="utf-8")
     tmp.replace(path)
@@ -264,7 +307,8 @@ def voice_of(turns: list[Turn], n_voices: int, t: float) -> int:
     return (len(turns) - 1) % n_voices if turns else 0
 
 
-def take_turns(plans: list[Plan], turns: list[Turn]) -> tuple[Plan, list[int]]:
+def take_turns(plans: list[Plan], turns: list[Turn],
+               slots: list[list] | None = None) -> tuple[Plan, list[int]]:
     """One plan, each placement taken from the voice whose turn it starts in.
 
     Every voice was arranged over the whole song, so each already has a
@@ -276,6 +320,11 @@ def take_turns(plans: list[Plan], turns: list[Turn]) -> tuple[Plan, list[int]]:
     handover finishes in its own voice; cutting it at the boundary would chop
     the word, and a moment of overlap at a handover is what two singers do.
 
+    slots, one list per voice, is the grid each voice was planned on. Voices
+    swallowing at different paces plan on different grids, so the slots the
+    combined plan had to fill are each voice's own slots inside its own turns.
+    Without them, the first voice's total stands in for all of them.
+
     Returns the plan and the voice index of every placement in it.
     """
     kept: list[tuple[Placement, int]] = []
@@ -283,10 +332,15 @@ def take_turns(plans: list[Plan], turns: list[Turn]) -> tuple[Plan, list[int]]:
         kept += [(p, v) for p in plan.placements
                  if voice_of(turns, len(plans), p.onset_s) == v]
     kept.sort(key=lambda pv: pv[0].onset_s)
+    if slots is not None:
+        total = sum(1 for v, grid in enumerate(slots) for s in grid
+                    if voice_of(turns, len(plans), s.onset_s) == v)
+    else:
+        total = plans[0].slots_total if plans else 0
     combined = Plan(
         placements=[p for p, _ in kept],
         slots_used=sum(p.n_slots for p, _ in kept),
-        slots_total=plans[0].slots_total if plans else 0,
+        slots_total=total,
         # slots_dropped is counted per arrangement and cannot be attributed to
         # a turn afterwards, so it is left out rather than estimated.
     )
