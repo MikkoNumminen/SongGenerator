@@ -101,14 +101,114 @@ never see. Resolve it on a real vocal.
 
 ## Open items
 
+- **One bank was built from candidates nobody has listened to.**
+
+  141 candidates were mined into a `words_<song>_src/` directory and built
+  straight into a bank of 137 units, unheard and unnamed, junk included. Four
+  did not make it, and nobody has looked at which four or why. Deleting the bad
+  ones and rebuilding is what turns it into a bank rather than a pile.
+
+  It declares no `bank.json`, and that part is deliberate rather than missing:
+  it is cut from a sung song, not from generated speech, so it takes the same
+  defaults as the default bank. `arranged` with splittable clips is the right
+  placement for sung material. Do not give it `sequence` and `never_split` by
+  analogy with the spoken bank tuned in "Tune a bank of generated voices" in
+  [WORKFLOWS.md](WORKFLOWS.md), which is a different problem.
+
+  That spoken bank's candidates have had no systematic listening pass either,
+  though its cuts are at least verified against the source.
+
+- **The run report names an engine it did not use.**
+
+  `mapping.py` prints `engine {config.SHIFT_ENGINE}` rather than the engine the
+  run actually used, so `--engine rubberband` reports "world". It misled an
+  entire A/B comparison until the two files were compared as audio.
+
+  Not a one-line fix, which is why it is written down rather than done in
+  passing: `report(plan, units)` has no access to the run's engine. That lives
+  in `args.engine`, no `Placement` carries it, so this needs the signature, the
+  one call site in `cli.py`, and any test that calls `report/2`.
+
+  The same report's `truncated` count fires on any reading speed above 1.0
+  whether or not anything was cut. That one is already documented where it
+  matters, in the diagnostic ladder in `docs/WORKFLOWS.md`, which tells the
+  reader to check `time fit` before believing it. Whoever fixes the counter
+  should delete that caveat in the same change.
+
+- **Settings that change the audio without changing the filename.**
+
+  `--engine`, `--mix-mode`, `--seed` and `--raw-clips` each produce a
+  materially different render under the same name, so each overwrites the take
+  before it with one generation kept in `previous/`. `--raw-clips` sings the
+  recordings instead of their standardised tier. `variant_tag` already names
+  `--mimicry`, `--no-shift`, `--mix`, `--arrangement`, `--swallow` and
+  `--keep-original`; these were left out.
+
+  Two neighbours look like the same problem and are not:
+
+  - `--separator` is ignored whenever the song already has stems, unless
+    `--force` is given: `separate.py` returns the cached stems with no backend
+    in the cache key, while the report and the JSON payload both name the
+    separator asked for. That defect is the cache key and the report. With
+    `--force` the new separator does change the audio, and the filename does
+    not say so, which is the problem above.
+  - `--bare-syllables` changes nothing about what gets sung, which this file
+    already records further down: `cli` loads the bank with
+    `singable_only=False` and `arrange.enrich` filters to word-like units
+    regardless. Naming it in the filename would produce a differently named
+    file with identical audio.
+
+  `--no-words` is its own case. It writes an untagged instrumental straight to
+  the output path, bypassing `versioned_name` and `keep_the_one_it_replaces`,
+  so it appears in the library as a row with no level in its name and keeps no
+  previous copy. With the default output it can only overwrite an earlier
+  instrumental of its own, since every worded render carries its level. An
+  `--output` that already names a level is the exception: `versioned_name`
+  does not add a level the name already ends in, so `-o song.wild.mp3
+  --no-words` writes over the wild take `-o song.wild.mp3` made, with no
+  backup.
+
+- **Noted: `pylibrb` is GPLv2 while `LICENSE` is MIT.**
+
+  Recorded because it is the kind of thing that looks like an oversight later.
+  `pylibrb` is a required dependency in `pyproject.toml` and bundles the Rubber
+  Band Library, which is GPL-or-commercial. It is free of charge, which is the
+  bar this repository sets.
+
+  This repository publishes its own source and does not ship `pylibrb` or the
+  library inside it: whoever installs the tool fetches them. Whether that is
+  enough has not been looked into further, and the question changes if the
+  tool is ever packaged with them for anyone else. That would also need the
+  move to `[project.optional-dependencies]` beside `roformer`, and two things
+  that go with it: `pitchshift.py` imports `pylibrb` bare, so a missing extra
+  gives a raw traceback where `separate.py` raises a named error, and `cli.py`
+  offers `--engine rubberband` in its choices unconditionally.
+
+- **Old and new render names sit side by side, and they are not duplicates.**
+
+  For one song, one bank's output folder holds four files: two `.mim1p00` from
+  before the naming rule and two untagged from after. They are four different
+  renders, a day apart, with four different audio checksums, and `previous/`
+  holds a third generation again.
+
+  So there is no safe sweep for `*.mim1p00.mp3` beside an untagged twin, and
+  the earlier version of this note suggested one. It would delete real takes.
+  It would also delete the top rung of any `--ladder` render, which the code
+  still writes as `mim1p00` on purpose so seven files can be told apart: disk
+  currently holds 139 of them, and the only reason the pattern has not
+  misfired is that nobody has run a ladder beside a plain render.
+
+  Whether the older takes are worth keeping is a listening question, one folder
+  at a time.
+
 - **The elderly female voice's bank does not sound like her.**
 
-  Three banks were made for her while rendering a rap posse cut with
-  `--voices`, and the owner heard all three as wrong: voice conversion of the
-  sung ppbank clips, one text-to-speech call per short phrase, and single
-  words cut out of carrier sentences by that sibling project's word-bank
-  script. The third is clean (every word verified by transcript, whole, never
-  stretched) and is still not her. The song was set aside rather than fixed.
+  Three banks were made for her while rendering a rap posse cut with `--voices`,
+  and the owner heard all three as wrong: voice conversion of the sung clips
+  from the default bank, one text-to-speech call per short phrase, and single
+  words cut out of carrier sentences by that sibling project's word-bank script.
+  The third is clean (every word verified by transcript, whole, never stretched)
+  and is still not her. The song was set aside rather than fixed.
 
   The owner's recollection is that this voice was a different, younger-sounding
   voice from the same engine, lowered in pitch to sound like a very old
@@ -150,7 +250,7 @@ never see. Resolve it on a real vocal.
   Shuffling the running order varies the take while leaving every clip exactly
   as recorded. That much works.
 
-  What it does not do is know whose voice it is holding. `asuntoautoBank` now
+  What it does not do is know whose voice it is holding. One spoken bank now
   carries three singers, and conservative keeps them in blocks only because
   reciting in bank order happens to group them: the female phrases were built
   first, then the male, then the reader. Shuffling throws that away, so wild
@@ -201,13 +301,14 @@ never see. Resolve it on a real vocal.
   Not scheduled. Written down because the reasoning is the useful part: the
   cost is generating data that does not exist yet, not drawing it.
 
-- **Make vocals with the sibling audiobook project.**
+- **Make vocals with the sibling audiobook project.** Partly done since this
+  was written; see the end of this item.
 
-  A bank needs clean, isolated, pitch-trackable words, and every source cut so
-  far has been a recording of somebody singing over a band. The worst of them
-  failed outright: see the traps under "Add words to the bank" in
-  [WORKFLOWS.md](WORKFLOWS.md), all of which come from separating a voice out
-  of a mix rather than starting with one.
+  A bank needs clean, isolated, pitch-trackable words, and every source cut at
+  the time had been a recording of somebody singing over a band. The worst of
+  them failed outright: see the traps under "Add words to the bank" in
+  [WORKFLOWS.md](WORKFLOWS.md), all of which come from separating a voice out of
+  a mix rather than starting with one.
 
   That project already makes speech, on this machine, with no band under it.
   A voice generated rather than extracted has no bleed to gate away, no
@@ -216,7 +317,14 @@ never see. Resolve it on a real vocal.
   banks are actually liked for: a real person's delivery.
 
   Worth a small experiment rather than a plan. One generated word set, cut
-  into a bank, rendered next to `words_hq4` on the same song.
+  into a bank, rendered next to the default bank on the same song.
+
+  Since then a spoken bank has been built from generated speech and tuned (see
+  "Tune a bank of generated voices" in [WORKFLOWS.md](WORKFLOWS.md)), and voice
+  conversion has made copies of a sung bank in other voices. One generated
+  voice never sounded like its speaker; see the elderly voice's item above.
+  What is still open is the comparison this item proposed: a generated word
+  set sung next to the default bank on the same song, judged by ear.
 
 - **Done: the site has a name, and the edge is reachable from the tailnet.**
   Kept because the wrong answer was expensive and is easy to reach for again.
@@ -271,9 +379,9 @@ never see. Resolve it on a real vocal.
      of an octave away, and the unit breaks in the middle. Shifting the shout
      too is not the answer, that is what `SHOUT_KEEP_RAW` exists to prevent.
      Choosing the *word's* octave to sit beside the shout is. Measured over 304
-     units mixing a raw shout with sung words, median internal spread 7.5 to
-     6.9 semitones and units breaking more than half an octave 230 to 200.
-     Where it applies the win is large, `perse+eee` goes from 10.6 to 3.0.
+     units mixing a raw shout with sung words, median internal spread 7.5 to 6.9
+     semitones and units breaking more than half an octave 230 to 200. Where it
+     applies the win is large, one word+shout unit goes from 10.6 to 3.0.
 
      A shout also leaves a gap in time, not only in pitch. It keeps the length
      it was recorded at, so it does not hold its vowel across a rest the way a
@@ -282,12 +390,12 @@ never see. Resolve it on a real vocal.
      30 ms, both after `eee`. Whatever is decided about the octave should
      decide this at the same time: both come from the same exemption.
 
-  2. **Record a bare `paviaani`.** There is not one. All six takes in the
-     curated bank are `eee-paviaani`, so every placement of the climax word
-     carries the shout and its break. This removes the problem rather than
-     reducing it, and no code change reaches as far.
+  2. **Record the climax word bare.** There is no such take. All six takes in
+     the curated bank have the `eee` shout before it, so every placement of the
+     climax word carries the shout and its break. This removes the problem
+     rather than reducing it, and no code change reaches as far.
 
-  3. **The `paviaani` takes disagree.** `eee-paviaani_8` descends across its
+  3. **The climax word's takes disagree.** One of the six descends across its
      syllables where the other five ascend, so which take the arrangement picks
      changes the shape of the word. Worth deciding whether that is range or a
      take to set aside.
@@ -296,10 +404,10 @@ never see. Resolve it on a real vocal.
      singer's portamento and confirmed by ear, not by measurement. The
      surrounding constants in that block all carry numbers.
 
-  Worth knowing before re-measuring any of this: most remaining `eee+paviaani`
-  breaks are not octave artefacts. The word's own recorded melody spans about
-  9.6 semitones around the held shout, which is real and no octave choice
-  should flatten it.
+  Worth knowing before re-measuring any of this: most remaining breaks in the
+  shout and climax word are not octave artefacts. The word's own recorded melody
+  spans about 9.6 semitones around the held shout, which is real and no octave
+  choice should flatten it.
 
 - **Record word takes at higher pitches. Still the way to reach the last of
   it, but much less urgent than it was.**
@@ -355,7 +463,7 @@ never see. Resolve it on a real vocal.
   | song C | 62.2 | +8.6 | 0.75 | 0.86 |
   | song D | 63.4 | +9.9 | 0.68 | 0.96 |
   | song E | 58.7 | +5.1 | 0.87 | 0.99 |
-  | paskaperse | 53.5 | 0.0 | 0.95 | 1.00 |
+  | the bank's own source | 53.5 | 0.0 | 0.95 | 1.00 |
 
   Mean 0.78 then, 0.90 now. The bank sits at MIDI 53.6 with a 10-90 percentile
   span of 53.3 to 61.0, so it has almost no register of its own, and the songs
@@ -467,7 +575,8 @@ never see. Resolve it on a real vocal.
   Re-fetching at a decent resolution needs the link as much as the thirteen
   with no picture at all do.
 
-  `paskaperse.wav` is not in that table and not in the index. It is not a song
+  The recording the default bank was cut from is not in that table and not in
+  the index. It is not a song
   that was fetched from anywhere: it is the source the first word clips were
   cut out of, so there is no address to find for it. That is a different answer
   from one nobody has written down, and worth keeping distinct, because a gap
@@ -511,9 +620,9 @@ never see. Resolve it on a real vocal.
   What it does not fix is the backlog: those rows are a sitting-down-and-writing
   job for whoever has the links, and nothing can automate it.
 
-- **A live site: drop a song in, get a paskaperse back.** Nothing about the
-  pipeline needs a person once the bank exists, so the interesting question is
-  not whether it can be a web service but what it costs and what it hands a
+- **A live site: drop a song in, get it back sung by the bank.** Nothing about
+  the pipeline needs a person once the bank exists, so the interesting question
+  is not whether it can be a web service but what it costs and what it hands a
   stranger.
 
   What a request actually costs, measured on this machine today, an RTX 3080 Ti:
