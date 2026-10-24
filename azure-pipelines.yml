@@ -87,10 +87,13 @@ steps:
     displayName: Build
     workingDirectory: web
 
-  # Where the edge is and which client id signs people in. Neither value is
-  # secret and neither can be: the browser has to know where to send requests,
-  # so both are in the shipped files however they get there. The allowlist on
-  # the edge is the protection.
+  # Where the edge is and which client id signs people in. Neither is a
+  # credential, and neither can be kept from a visitor: the browser has to know
+  # where to send requests, so both are in the shipped files however they get
+  # there. The allowlist on the edge is the protection. Kept out of this file
+  # and out of the log all the same, since the address identifies the
+  # deployment; the publish task prints the site's host, so mask it before
+  # turning this back on.
   #
   # Both come from pipeline variables set in the UI, since both belong to the
   # deployment rather than to this file.

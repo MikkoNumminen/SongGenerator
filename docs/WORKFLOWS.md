@@ -727,10 +727,10 @@ The client id is not secret and cannot be. The browser has to know which client
 signs people in, so it is in the shipped files however it gets there. The
 allowlist on the edge is what actually protects the service.
 
-The client id is a secret here even though it is public anyway. GitHub's plain variables are
-readable by any workflow in any fork's pull request, and the client id being
-public in the shipped files is not a reason to hand it to arbitrary workflow
-code as well.
+The client id is a secret here even though it is public anyway. GitHub's
+plain variables are readable by any workflow in any fork's pull request, and
+the client id being public in the shipped files is not a reason to hand it to
+arbitrary workflow code as well.
 
 The two addresses are secrets for a different reason. Neither is a
 credential, but this repository publishes nothing that identifies the
