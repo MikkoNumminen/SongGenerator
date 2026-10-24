@@ -18,7 +18,7 @@ def _job(job_id: str, stage: Stage = Stage.QUEUED, created: str = "2026-08-08T00
         created_at=created,
         requested_by="someone@example.invalid",
         source_url="https://example.invalid/watch?v=abc",
-        bank="ppbank",
+        bank="example",
         stage=stage,
     )
 
@@ -31,7 +31,7 @@ def test_a_job_round_trips(tmp_path):
     assert got is not None
     assert got.id == "aaa"
     assert got.stage is Stage.QUEUED
-    assert got.bank == "ppbank"
+    assert got.bank == "example"
 
 
 def test_saving_the_same_job_again_updates_it(tmp_path):
@@ -70,10 +70,10 @@ def test_the_optional_settings_survive_the_round_trip(tmp_path):
     store = open_store(tmp_path / "jobs.sqlite3")
     job = Job(
         id="bbb", created_at="2026-08-08T00:00:00+00:00",
-        requested_by="a@b.invalid", source_url="u", bank="muslimbank",
+        requested_by="a@b.invalid", source_url="u", bank="third",
         stage=Stage.DONE, level="wild", mimicry=0.45, engine="world",
         arrangement="# seed 42\nphrase 0\n", exit_code=0,
-        output_dir="output/song/muslimbank",
+        output_dir="output/song/third",
     )
     store.save(job)
 
@@ -81,7 +81,7 @@ def test_the_optional_settings_survive_the_round_trip(tmp_path):
     assert got is not None
     assert (got.level, got.mimicry, got.engine) == ("wild", 0.45, "world")
     assert got.arrangement is not None and got.arrangement.startswith("# seed 42")
-    assert got.output_dir == "output/song/muslimbank"
+    assert got.output_dir == "output/song/third"
 
 
 def test_a_run_the_process_died_during_is_settled_at_startup(tmp_path):

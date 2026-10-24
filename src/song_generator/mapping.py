@@ -225,7 +225,7 @@ def level_clip(audio: np.ndarray) -> np.ndarray:
 def resolve_bank(words_dir: Path, prefer_standardised: bool = True) -> tuple[Path, bool]:
     """Which directory to sing from, and whether its clips are already levelled.
 
-    A standardised tier sits beside its bank as words_hq.std and is preferred
+    A standardised tier sits beside its bank as words_example.std and is preferred
     when it exists. A clone that has never run the pass has no such directory
     and gets the recorded clips, which is the behaviour that shipped before the
     tier existed.

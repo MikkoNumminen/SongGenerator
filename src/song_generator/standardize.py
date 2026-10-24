@@ -69,8 +69,8 @@ def check_destination(root: Path, sources: list[Path]) -> Path:
     Three ways a derivative could land on top of an original, all refused
     before anything is written:
 
-      --out words_hq          the tier IS the source
-      --out words_hq/std      the tier is inside the source, so a later
+      --out words_example          the tier IS the source
+      --out words_example/std      the tier is inside the source, so a later
                               rglob over the source sweeps derivatives up
       --out .                 the tier contains the source
 

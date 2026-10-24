@@ -25,7 +25,7 @@ ADMIN = "owner@example.invalid"
 GUEST = "friend@example.invalid"
 STRANGER = "nobody@example.invalid"
 
-BANKS = {"ppbank": "words_hq"}
+BANKS = {"example": "words_example"}
 LEVELS = ("conservative", "wild")
 AT = "2026-01-01T00:00:00+00:00"
 
@@ -203,7 +203,7 @@ class TestServingATrack:
     whole security of the route."""
 
     def _track(self, tmp_path, name="song.conservative.mp3"):
-        out = tmp_path / "output" / "a_song" / "ppbank"
+        out = tmp_path / "output" / "a_song" / "example"
         out.mkdir(parents=True, exist_ok=True)
         (out / name).write_bytes(b"not really an mp3")
         return out / name
@@ -213,7 +213,7 @@ class TestServingATrack:
         client, _ = _app(tmp_path, ADMIN)
 
         answer = client.get(
-            "/library/a_song/ppbank/song.conservative.mp3", headers=AUTH)
+            "/library/a_song/example/song.conservative.mp3", headers=AUTH)
 
         assert answer.status_code == 200
         assert answer.content == b"not really an mp3"
@@ -229,18 +229,18 @@ class TestServingATrack:
 
         for attempt in ("..%2f..%2fsecret.mp3", "..%2F..%2Fsecret.mp3"):
             answer = client.get(
-                f"/library/a_song/ppbank/{attempt}", headers=AUTH)
+                f"/library/a_song/example/{attempt}", headers=AUTH)
             assert answer.status_code == 404, attempt
             assert b"not for you" not in answer.content
 
     def test_only_renderings_are_served(self, tmp_path):
         """Containment alone would happily hand over anything inside output/."""
-        out = tmp_path / "output" / "a_song" / "ppbank"
+        out = tmp_path / "output" / "a_song" / "example"
         out.mkdir(parents=True, exist_ok=True)
         (out / "notes.txt").write_text("private", encoding="utf-8")
         client, _ = _app(tmp_path, ADMIN)
 
-        answer = client.get("/library/a_song/ppbank/notes.txt", headers=AUTH)
+        answer = client.get("/library/a_song/example/notes.txt", headers=AUTH)
 
         assert answer.status_code == 404
 
@@ -249,7 +249,7 @@ class TestServingATrack:
         client, _ = _app(tmp_path, STRANGER, seeded=frozenset())
 
         answer = client.get(
-            "/library/a_song/ppbank/song.conservative.mp3", headers=AUTH)
+            "/library/a_song/example/song.conservative.mp3", headers=AUTH)
 
         assert answer.status_code == 403
 
@@ -258,7 +258,7 @@ class TestWhatAnAddressMaySee:
     """A new address is a stranger. It gets the demo library and nothing else
     until somebody says otherwise."""
 
-    def _rendering(self, tmp_path, bank="ppbank", song="a_song"):
+    def _rendering(self, tmp_path, bank="example", song="a_song"):
         out = tmp_path / "output" / song / bank
         out.mkdir(parents=True, exist_ok=True)
         (out / f"{song}.conservative.mp3").write_bytes(b"real one")
@@ -301,7 +301,7 @@ class TestWhatAnAddressMaySee:
 
         guest, _ = _app(tmp_path, GUEST)
         answer = guest.get(
-            "/library/a_song/ppbank/a_song.conservative.mp3", headers=AUTH)
+            "/library/a_song/example/a_song.conservative.mp3", headers=AUTH)
 
         assert answer.status_code == 404
         assert b"real one" not in answer.content
@@ -311,25 +311,25 @@ class TestWhatAnAddressMaySee:
         admin, _ = _app(tmp_path, ADMIN)
         admin.post("/users", json={"email": GUEST}, headers=AUTH)
 
-        admin.put(f"/users/{GUEST}/banks", json={"banks": ["ppbank"]},
+        admin.put(f"/users/{GUEST}/banks", json={"banks": ["example"]},
                   headers=AUTH)
 
         guest, _ = _app(tmp_path, GUEST)
         tracks = guest.get("/library", headers=AUTH).json()["tracks"]
-        assert [t["bank"] for t in tracks] == ["ppbank"]
+        assert [t["bank"] for t in tracks] == ["example"]
 
     def test_a_bank_this_machine_does_not_have_is_not_granted(self, tmp_path):
         """A row naming a bank that is not here would look like access to
         something and mean nothing until a bank of that name turned up."""
         admin, _ = _app(tmp_path, ADMIN)
         admin.post("/users", json={"email": GUEST,
-                                   "banks": ["ppbank", "not_a_bank"]},
+                                   "banks": ["example", "not_a_bank"]},
                    headers=AUTH)
 
         listed = admin.get("/users", headers=AUTH).json()
         row = next(u for u in listed["users"] if u["email"] == GUEST)
-        assert row["banks"] == ["ppbank"]
-        assert listed["grantable"] == ["demo", "ppbank"]
+        assert row["banks"] == ["example"]
+        assert listed["grantable"] == ["demo", "example"]
 
     def test_an_administrator_sees_everything_without_a_row_saying_so(
             self, tmp_path):
@@ -339,10 +339,10 @@ class TestWhatAnAddressMaySee:
 
         tracks = admin.get("/library", headers=AUTH).json()["tracks"]
 
-        assert {t["bank"] for t in tracks} == {"ppbank", "demo"}
+        assert {t["bank"] for t in tracks} == {"example", "demo"}
         row = next(u for u in admin.get("/users", headers=AUTH).json()["users"]
                    if u["email"] == ADMIN)
-        assert row["banks"] == ["demo", "ppbank"]
+        assert row["banks"] == ["demo", "example"]
 
     def test_an_administrator_cannot_be_narrowed_from_the_panel(self, tmp_path):
         """The account that could widen it again is the one being narrowed."""
@@ -358,7 +358,7 @@ class TestWhatAnAddressMaySee:
         "everything" and must not lock the address out of the one library it
         started with."""
         admin, _ = _app(tmp_path, ADMIN)
-        admin.post("/users", json={"email": GUEST, "banks": ["ppbank"]},
+        admin.post("/users", json={"email": GUEST, "banks": ["example"]},
                    headers=AUTH)
 
         admin.put(f"/users/{GUEST}/banks", json={"banks": []}, headers=AUTH)
@@ -388,14 +388,14 @@ class TestUpgradingADatabaseThatPredatesLibraries:
 
     def test_an_address_from_before_keeps_everything(self, tmp_path):
         self._old_shaped_db(tmp_path)
-        out = tmp_path / "output" / "a_song" / "ppbank"
+        out = tmp_path / "output" / "a_song" / "example"
         out.mkdir(parents=True)
         (out / "a_song.wild.mp3").write_bytes(b"still theirs")
 
         guest, _ = _app(tmp_path, GUEST, seeded=frozenset({ADMIN}))
         tracks = guest.get("/library", headers=AUTH).json()["tracks"]
 
-        assert [t["bank"] for t in tracks] == ["ppbank"]
+        assert [t["bank"] for t in tracks] == ["example"]
 
     def test_an_address_added_after_the_upgrade_still_starts_at_demo(
             self, tmp_path):
@@ -412,17 +412,17 @@ class TestUpgradingADatabaseThatPredatesLibraries:
             self, tmp_path):
         """What they hold is "everything", not a list copied at upgrade time."""
         self._old_shaped_db(tmp_path)
-        for bank in ("ppbank", "later_bank"):
+        for bank in ("example", "later_bank"):
             out = tmp_path / "output" / "a_song" / bank
             out.mkdir(parents=True)
             (out / "a_song.wild.mp3").write_bytes(b"x")
 
-        settings_banks = {"ppbank": "words_hq", "later_bank": "words_later"}
+        settings_banks = {"example": "words_example", "later_bank": "words_later"}
         guest, _ = _app(tmp_path, GUEST, seeded=frozenset({ADMIN}),
                         banks=settings_banks)
         tracks = guest.get("/library", headers=AUTH).json()["tracks"]
 
-        assert {t["bank"] for t in tracks} == {"ppbank", "later_bank"}
+        assert {t["bank"] for t in tracks} == {"example", "later_bank"}
 
 
 class TestWhoseRunIsWhose:
@@ -433,7 +433,7 @@ class TestWhoseRunIsWhose:
     is the same audio the library refuses it.
     """
 
-    def _a_run(self, tmp_path, by, *, song="a_song", bank="ppbank"):
+    def _a_run(self, tmp_path, by, *, song="a_song", bank="example"):
         from app.jobs import Job, Stage
         out = tmp_path / "output" / song / bank
         out.mkdir(parents=True, exist_ok=True)
@@ -514,7 +514,7 @@ class TestSeeingEverybodysRuns:
         for by, song in ((GUEST, "theirs"), (ADMIN, "mine")):
             store.save(Job(id=f"job-{song}", created_at=AT, requested_by=by,
                            source_url="https://example.invalid/x",
-                           bank="ppbank", stage=Stage.DONE, song=song))
+                           bank="example", stage=Stage.DONE, song=song))
 
     def test_a_new_address_sees_only_its_own(self, tmp_path):
         admin, _ = _app(tmp_path, ADMIN)
@@ -568,7 +568,7 @@ class TestLookingAtOnePersonsRuns:
         for by, song in ((GUEST, "theirs"), (ADMIN, "mine")):
             store.save(Job(id=f"job-{song}", created_at=AT, requested_by=by,
                            source_url="https://example.invalid/x",
-                           bank="ppbank", stage=Stage.DONE, song=song))
+                           bank="example", stage=Stage.DONE, song=song))
 
     def test_an_administrator_can_narrow_to_one_address(self, tmp_path):
         admin, _ = _app(tmp_path, ADMIN)
@@ -623,7 +623,7 @@ class TestInvitations:
 
     def test_it_grants_the_demo_library_and_nothing_else(self, tmp_path):
         admin, _ = _app(tmp_path, ADMIN)
-        out = tmp_path / "output" / "a_song" / "ppbank"
+        out = tmp_path / "output" / "a_song" / "example"
         out.mkdir(parents=True)
         (out / "a_song.wild.mp3").write_bytes(b"not for a stranger")
         token = admin.post("/invitations", headers=AUTH).json()["token"]
@@ -721,7 +721,7 @@ class TestOpeningYourOwnLink:
     def test_it_does_not_narrow_somebody_who_already_has_more(self, tmp_path):
         """The grant is 'demo', and an existing member has at least that."""
         admin, _ = _app(tmp_path, ADMIN)
-        admin.post("/users", json={"email": GUEST, "banks": ["ppbank"]},
+        admin.post("/users", json={"email": GUEST, "banks": ["example"]},
                    headers=AUTH)
         token = admin.post("/invitations", headers=AUTH).json()["token"]
 
@@ -730,7 +730,7 @@ class TestOpeningYourOwnLink:
 
         row = next(u for u in admin.get("/users", headers=AUTH).json()["users"]
                    if u["email"] == GUEST)
-        assert row["banks"] == ["ppbank"]
+        assert row["banks"] == ["example"]
 
 
 class TestAskingToBeLetIn:
@@ -869,21 +869,21 @@ class TestAFolderThatIsNoLongerABank:
         one grant of any real bank read every rendering on the machine.
         """
         self._retired(tmp_path)
-        granted = tmp_path / "output" / "a_song" / "ppbank"
+        granted = tmp_path / "output" / "a_song" / "example"
         granted.mkdir(parents=True, exist_ok=True)
         (granted / "a_song.wild.mp3").write_bytes(b"granted")
 
         admin, _ = _app(tmp_path, ADMIN)
         admin.post("/users", json={"email": GUEST}, headers=AUTH)
-        admin.put(f"/users/{GUEST}/banks", json={"banks": ["ppbank"]},
+        admin.put(f"/users/{GUEST}/banks", json={"banks": ["example"]},
                   headers=AUTH)
 
         guest, _ = _app(tmp_path, GUEST)
 
-        assert guest.get("/library/a_song/ppbank/a_song.wild.mp3",
+        assert guest.get("/library/a_song/example/a_song.wild.mp3",
                          headers=AUTH).content == b"granted"
         escaped = guest.get(
-            "/library/a_song/ppbank/..%5CAB-syllables%5Ca_song.wild.mp3",
+            "/library/a_song/example/..%5CAB-syllables%5Ca_song.wild.mp3",
             headers=AUTH)
         assert escaped.status_code == 404
         assert b"still mine" not in escaped.content

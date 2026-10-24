@@ -44,7 +44,7 @@ def _clip(sound_s: float = 0.5, head_s: float = 0.0, tail_s: float = 0.0,
 @pytest.fixture
 def bank(tmp_path):
     """A source bank with one clip in it."""
-    d = tmp_path / "words_hq"
+    d = tmp_path / "words_example"
     d.mkdir()
     audio_io.write_wav(d / "bravo_1.wav", _clip())
     return d
@@ -78,21 +78,21 @@ def test_guard_runs_before_anything_is_written(bank):
 
 
 def test_refuses_a_name_that_climbs_out(bank, tmp_path):
-    out = tmp_path / "words_hq.std"
+    out = tmp_path / "words_example.std"
     with pytest.raises(StandardizeError, match="not inside"):
         write_derivative(out, "../escaped.wav", _clip(), [bank])
     assert not (tmp_path / "escaped.wav").exists()
 
 
 def test_refuses_a_path_listed_as_a_source(bank, tmp_path):
-    out = tmp_path / "words_hq.std"
+    out = tmp_path / "words_example.std"
     protected = {(out / "bravo_1.wav").resolve()}
     with pytest.raises(StandardizeError, match="source clip in the manifest"):
         write_derivative(out, "bravo_1.wav", _clip(), [bank], protected=protected)
 
 
 def test_writes_a_sibling_normally(bank, tmp_path):
-    out = tmp_path / "words_hq.std"
+    out = tmp_path / "words_example.std"
     written = write_derivative(out, "bravo_1.wav", _clip(), [bank])
     assert written.is_file()
     assert written.parent.resolve() == out.resolve()
@@ -383,7 +383,7 @@ def test_a_short_clip_can_still_be_measured():
 @pytest.fixture
 def built(tmp_path):
     """A source bank with an index, as build_bank would leave it."""
-    d = tmp_path / "words_hq"
+    d = tmp_path / "words_example"
     d.mkdir()
     audio_io.write_wav(d / "bravo_1.wav", _clip(sound_s=0.8, head_s=0.2, tail_s=0.5))
     audio_io.write_wav(d / "aah_1.wav", _clip(sound_s=0.9, head_s=0.1, amp=0.2))
@@ -661,7 +661,7 @@ def test_raw_clips_opts_back_out(built):
 
 
 def test_pointing_straight_at_a_tier_still_reads_as_standardised(built):
-    """--words-dir words_hq.std must not look for words_hq.std.std."""
+    """--words-dir words_example.std must not look for words_example.std.std."""
     out = _out(built)
     standardise_bank(built, out, "offset")
     where, standardised = resolve_bank(out)
@@ -757,8 +757,8 @@ def test_doctor_reports_the_same_bank_a_run_would_sing_from(built, monkeypatch):
     invisible: 23 units reported where a song was sung from 37."""
     from song_generator.mapping import load_bank
 
-    monkeypatch.setattr(config, "BANKS", {"ppbank": str(built)})
-    monkeypatch.setattr(config, "DEFAULT_BANK", "ppbank")
+    monkeypatch.setattr(config, "BANKS", {"example": str(built)})
+    monkeypatch.setattr(config, "DEFAULT_BANK", "example")
 
     assert len(load_bank(built, singable_only=False)) >= len(load_bank(built))
 
@@ -770,8 +770,8 @@ def test_doctor_names_a_stale_tier(built, capsys, monkeypatch):
 
     out = _out(built)
     standardise_bank(built, out, "offset")
-    monkeypatch.setattr(config, "BANKS", {"ppbank": str(built)})
-    monkeypatch.setattr(config, "DEFAULT_BANK", "ppbank")
+    monkeypatch.setattr(config, "BANKS", {"example": str(built)})
+    monkeypatch.setattr(config, "DEFAULT_BANK", "example")
 
     report_environment()
     assert "up to date" in capsys.readouterr().out

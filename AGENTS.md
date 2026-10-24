@@ -44,7 +44,7 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   person types on purpose. Anything new that starts a render inherits this
   rule; it is not a preference, and it has been stated twice.
 - **Never publish anything identifying.** No person's name, no voice or
-  persona name, no email address, no domain, hostname or resource id of the
+  persona name, no voice bank or the name of one, no email address, no domain, hostname or resource id of the
   deployment, and no title or artist of a song rendered here, nor any slug,
   shorthand or source-video tag that stands for one, in any tracked file, ref
   name, commit message or pull request. This is absolute. In examples and
@@ -92,9 +92,9 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   Identification is done by ear.
 - **Never point a tool's output at a bank somebody curated by hand.** The
   clips in a bank get renamed by ear and added to over time, and none of that
-  is regenerable. `recut_bank --out` defaulted to `words_hq` from when it
-  created that directory, and would have written over eighteen hand-named
-  recordings; it now refuses unless told otherwise, and checks again at write
+  is regenerable. `recut_bank --out` once defaulted to the directory it had
+  first created, a curated bank by then, and would have written over
+  eighteen hand-named recordings; it now refuses unless told otherwise, and checks again at write
   time, since a clip renamed into the folder mid-run is the same hand work.
   Any new tool that writes clips needs the same refusal.
 - **Never re-separate needlessly.** Stems are cached under `work/<song>/`.

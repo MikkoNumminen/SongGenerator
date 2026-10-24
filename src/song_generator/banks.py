@@ -86,7 +86,7 @@ RENDER_DEFAULTS = {
 def settings_dir(bank_dir: Path) -> Path:
     """The directory whose bank.json speaks for these clips.
 
-    A standardised tier sits beside its bank as words_hq.std and is a
+    A standardised tier sits beside its bank as words_example.std and is a
     derivative of it, not a different bank, so the settings belong to the
     bank however the tier was reached. The manifest marker decides what is
     a tier, the same rule mapping.resolve_bank uses to decide what is

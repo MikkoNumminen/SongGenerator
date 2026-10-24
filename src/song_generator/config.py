@@ -406,9 +406,10 @@ MATCH_PREFIX_MIN_LEN = 4
 # Used by `python -m song_generator.standardize`, not by the main pipeline.
 
 # Suffix appended to a bank directory to name its standardised tier, so
-# words_hq becomes words_hq.std. A sibling rather than a subdirectory, because
-# the result is a complete bank in its own right: --words-dir points at it and
-# every existing tool reads it with no special case.
+# words_example becomes words_example.std. A sibling rather than a
+# subdirectory, because the result is a complete bank in its own right:
+# --words-dir points at it and every existing tool reads it with no special
+# case.
 STD_SUFFIX = ".std"
 
 # The manifest filename inside a standardised tier. Its presence is also what
@@ -573,27 +574,21 @@ EDGE_FADE_S = 0.015
 WORD_ROTATION_SEED = 1987
 WORD_SEQUENCE = None
 
-# Prebuilt banks, switchable per run with --bank. Both are built ahead of time
-# and the song's stems are cached, so switching costs only a re-render.
+# Prebuilt banks, switchable per run with --bank: a name for each, and the
+# directory its clips sit in.
 #
-# "ppbank" - clips named by ear, from the song the bank is named after. The
-#            words are actually words, which is the whole point, so this is
-#            the default.
-# "chaos"  - every candidate clip taken as raw material, names ignored. The
-#            mapper only needs each clip's syllable count and pitch, so this
-#            still sings; it just stops saying anything.
+# No real bank is named here. The banks are recordings, and which ones exist
+# and what they are called stays on the machine that holds them: they are
+# registered in vocabulary_local.py, which is gitignored and replaces this
+# table and DEFAULT_BANK wholesale (see the end of this file). What ships is
+# three placeholders, so a fresh checkout has a default to point at and the
+# tests have voices to give --voices.
 BANKS = {
-    # Cut from Mel-Band Roformer stems. Around 47% of each clip's content in
-    # the older bank turned out to be instrumental Demucs had left behind,
-    # audible as a synthesiser tone under some words. Cleaner separation also
-    # lets pitch detection read the sung note more accurately, so clips match
-    # their targets better and fold less often.
-    "ppbank": "words_hq",
-    # The original Demucs-cut bank, kept for comparison.
-    "demucs": "words",
-    "chaos": "words_chaos",
+    "example": "words_example",
+    "other": "words_other",
+    "third": "words_third",
 }
-DEFAULT_BANK = "ppbank"
+DEFAULT_BANK = "example"
 
 # --swallow LO-HI: each bank word swallows LO to HI of the original's words,
 # for rap, where a bank syllable on every rapped syllable came out as too many

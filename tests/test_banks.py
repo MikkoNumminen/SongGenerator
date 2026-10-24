@@ -796,14 +796,14 @@ class TestWordBusLufs:
 
 class TestSettingsComeFromTheBank:
     def _bank_and_tier(self, tmp_path):
-        bank = tmp_path / "words_hq"
+        bank = tmp_path / "words_example"
         bank.mkdir()
         (bank / "bank.json").write_text(json.dumps({
             "levels": {"conservative": {"strategy": "sequence"}},
             "mix": {"word_bus_lufs": -11.0},
             "never_split": True,
         }), encoding="utf-8")
-        tier = tmp_path / ("words_hq" + config.STD_SUFFIX)
+        tier = tmp_path / ("words_example" + config.STD_SUFFIX)
         tier.mkdir()
         (tier / config.STD_MANIFEST).write_text("{}", encoding="utf-8")
         return bank, tier
@@ -1140,12 +1140,12 @@ class TestOutputPerBank:
     def test_two_banks_for_one_song_write_to_different_folders(self):
         from song_generator.cli import output_path
 
-        a = output_path(None, Path("input/song.mp4"), "ppbank")
-        b = output_path(None, Path("input/song.mp4"), "muslimbank")
+        a = output_path(None, Path("input/song.mp4"), "example")
+        b = output_path(None, Path("input/song.mp4"), "third")
         assert a != b
         assert a.name == b.name == "song.mp3"
-        assert a.parent.name == "ppbank"
-        assert b.parent.name == "muslimbank"
+        assert a.parent.name == "example"
+        assert b.parent.name == "third"
         # Same song folder, so the levels of one song stay side by side.
         assert a.parent.parent == b.parent.parent
 

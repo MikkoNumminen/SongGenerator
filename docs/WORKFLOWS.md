@@ -63,7 +63,7 @@ costs is the files.
 | `--ladder` | Every mimicry rung, fourteen files instead of two |
 | `--play wild` | One level instead of both |
 | `--arrangement <path>` | Replay a saved arrangement exactly, or an edited one, named `.replay` |
-| `--bank chaos` | Sing with every candidate clip, identity ignored |
+| `--bank <name>` | Sing with another bank registered in `vocabulary_local.py` |
 | `--seed 42` | Fix the arrangement seed; otherwise a new one each run |
 | `--raw-clips` | Ignore the standardised tier, sing the recordings as they are |
 | `--no-shift` | Words at their own recorded pitch |
@@ -77,7 +77,7 @@ costs is the files.
 ## Sing a song with several voices taking turns
 
 ```powershell
-.\.venv\Scripts\song-generator.exe input\song.mp4 --voices ppbank <voiceB>
+.\.venv\Scripts\song-generator.exe input\song.mp4 --voices <voiceA> <voiceB>
 ```
 
 For a posse cut where several people sing: each turn is sung by the next bank
@@ -196,7 +196,7 @@ voice" below before assuming a converted bank is fine because the numbers
 are.
 
 1. Start from the bank's **source** clips, the hand-named recordings a bank
-   was built from (for `ppbank`, that is `words_hq`), not the built bank
+   was built from (its `words_<bank>` source directory), not the built bank
    itself: `build_bank` parses word identity out of the source filenames, so
    converting the source and re-running `build_bank` on the result keeps every
    name.
@@ -646,7 +646,7 @@ moves the file it is about to overwrite into a `previous` folder beside it, and
 `--rollback` puts it back.
 
 ```powershell
-.\.venv\Scripts\song-generator.exe input\song.mp4 --bank ppbank --rollback
+.\.venv\Scripts\song-generator.exe input\song.mp4 --bank <name> --rollback
 ```
 
 It restores every level for that song and bank at once, because a run writes
@@ -777,7 +777,7 @@ reflect what is on disk, and an ordinary run says nothing about it.
 
 ## Tune a bank of generated voices
 
-Everything below was settled by tuning `asuntoautoBank` over one long session,
+Everything below was settled by tuning one spoken bank over one long session,
 mostly by getting it wrong first. Walk it in order. Each step's decision
 depends on a measurement, and the measurement is cheap.
 
@@ -801,7 +801,7 @@ Two figures, and they are not the same measurement. **Per clip**, the phrases
 in these banks run 57 to 86 per cent unvoiced, and the spread between the
 voices is what matters: the lowest one is the highest number and it tears
 first. `doctor` reports a **bank-wide mean over sampled clips**, one number,
-which for `asuntoautoBank` is 42 per cent voiced. Read the doctor line for
+which for that bank is 42 per cent voiced. Read the doctor line for
 whether a bank is breathy at all, and measure per clip when deciding which
 voice is the problem.
 
@@ -833,7 +833,7 @@ word is a different sound, not a shorter one.
 
 A speaking voice needs more than a sung one to be heard, but a hot word bus
 trips the ceiling in `mapping.mix` and drags the whole mix down: at -11.0 LUFS
-this bank's renders came back quieter overall than at -14.0. `asuntoautoBank`
+this bank's renders came back quieter overall than at -14.0. That bank
 settled at **-13.0**. Copying another bank's number without measuring is a
 documented way to make every render sound wrong.
 
@@ -857,7 +857,7 @@ twice the damage, worst on the lowest voice.
 | female phrase | 57% | 3.1 | 3.6 | **2.3** |
 | male phrase | 72% | 1.8 | 3.3 | **1.0** |
 
-**7. Where `asuntoautoBank` landed**, as a worked example:
+**7. Where that bank landed**, as a worked example:
 
 ```jsonc
 {
@@ -1008,7 +1008,7 @@ sounding**:
 
 | source | voice against the band under it |
 |---|---|
-| the source videos that built `words_hq4` | **+1.5 dB** |
+| the source videos that built the default bank | **+1.5 dB** |
 | a buried vocal that produced nothing usable | **−3.1 dB** |
 
 ```powershell
@@ -1078,7 +1078,7 @@ anything else makes it a different singer.
 
 ### The bank's own level
 
-`words_hq4` declares no `bank.json`, so it uses `config.WORD_BUS_LUFS`,
+The default bank declares no `bank.json`, so it uses `config.WORD_BUS_LUFS`,
 **−14.0**. Copying `−11.0` from a spoken bank without measuring made every
 render sound wrong in a way that was not simply loudness: the hotter word bus
 tripped the −1 dB ceiling in `mapping.mix`, which scales the whole mix down,
@@ -1101,7 +1101,7 @@ losing a name, label or syllable boundary.
 
 ```powershell
 .\.venv\Scripts\python.exe -m song_generator.separate_hq --for-bank "sources\*.mp4"
-.\.venv\Scripts\python.exe -m song_generator.recut_bank --out words_hq2
+.\.venv\Scripts\python.exe -m song_generator.recut_bank --out words_recut
 ```
 
 `--for-bank` narrows the files you pass to the ones the current bank was cut

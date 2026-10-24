@@ -19,7 +19,7 @@ function run(id: string, stage: string): JobReply {
     created_at: '2026-08-12T09:00:00+00:00',
     requested_by: 'someone@example.com',
     source_url: 'https://example.invalid/song',
-    bank: 'ppbank',
+    bank: 'example',
     song: `song-${id}`,
   };
 }

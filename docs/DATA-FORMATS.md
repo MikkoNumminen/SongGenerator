@@ -284,7 +284,7 @@ never overwritten, so an older arrangement stays reproducible.
 ```
 # SongGenerator arrangement
 #   song    some_song
-#   bank    words_hq3.std
+#   bank    words_example.std
 #   level   wild
 #   seed    543686
 #
@@ -350,7 +350,7 @@ Each level of a run writes its own file, so a run produces two.
 
 ---
 
-## `words_hq.std/standardized.json`
+## `words_<bank>.std/standardized.json`
 
 How each derivative was made, and what it was made from. Written by
 `standardize.py`.
@@ -360,7 +360,7 @@ How each derivative was made, and what it was made from. Written by
   "format": 1,
   "params_sha256": "9f2c...",     // every threshold and target, as one hash
   "shout_mode": "offset",
-  "source_dir": "words_hq",
+  "source_dir": "words_example",
   "clips": {
     "aah-calculator_1.wav": {
       "source_sha256": "4a81...", // of the recorded clip's bytes
@@ -394,7 +394,7 @@ Exits non-zero unless everything matches, so it can gate a build.
 
 The tier alongside it is an ordinary bank: `words.json` in the same directory,
 with `duration_s` and `syllable_bounds_s` rewritten to match the trimmed audio.
-`--words-dir words_hq.std` reads it like any other.
+`--words-dir words_example.std` reads it like any other.
 
 ---
 

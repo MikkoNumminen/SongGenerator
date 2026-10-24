@@ -105,7 +105,7 @@ never see. Resolve it on a real vocal.
 
   Three banks were made for her while rendering a rap posse cut with
   `--voices`, and the owner heard all three as wrong: voice conversion of the
-  sung ppbank clips, one text-to-speech call per short phrase, and single
+  sung default bank's clips, one text-to-speech call per short phrase, and single
   words cut out of carrier sentences by that sibling project's word-bank
   script. The third is clean (every word verified by transcript, whole, never
   stretched) and is still not her. The song was set aside rather than fixed.
@@ -150,7 +150,7 @@ never see. Resolve it on a real vocal.
   Shuffling the running order varies the take while leaving every clip exactly
   as recorded. That much works.
 
-  What it does not do is know whose voice it is holding. `asuntoautoBank` now
+  What it does not do is know whose voice it is holding. One spoken bank now
   carries three singers, and conservative keeps them in blocks only because
   reciting in bank order happens to group them: the female phrases were built
   first, then the male, then the reader. Shuffling throws that away, so wild
@@ -216,7 +216,7 @@ never see. Resolve it on a real vocal.
   banks are actually liked for: a real person's delivery.
 
   Worth a small experiment rather than a plan. One generated word set, cut
-  into a bank, rendered next to `words_hq4` on the same song.
+  into a bank, rendered next to the default bank on the same song.
 
 - **Done: the site has a name, and the edge is reachable from the tailnet.**
   Kept because the wrong answer was expensive and is easy to reach for again.

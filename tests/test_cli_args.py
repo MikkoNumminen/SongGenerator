@@ -130,8 +130,8 @@ class TestOutputGoesInItsOwnFolder:
 
         from song_generator.cli import output_path
 
-        got = output_path(None, Path("input/my_song.mp4"), "ppbank")
-        assert got.parent.name == "ppbank"
+        got = output_path(None, Path("input/my_song.mp4"), "example")
+        assert got.parent.name == "example"
         assert got.parent.parent.name == "my_song"
         assert got.parent.parent.parent.name == "output"
 
@@ -141,7 +141,7 @@ class TestOutputGoesInItsOwnFolder:
 
         from song_generator.cli import output_path
 
-        got = output_path(None, Path("input/my_song.mp4"), "ppbank")
+        got = output_path(None, Path("input/my_song.mp4"), "example")
         assert got.name == "my_song.mp3"
 
     def test_an_explicit_output_is_folded_the_same_way(self):
@@ -150,8 +150,8 @@ class TestOutputGoesInItsOwnFolder:
 
         from song_generator.cli import output_path
 
-        got = output_path(Path("elsewhere/song.mp3"), Path("input/x.mp4"), "ppbank")
-        assert got.parent.name == "ppbank"
+        got = output_path(Path("elsewhere/song.mp3"), Path("input/x.mp4"), "example")
+        assert got.parent.name == "example"
         assert got.parent.parent.name == "song"
         assert got.parent.parent.parent.name == "elsewhere"
         assert got.name == "song.mp3"
@@ -229,7 +229,7 @@ class TestEveryFilenameCarriesTheLevel:
 
         from song_generator.cli import versioned_name
 
-        out = Path("output/song/ppbank/song.mp3")
+        out = Path("output/song/example/song.mp3")
         a = versioned_name(out, "conservative")
         b = versioned_name(out, "wild")
         assert a != b
@@ -241,7 +241,7 @@ class TestEveryFilenameCarriesTheLevel:
 
         from song_generator.cli import versioned_name
 
-        out = Path("output/song/ppbank/song.mp3")
+        out = Path("output/song/example/song.mp3")
         got = versioned_name(out, "wild", tag="mim0p60")
         assert got.name == "song.wild.mim0p60.mp3"
 
@@ -250,7 +250,7 @@ class TestEveryFilenameCarriesTheLevel:
 
         from song_generator.cli import versioned_name
 
-        out = Path("output/song/ppbank/song.wild.mp3")
+        out = Path("output/song/example/song.wild.mp3")
         assert versioned_name(out, "wild").name == "song.wild.mp3"
         assert versioned_name(out, "wild", tag="mim0p60").name == \
             "song.wild.mim0p60.mp3"
@@ -297,7 +297,7 @@ class TestOnlyThePlainTakeGetsThePlainName:
 
         from song_generator.cli import versioned_name
 
-        out = Path("output/song/ppbank/song.mp3")
+        out = Path("output/song/example/song.mp3")
         plain = versioned_name(out, "wild", tag=cli.variant_tag(parse()))
         others = [
             versioned_name(out, "wild", tag=cli.variant_tag(parse(*argv)))
@@ -312,7 +312,7 @@ class TestOnlyThePlainTakeGetsThePlainName:
 
         from song_generator.cli import rung_word, versioned_name
 
-        out = Path("output/song/ppbank/song.mp3")
+        out = Path("output/song/example/song.mp3")
         names = {versioned_name(out, "wild", tag=rung_word(t)).name
                  for t in config.MIMICRY_VARIANTS}
         assert len(names) == len(config.MIMICRY_VARIANTS)
@@ -340,7 +340,7 @@ class TestOneGenerationBack:
         return target
 
     def test_the_take_that_was_there_is_kept(self, tmp_path):
-        target = self._take(tmp_path / "song" / "nbank", b"the old one")
+        target = self._take(tmp_path / "song" / "other", b"the old one")
 
         kept = cli.keep_the_one_it_replaces(target)
 
@@ -352,7 +352,7 @@ class TestOneGenerationBack:
 
     def test_nothing_to_keep_is_not_an_error(self, tmp_path):
         """The first render of a song has no predecessor, which is ordinary."""
-        folder = tmp_path / "song" / "nbank"
+        folder = tmp_path / "song" / "other"
         folder.mkdir(parents=True)
 
         assert cli.keep_the_one_it_replaces(folder / "song.wild.mp3") is None
@@ -363,7 +363,7 @@ class TestOneGenerationBack:
         On Windows a plain rename refuses to overwrite an existing file, so
         this is the case that would raise instead of rotating.
         """
-        folder = tmp_path / "song" / "nbank"
+        folder = tmp_path / "song" / "other"
         target = self._take(folder, b"first")
         cli.keep_the_one_it_replaces(target)
         self._take(folder, b"second")
@@ -380,7 +380,7 @@ class TestOneGenerationBack:
         song = tmp_path / "song.mp4"
         song.write_bytes(b"not actually read")
         out = tmp_path / "out" / "song.mp3"
-        folder = out.parent / "song" / "ppbank"
+        folder = out.parent / "song" / "example"
         folder.mkdir(parents=True)
         for level in ("wild", "conservative"):
             take = folder / f"song.{level}.mp3"
@@ -388,7 +388,7 @@ class TestOneGenerationBack:
             cli.keep_the_one_it_replaces(take)
             take.write_bytes(f"bad {level}".encode())
 
-        code = cli.main([str(song), "--bank", "ppbank", "--output", str(out),
+        code = cli.main([str(song), "--bank", "example", "--output", str(out),
                          "--rollback"])
 
         assert code == cli.EXIT_OK
@@ -401,7 +401,7 @@ class TestOneGenerationBack:
         song = tmp_path / "song.mp4"
         song.write_bytes(b"not actually read")
 
-        code = cli.main([str(song), "--bank", "ppbank",
+        code = cli.main([str(song), "--bank", "example",
                          "--output", str(tmp_path / "out" / "song.mp3"),
                          "--rollback"])
 
@@ -411,7 +411,7 @@ class TestOneGenerationBack:
     def test_rolling_back_puts_the_previous_take_in_place(self, tmp_path):
         """The other half of keeping one. Without this the backup is a file in
         a folder and the rollback is done in Explorer."""
-        folder = tmp_path / "song" / "nbank"
+        folder = tmp_path / "song" / "other"
         target = self._take(folder, b"the good one")
         cli.keep_the_one_it_replaces(target)
         self._take(folder, b"the bad re-render")
@@ -422,7 +422,7 @@ class TestOneGenerationBack:
     def test_rolling_back_twice_returns_to_where_it_started(self, tmp_path):
         """Somebody comparing two takes by ear will press this repeatedly, and
         neither take may be the one that gets thrown away."""
-        folder = tmp_path / "song" / "nbank"
+        folder = tmp_path / "song" / "other"
         target = self._take(folder, b"first")
         cli.keep_the_one_it_replaces(target)
         self._take(folder, b"second")
@@ -438,7 +438,7 @@ class TestOneGenerationBack:
         ]
 
     def test_rolling_back_with_nothing_kept_says_so(self, tmp_path):
-        folder = tmp_path / "song" / "nbank"
+        folder = tmp_path / "song" / "other"
         target = self._take(folder, b"the only one")
 
         assert cli.restore_the_previous(target) is None
@@ -447,7 +447,7 @@ class TestOneGenerationBack:
     def test_rolling_back_a_deleted_take_is_a_plain_restore(self, tmp_path):
         """The safety guard against deleting by accident: the kept take comes
         back even when there is nothing left to swap it with."""
-        folder = tmp_path / "song" / "nbank"
+        folder = tmp_path / "song" / "other"
         target = self._take(folder, b"deleted by hand")
         cli.keep_the_one_it_replaces(target)
 
@@ -459,7 +459,7 @@ class TestOneGenerationBack:
         """A wild render must not evict the conservative backup, nor one bank
         another's. Those are the slots the naming already separates."""
         song = tmp_path / "song"
-        for bank in ("nbank", "ppbank"):
+        for bank in ("other", "example"):
             for level in ("wild", "conservative"):
                 folder = song / bank
                 folder.mkdir(parents=True, exist_ok=True)
@@ -470,17 +470,17 @@ class TestOneGenerationBack:
         kept = sorted(p.relative_to(song).as_posix()
                       for p in song.rglob(f"{cli.PREVIOUS_DIR}/*.mp3"))
         assert kept == [
-            "nbank/previous/song.conservative.mp3",
-            "nbank/previous/song.wild.mp3",
-            "ppbank/previous/song.conservative.mp3",
-            "ppbank/previous/song.wild.mp3",
+            "example/previous/song.conservative.mp3",
+            "example/previous/song.wild.mp3",
+            "other/previous/song.conservative.mp3",
+            "other/previous/song.wild.mp3",
         ]
 
     def test_the_kept_take_is_not_listed_as_a_rendering(self, tmp_path):
         """The songs page walks `<song>/<bank>/*.mp3`. A backup saved beside
         the take as `song.wild.previous.mp3` would appear there as a second
         take called "previous"; a directory inside the bank does not."""
-        folder = tmp_path / "song" / "nbank"
+        folder = tmp_path / "song" / "other"
         target = self._take(folder, b"old")
 
         cli.keep_the_one_it_replaces(target)

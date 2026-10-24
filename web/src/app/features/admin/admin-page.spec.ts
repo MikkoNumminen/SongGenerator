@@ -26,11 +26,11 @@ function reply(users: string[] = [GUEST]): UsersReply {
       added_at: '2026-01-01T00:00:00+00:00',
       added_by: OWNER,
       is_admin: email === OWNER,
-      banks: email === OWNER ? ['demo', 'ppbank'] : ['demo'],
+      banks: email === OWNER ? ['demo', 'example'] : ['demo'],
       see_all_runs: email === OWNER,
     })),
     admins: [OWNER],
-    grantable: ['demo', 'ppbank'],
+    grantable: ['demo', 'example'],
   };
 }
 
@@ -179,12 +179,12 @@ describe('the allowlist page', () => {
     const allowlist = new FakeAllowlist();
     const fixture = await render(allowlist);
 
-    fixture.componentInstance.toggleWanted('ppbank');
+    fixture.componentInstance.toggleWanted('example');
     fixture.componentInstance.typed.set('friend@example.invalid');
     fixture.componentInstance.grant();
     await fixture.whenStable();
 
-    expect(allowlist.grantedBanks).toEqual([['demo', 'ppbank']]);
+    expect(allowlist.grantedBanks).toEqual([['demo', 'example']]);
   });
 
   it('goes back to demo only after a grant', async () => {
@@ -192,7 +192,7 @@ describe('the allowlist page', () => {
     const allowlist = new FakeAllowlist();
     const fixture = await render(allowlist);
 
-    fixture.componentInstance.toggleWanted('ppbank');
+    fixture.componentInstance.toggleWanted('example');
     fixture.componentInstance.typed.set('friend@example.invalid');
     fixture.componentInstance.grant();
     await fixture.whenStable();
@@ -205,10 +205,10 @@ describe('the allowlist page', () => {
     const fixture = await render(allowlist);
     const guest = allowlist.listed.users.find((u) => u.email === GUEST)!;
 
-    fixture.componentInstance.toggleFor(guest, 'ppbank');
+    fixture.componentInstance.toggleFor(guest, 'example');
     await fixture.whenStable();
 
-    expect(allowlist.setFor).toEqual([[GUEST, ['demo', 'ppbank']]]);
+    expect(allowlist.setFor).toEqual([[GUEST, ['demo', 'example']]]);
   });
 
   it('grants seeing every run, and withdraws it', async () => {

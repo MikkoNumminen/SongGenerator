@@ -165,7 +165,7 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     p.add_argument("--bank", type=Path, default=Path("words"))
-    p.add_argument("--out", type=Path, default=Path("words_hq"))
+    p.add_argument("--out", type=Path, default=Path("words_recut"))
     p.add_argument("--stem", default="vocal_hq.wav",
                    help="filename of the better stem inside each work dir")
     p.add_argument("--dry-run", action="store_true",

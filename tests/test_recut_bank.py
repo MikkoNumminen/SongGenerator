@@ -187,7 +187,7 @@ class TestRecutWillNotClobberHandNamedClips:
 
         stem = self._sources(tmp_path, monkeypatch)
         source = self._bank(tmp_path / "words", stem, ["bravo_1.wav"])
-        out = self._bank(tmp_path / "words_hq", stem, ["bravo_1.wav"])
+        out = self._bank(tmp_path / "words_example", stem, ["bravo_1.wav"])
         before = (out / "bravo_1.wav").read_bytes()
 
         code = main(["--bank", str(source), "--out", str(out)])
@@ -202,7 +202,7 @@ class TestRecutWillNotClobberHandNamedClips:
         stem = self._sources(tmp_path, monkeypatch)
         source = self._bank(tmp_path / "words", stem,
                             ["bravo_1.wav", "tango_1.wav"])
-        out = self._bank(tmp_path / "words_hq", stem, ["bravo_1.wav"])
+        out = self._bank(tmp_path / "words_example", stem, ["bravo_1.wav"])
 
         main(["--bank", str(source), "--out", str(out)])
         said = capsys.readouterr().err
