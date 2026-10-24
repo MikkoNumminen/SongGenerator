@@ -92,12 +92,14 @@ def test_constants_named_in_docs_actually_exist(doc):
         # Deployment settings for the web front end and the edge, which are
         # real and checked elsewhere: SONGGEN_ALLOWED_ORIGINS is read in
         # api/app/config.py, and the other two are an injection token in
-        # web/src/app/core plus the repository variable that fills it. This
+        # web/src/app/core plus the repository secret that fills it. This
         # test guards the pipeline's own constants, and pulling those two
         # trees into it would make config.py the place every deployment name
         # has to be declared, which it is not.
         "SONGGEN_ALLOWED_ORIGINS", "SONGGEN_ALLOWED_EMAILS",
         "SONGGEN_GOOGLE_CLIENT_ID", "API_BASE_URL", "GOOGLE_CLIENT_ID",
+        # The site's own address, a repository secret the deploy checks against.
+        "SITE_URL",
         # The one real credential in the deployment, and the only reason it is
         # named in a runbook is to say it must be marked secret.
         "AZURE_STATIC_WEB_APPS_API_TOKEN",

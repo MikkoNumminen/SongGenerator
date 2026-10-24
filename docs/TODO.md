@@ -194,6 +194,28 @@ never see. Resolve it on a real vocal.
   Whether the older takes are worth keeping is a listening question, one folder
   at a time.
 
+- **The elderly female voice's bank does not sound like her.**
+
+  Three banks were made for her while rendering a rap posse cut with
+  `--voices`, and the owner heard all three as wrong: voice conversion of the
+  sung ppbank clips, one text-to-speech call per short phrase, and single
+  words cut out of carrier sentences by that sibling project's word-bank
+  script. The third is clean (every word verified by transcript, whole, never
+  stretched) and is still not her. The song was set aside rather than fixed.
+
+  The owner's recollection is that this voice was a different, younger-sounding
+  voice from the same engine, lowered in pitch to sound like a very old
+  woman. Nothing in the sibling project's current generation code lowers it:
+  no pitch or formant shift in its audiobook-generation script or the engine
+  bridge. So if the lowering happened, it is in how a reference clip was
+  made, in a step outside that code, or in a version of it no longer checked
+  out. That is where to look first. Compare her words here against an
+  audiobook rendered by that same project in her voice, by ear and by median
+  pitch, before building a fourth bank.
+
+  The how and the dead ends are in [WORKFLOWS.md](WORKFLOWS.md), "Make a
+  voice-converted copy of a bank".
+
 - **The planner predicts folding by a different rule than the renderer uses.**
 
   `pitch_cost` in `mapping.py` measures a candidate against the MEAN shift
@@ -272,7 +294,7 @@ never see. Resolve it on a real vocal.
   Not scheduled. Written down because the reasoning is the useful part: the
   cost is generating data that does not exist yet, not drawing it.
 
-- **Make vocals with AudiobookMaker.**
+- **Make vocals with the sibling audiobook project.**
 
   A bank needs clean, isolated, pitch-trackable words, and every source cut so
   far has been a recording of somebody singing over a band. The worst of them
@@ -280,7 +302,7 @@ never see. Resolve it on a real vocal.
   [WORKFLOWS.md](WORKFLOWS.md), all of which come from separating a voice out
   of a mix rather than starting with one.
 
-  AudiobookMaker already makes speech, on this machine, with no band under it.
+  That project already makes speech, on this machine, with no band under it.
   A voice generated rather than extracted has no bleed to gate away, no
   ambiguous pitch to cross-check, and no octave spread to normalise, so most
   of that procedure stops applying. What it costs is the thing the recorded
@@ -320,7 +342,7 @@ never see. Resolve it on a real vocal.
 
   Still open, and cosmetic: a subdomain would be tidier than a redirect, since
   the address bar shows the Azure hostname the moment the redirect fires. One
-  CNAME from `songgenerator.mikkonumminen.dev` to the Static Web App, left
+  CNAME from `songgenerator.<site domain>` to the Static Web App, left
   unproxied so Azure issues its own certificate; two custom domains are free.
   It needs a token with DNS edit on that zone, and the one wrangler logs in
   with carries `zone:read` only.
@@ -331,7 +353,7 @@ never see. Resolve it on a real vocal.
   The tearing is fixed. Shifts were folded one syllable at a time, so two
   syllables of a word either side of the 12-semitone cap were moved an octave
   apart however little the melody moved between them. `fold_unit` now makes one
-  octave decision per word, and on ellinoora the words whose internal interval
+  octave decision per word, and on one song the words whose internal interval
   was enlarged by folding went from 32 of 156 to 5. A glide between syllables
   covers the rest. See `fold_unit` and `GLIDE_MS`.
 
@@ -348,7 +370,7 @@ never see. Resolve it on a real vocal.
 
      A shout also leaves a gap in time, not only in pitch. It keeps the length
      it was recorded at, so it does not hold its vowel across a rest the way a
-     sung syllable now does, and the word after it starts late. On rocketman
+     sung syllable now does, and the word after it starts late. On one song
      those are the only two words left with silence inside them, 80 ms and
      30 ms, both after `eee`. Whatever is decided about the octave should
      decide this at the same time: both come from the same exemption.
@@ -382,8 +404,8 @@ never see. Resolve it on a real vocal.
   SHIFT_CAP_SEMITONES for the measurement and the listening result.
 
   What remains is the songs that still fold heavily, which are the ones sitting
-  furthest above the bank: musickorea at 0.60 with 75% still folded, music8 at
-  0.81, music46 and music45 at 0.82. Those are a range problem and no cap
+  furthest above the bank: song A at 0.60 with 75% still folded, song B at
+  0.81, two more at 0.82. Those are a range problem and no cap
   setting reaches them.
 
   A folded syllable lands on the right note *name* in the wrong register, so it
@@ -421,11 +443,11 @@ never see. Resolve it on a real vocal.
 
   | song | melody | above bank | ceiling at cap 7 | at cap 12 |
   |---|---|---|---|---|
-  | musickorea | 67.9 | +14.4 | 0.51 | 0.60 |
-  | music8 | 63.7 | +10.1 | 0.62 | 0.81 |
-  | musichyva | 62.2 | +8.6 | 0.75 | 0.86 |
-  | cardib_up | 63.4 | +9.9 | 0.68 | 0.96 |
-  | rocketman_bluegrass | 58.7 | +5.1 | 0.87 | 0.99 |
+  | song A | 67.9 | +14.4 | 0.51 | 0.60 |
+  | song B | 63.7 | +10.1 | 0.62 | 0.81 |
+  | song C | 62.2 | +8.6 | 0.75 | 0.86 |
+  | song D | 63.4 | +9.9 | 0.68 | 0.96 |
+  | song E | 58.7 | +5.1 | 0.87 | 0.99 |
   | paskaperse | 53.5 | 0.0 | 0.95 | 1.00 |
 
   Mean 0.78 then, 0.90 now. The bank sits at MIDI 53.6 with a 10-90 percentile
@@ -516,7 +538,7 @@ never see. Resolve it on a real vocal.
 - **Not every song that has been made records where it came from, and the
   video is the reason that matters.** Twenty-three songs are indexed. Two have
   their source written down. For the other twenty-one the only surviving trace
-  of the original is a filename, and `music46.mp4` says nothing about what it
+  of the original is a filename, and `clip.mp4` says nothing about what it
   is, who made it, or which link it came from.
 
   **The point is not provenance, it is the picture.** A rendered song is new
@@ -548,7 +570,7 @@ never see. Resolve it on a real vocal.
   derives from the input filename. That slug names the `work/` directory
   reliably. It does **not** always name the `output/` folder, because `-o`
   defaults to the raw input stem and several renders were given short names by
-  hand, so `work/avantasia_-_carry_me_over_official_video` is `output/carry_me_over`.
+  hand, so `work/band_-_song_official_video` is `output/song`.
   The slug is still the stable key; the output folder is not.
 
   It lives in `input/` rather than `docs/` because `docs/` is tracked, and a
@@ -558,14 +580,14 @@ never see. Resolve it on a real vocal.
   **The files were asked and they do not know.** A downloader can stamp the
   source URL into what it writes. Checked with `ffprobe`: not one of these
   carries a URL. They do not all fail equally though. Every mp3 carries title,
-  uploading channel, album and year, so one tagged `title=Mokoma - Takatalvi
-  (Re-recorded 2018)` and `artist=MokomaOfficial` can be found again by
+  uploading channel, album and year, so one tagged `title=<band> - <song>
+  (Re-recorded <year>)` and `artist=<band>Official` can be found again by
   searching for exactly that. The mp4s carry only container tags, `major_brand`
   and the encoder version, which identify nothing. For those the only source of
   truth is whoever downloaded them.
 
   **Eleven songs are not in the repo at all.** Ten were rendered straight out
-  of a downloads folder and one, `seija_simola_-_juna_turkuun`, was analysed
+  of a downloads folder and one was analysed
   and never rendered. None was copied into `input/`, so that audio exists in
   one place and clearing the folder loses it. Copying them in costs nothing and is
   the thing to do first, because a link is no help once the file it names is
@@ -752,17 +774,17 @@ turned out the way it did.
 
   | song | folded, measured | predicted now | predicted before |
   |---|---|---|---|
-  | musickorea | 71% | 78% | 0% |
-  | ghostlights | 67% | 71% | 1% |
-  | dawn | 51% | 58% | 1% |
-  | misplaced | 46% | 48% | 0% |
-  | musichyva | 27% | 38% | 0% |
-  | takatalvi | 10% | 11% | 1% |
-  | cardib_up | 9% | 5% | 0% |
-  | rocketman_bluegrass | 2% | 3% | 0% |
+  | song A | 71% | 78% | 0% |
+  | song F | 67% | 71% | 1% |
+  | song G | 51% | 58% | 1% |
+  | song H | 46% | 48% | 0% |
+  | song C | 27% | 38% | 0% |
+  | song I | 10% | 11% | 1% |
+  | song D | 9% | 5% | 0% |
+  | song E | 2% | 3% | 0% |
 
   The old number sat at 0 or 1 for every song whatever happened, including the
-  one that folded 71%. The new one never inverts the order. On `misplaced` the
+  one that folded 71%. The new one never inverts the order. On song H the
   median it reports, 10.9 semitones, is the same figure the render asked for.
 
   It is still an estimate and now says so in its own output. What it cannot

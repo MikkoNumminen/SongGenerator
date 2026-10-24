@@ -75,10 +75,10 @@ Everywhere else the name resolves to Tailscale's public ingress and the request
 is one public host calling another, which nothing objects to. So the site
 worked for everyone except the person most likely to be testing it.
 
-The fix was to stop giving the browser a tailnet name. `mikkonumminen.dev`
+The fix was to stop giving the browser a tailnet name. The site's domain
 proxies `/api/songgen/*` to the funnel, and Vercel's edge is not on the
 tailnet, so it resolves the public ingress like any other visitor. The browser
-only ever talks to `mikkonumminen.dev`. The RAG chat on the same machine had
+only ever talks to the site's domain. The RAG chat on the same machine had
 already been arranged this way; this is the same trick, one project later.
 
 ## Ports, and the ones not to touch
@@ -107,9 +107,9 @@ The edge answers at `https://<node>.<tailnet>.ts.net:10000`. `tailscale status`
 prints the node's own name, and `tailscale funnel status` prints the whole URL
 as served.
 
-The site does not use that URL. `mikkonumminen.dev` proxies `/api/songgen/*` to
+The site does not use that URL. The site's domain proxies `/api/songgen/*` to
 it, one rewrite per endpoint, and the site is pointed at the proxy through
-`API_BASE_URL` in `.github/workflows/deploy.yml`. So renaming the node or moving the port
+the `API_BASE_URL` repository secret. So renaming the node or moving the port
 means editing that proxy's rewrites, not the site's build.
 
 Routing through the proxy is what makes the site work on this machine at all;

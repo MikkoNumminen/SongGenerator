@@ -595,6 +595,21 @@ BANKS = {
 }
 DEFAULT_BANK = "ppbank"
 
+# --swallow LO-HI: each bank word swallows LO to HI of the original's words,
+# for rap, where a bank syllable on every rapped syllable came out as too many
+# words far too fast. The analysis finds syllables rather than words, so a
+# word is counted as this many notes. An estimate for Finnish rap, which runs
+# on short words (mä, on, se) between long ones, not a measurement; the run
+# report prints the notes each bank syllable actually took, so it can be
+# checked against the ear and moved.
+RAP_WORD_SYLLABLES = 2.5
+
+# How far a swallowed group's boundary may move from its even split, in notes,
+# to land on a wider gap. One keeps the pace within a note of what was asked
+# while still preferring a pause to the middle of a word.
+SWALLOW_SNAP_NOTES = 1
+
+
 # Optional: snap placed word onsets to the beat grid from stage 2. Off by
 # default because in Mode A the original vocal's timing is already musical and
 # quantising it only makes the result stiffer. BEAT_SUBDIVISION is the grid
@@ -847,12 +862,12 @@ FORMANT_SCALE = 1.0
 # It is not a trade. At 12 both test songs sound better, judged by ear on whole
 # renders at mimicry 1.00, which is where a bad shift has nowhere to hide. What
 # the numbers called smoothing reads as the words being sung rather than
-# approximated, and it is swamped by what folding stops costing: on cardib_up
+# approximated, and it is swamped by what folding stops costing: on one song
 # the median shift goes from 2.1 to 7.6 semitones, so most of the song lands on
 # the note the singer actually hit, and its ceiling goes from 0.68 to 0.96.
 #
-# Ceilings at 12 against 7: cardib_up 0.96 from 0.68, musichyva 0.86 from 0.75,
-# rocketman 0.99 from 0.87, musickorea 0.60 from 0.51.
+# Ceilings at 12 against 7, four songs: 0.96 from 0.68, 0.86 from 0.75,
+# 0.99 from 0.87, 0.60 from 0.51.
 #
 # Beyond 12 is untested by ear. 15 measures worse again and buys little.
 SHIFT_CAP_SEMITONES = 12.0
@@ -872,7 +887,7 @@ UNVOICED_RESTORE_TOLERANCE = 0.02
 #
 # Off, each syllable was pinned to its slot and given that slot's length, so
 # wherever the melody left a rest between two notes the word was cut in half by
-# real silence. Measured on sanni against the curated bank: 55 of 150
+# real silence. Measured on one song against the curated bank: 55 of 150
 # multi-syllable words held silence inside them, median 130 ms and up to 310,
 # 10.7 seconds of it across the song. That is the word being spelled out a
 # syllable at a time, and no amount of pitch work covers it.
@@ -902,6 +917,21 @@ WORDS_SING_THROUGH = True
 # slide rather than a smeared edge, short enough that a syllable of ordinary
 # length still spends most of itself on its own pitch.
 GLIDE_MS = 60.0
+
+# Rubber Band cannot glide, so its syllables are rendered one at a time and
+# joined. Each used to be faded in and out over 5 ms and butted against the
+# next, so a word came out as separately struck pieces with the pitch stepping
+# between them, heard as words that jolt rather than ring. Now every syllable
+# but a word's last runs on this far into the next one, rendered from the
+# source that follows it, and the two are crossfaded over that overlap: the
+# vowel carries into the next syllable and the pitch changes inside the
+# crossfade. 40 ms sits under GLIDE_MS, so a short syllable keeps most of its
+# own pitch.
+RUBBERBAND_JOIN_S = 0.040
+
+# How a Rubber Band word ends: faded out over this, instead of the 5 ms that
+# cut a sung vowel off like a switch.
+RUBBERBAND_RELEASE_S = 0.030
 
 # Prefer the take whose recorded pitch is nearest the note it has to land on,
 # so it is shifted as little as possible.
@@ -987,6 +1017,107 @@ FOLDED_FIT = 0.45
 #              that shifting damages most, so the choice pays twice.
 # "random"   - a seeded coin flip per unit, for an evenly scattered mix.
 SHIFT_MIX_MODE = "furthest"
+
+
+# ---------------------------------------------------------------------------
+# STAGE 4b -- VOICES TAKING TURNS                     (--voices, turns.py)
+# ---------------------------------------------------------------------------
+# A song with several singers can be sung by several banks, the voice changing
+# wherever the singer does. Who is singing when is measured from the vocal
+# stem: each window is turned into a speaker embedding, the windows are
+# clustered, and a run of windows in one cluster is one singer's turn.
+#
+# Settled on a rap posse cut (5:43, five singers, 521 voiced windows). At
+# the values below it came out as five turns, 40-91, 91-132, 132-234, 234-285
+# and 285-306 s, with every blip between them a transition window holding two
+# voices at once.
+
+# The speaker model. ECAPA-TDNN trained on VoxCeleb: speech, not singing, but
+# rap is close enough to speech for it, and the weights are not gated.
+# Needs the optional extra: pip install -e .[voices]
+TURN_MODEL = "speechbrain/spkrec-ecapa-voxceleb"
+
+# Each embedding looks at this much vocal, stepping by TURN_HOP_S. Two seconds
+# is enough for ECAPA to identify a voice and short enough that a window rarely
+# holds two of them. The hop sets how precisely a handover is placed.
+TURN_WINDOW_S = 2.0
+TURN_HOP_S = 0.5
+
+# A window is only embedded when at least this much of it is inside a note the
+# melody analysis found. An embedding of the band's bleed between lines is
+# nobody's voice, and clustered it forms a speaker of its own.
+TURN_MIN_VOICED = 0.4
+
+# Cosine distance at which two clusters stop being merged. On the song above:
+# 0.6 gave the five turns; 0.55 the same five with more blips; 0.5 cut single
+# verses into two or three "singers", 27 clusters; 0.4 gave 74, one per line.
+# Raise it if two singers come out as one, lower it if one singer splits.
+TURN_DISTANCE = 0.6
+
+# A turn shorter than this is not a turn. It is a window straddling a handover
+# or a shout from somebody else, and a voice switching for it sounds like a
+# glitch rather than a new singer. Absorbed into its neighbours: split at its
+# middle when they differ, taken over whole when they agree.
+TURN_MIN_S = 4.0
+
+# The arrangement logs of a multi-voice run, one folder per voice under the
+# song's work directory, so two banks at one seed do not share a filename.
+VOICES_LOG_DIR = "voices"
+
+
+# A bank declaring "fold_by_phrase" chooses one octave for a whole phrase
+# instead of one per word. Per word, a melody that wanders near the shift cap
+# flips one word up and the next an octave down, a twelve-semitone leap in the
+# middle of a line, heard as the voice's range jumping about. Per phrase the
+# line keeps its own contour and sits, as a whole, in the voice's register.
+#
+# Inside a phrase, a single note further than this from the phrase's own line
+# is folded back by an octave. The pitch tracker reads a held note at half its
+# frequency now and then, and one such note in a phrase is a sudden drop that
+# the singer never sang.
+PHRASE_OCTAVE_OUTLIER = 9.0
+
+# A bank declaring "borrow_vibrato" gives each long syllable the original
+# singer's own vibrato from the same moment of the song. A converted clip's
+# vibrato is not hers, and stretched to a long note it slows with the clip:
+# measured on a ballad, her held notes shook at 5.6 Hz and 1.13 semitones,
+# the converted clips at 4.0 Hz and 0.67, and stretched 2-3x at 3.4-3.5 Hz and
+# 0.42-0.47, a lazy wobble where she sang a vibrato.
+#
+# The vibrato is her pitch contour minus its own moving average over
+# VIBRATO_SMOOTH_S: the shake, not the melody, which the shift already
+# follows. Only syllables sounding at least VIBRATO_MIN_S get it, and no
+# deviation larger than VIBRATO_MAX_ST is passed on, since a pitch-tracking
+# slip would otherwise arrive as a lurch.
+VIBRATO_SMOOTH_S = 0.25
+VIBRATO_MIN_S = 0.30
+VIBRATO_MAX_ST = 2.0
+
+# Rubber Band takes a borrowed vibrato in its real-time mode, fed in blocks of
+# this many samples with the pitch set before each one: about 12 ms at 44.1
+# kHz, fifteen steps across one cycle of a 5.6 Hz vibrato.
+VIBRATO_BLOCK = 512
+
+# A bank declaring "legato" holds each word's last syllable on into the next
+# word wherever the original singer did not rest between them. A gap shorter
+# than this, between the last note under one word and the first under the
+# next, is a breath inside a line, not a rest; the word sings through it.
+# Longer, the singer stopped, and so does the word.
+LEGATO_REST_S = PHRASE_GAP_S
+
+# How far Rubber Band may stretch a held syllable to reach the next word.
+# WORLD holds by repeating a frame and needs no limit; Rubber Band has to
+# stretch. Measured on a bright, mostly voiced sung bank (log-mel distance
+# from the source): 1.66 dB at 2x, 1.73 at 2.5x, 1.81 at 3x, 1.88 at 4x and
+# 2.18 at 6x, so a hold stays clean well past TIME_STRETCH_RANGE, which bounds
+# an ordinary syllable's fit and not a vowel being held. 6x covers the longest
+# holds a ballad's legato needed; at 4x a few lines still broke.
+HOLD_STRETCH_MAX = 6.0
+
+# --keep-original: how long the original vocal takes to fade in and out at the
+# edges of a kept range. Long enough not to click, short enough that a whistle
+# starting on the beat still starts on it. Inside the range, never outside it.
+KEEP_ORIGINAL_FADE_S = 0.05
 
 
 # ---------------------------------------------------------------------------

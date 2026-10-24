@@ -61,6 +61,11 @@ class Segment:
     # over a slow melody would come out smeared. A singer holds the vowel; they
     # do not slow the consonant down. WORLD only.
     sustain_to_s: float | None = None
+    # The original singer's vibrato to add to this syllable, in semitones, one
+    # value per vibrato_hop_s of output from out_start_s. None is a syllable
+    # left with whatever shake its clip has. See borrow_vibrato in banks.py.
+    vibrato: object = None
+    vibrato_hop_s: float = 0.01
 
     @property
     def src_dur_s(self) -> float:
@@ -92,7 +97,7 @@ def fold_unit(semitones: Sequence[float], cap: float | None = None) -> list[floa
     word sitting either side of the cap are moved an octave apart from each
     other. The word does not bend in the middle, it comes apart.
 
-    Measured on ellinoora against the curated bank: of 156 words with more than
+    Measured on one song against the curated bank: of 156 words with more than
     one pitched syllable, folding enlarged the interval inside 32 of them (21%)
     by a median of 5.5 semitones. The worst was a `perse` whose own melody
     moved 0.7 semitones and which was rendered with its halves 11.3 apart.
@@ -188,6 +193,15 @@ def _analyse(mono: np.ndarray, sr: int):
     return f0, sp, ap
 
 
+def _vibrato_at(seg: Segment, t_s: np.ndarray) -> np.ndarray:
+    """The borrowed vibrato, in semitones, at times t_s after the segment starts."""
+    curve = np.asarray(seg.vibrato, dtype=float)
+    if curve.size == 0:
+        return np.zeros_like(t_s, dtype=float)
+    idx = np.clip((t_s / seg.vibrato_hop_s).astype(int), 0, curve.size - 1)
+    return curve[idx]
+
+
 def render_segments(mono: np.ndarray, sr: int, segments: list[Segment],
                     total_out_s: float) -> np.ndarray:
     """Resynthesise a clip so each syllable lands on its slot, at its pitch."""
@@ -219,6 +233,7 @@ def render_segments(mono: np.ndarray, sr: int, segments: list[Segment],
     restorable = np.zeros(n_out, dtype=bool)
     src_sample = np.zeros(n_out, dtype=float)
     placed: list[tuple[int, int, float, bool]] = []
+    shaken: list[tuple[int, int, Segment]] = []
 
     for seg in segments:
         stretch = clamp_stretch(seg.out_dur_s, seg.src_dur_s)
@@ -261,8 +276,14 @@ def render_segments(mono: np.ndarray, sr: int, segments: list[Segment],
                 j1 = j_end
 
         placed.append((j0, j1, seg.semitones, seg.glide))
+        if seg.vibrato is not None:
+            shaken.append((j0, j1, seg))
 
     semis = apply_glide(semis, placed, step_s)
+    # After the glide, which would otherwise smooth the shake away at the
+    # syllable's edges.
+    for j0, j1, seg in shaken:
+        semis[j0:j1] += _vibrato_at(seg, (np.arange(j0, j1) - j0) * step_s)
 
     f0_out = f0[src_index] * 2.0 ** (semis / 12.0)
     f0_out[~gate] = 0.0
@@ -351,14 +372,30 @@ def render_segments_rubberband(mono: np.ndarray, sr: int, segments: list[Segment
 
     out = np.zeros(int(total_out_s * sr) + sr, dtype=np.float32)
     fade = max(1, int(0.005 * sr))
+    join = max(fade, int(config.RUBBERBAND_JOIN_S * sr))
+    release = max(fade, int(config.RUBBERBAND_RELEASE_S * sr))
+    overlap = 0   # how far the previous syllable runs on into this one
 
-    for seg in segments:
+    for k, seg in enumerate(segments):
         lo = max(0, int(seg.src_start_s * sr))
         hi = min(len(mono), int(seg.src_end_s * sr))
         if hi - lo < fade * 2:
             continue
+        follows = k + 1 < len(segments)
+        joined_in = k > 0
+        # Run on into the next syllable, from the source that follows, so the
+        # crossfade has real sound on both sides of it.
+        extra = min(join, len(mono) - hi) if follows else 0
+        hi += extra
 
         stretch = clamp_stretch(seg.out_dur_s, seg.src_dur_s)
+        if seg.sustain_to_s is not None and seg.src_dur_s > 0:
+            # Rubber Band cannot repeat a frame the way WORLD holds a vowel,
+            # so it reaches the next syllable by stretching, up to
+            # HOLD_STRETCH_MAX, which measured clean far past the ordinary
+            # fitting range.
+            wanted = (seg.sustain_to_s - seg.out_start_s) / seg.src_dur_s
+            stretch = max(stretch, min(wanted, config.HOLD_STRETCH_MAX))
         stretcher = pylibrb.RubberBandStretcher(
             sample_rate=sr, channels=1,
             options=options,
@@ -368,26 +405,83 @@ def render_segments_rubberband(mono: np.ndarray, sr: int, segments: list[Segment
         stretcher.formant_scale = scale
 
         block = np.ascontiguousarray(mono[lo:hi], dtype=np.float32)[None, :]
-        # Whole clip in one call, so say so. Without this Rubber Band sizes its
-        # buffers for a default block, discovers the real one is larger, and
-        # reallocates both of them while warning about it on every clip.
-        stretcher.set_max_process_size(block.shape[1])
-        stretcher.study(block, final=True)
-        stretcher.process(block, final=True)
-        piece = stretcher.retrieve_available()[0]
+        if seg.vibrato is not None:
+            piece = _rubberband_shaken(block[0], sr, seg, stretch, scale)
+        else:
+            # Whole clip in one call, so say so. Without this Rubber Band
+            # sizes its buffers for a default block, discovers the real one is
+            # larger, and reallocates both of them while warning about it on
+            # every clip.
+            stretcher.set_max_process_size(block.shape[1])
+            stretcher.study(block, final=True)
+            stretcher.process(block, final=True)
+            piece = stretcher.retrieve_available()[0]
 
         if piece.size < fade * 2:
             continue
         piece = piece.copy()
-        ramp = np.linspace(0.0, 1.0, fade, dtype=np.float32)
-        piece[:fade] *= ramp
-        piece[-fade:] *= ramp[::-1]
+        head = min(max(fade, overlap) if joined_in else fade, piece.size // 2)
+        tail_len = int(round(extra * stretch)) if follows else release
+        tail = min(max(fade, tail_len), piece.size // 2)
+        piece[:head] *= np.linspace(0.0, 1.0, head, dtype=np.float32)
+        piece[-tail:] *= np.linspace(1.0, 0.0, tail, dtype=np.float32)
+        overlap = tail if follows else 0
 
         start = int(seg.out_start_s * sr)
         end = min(len(out), start + len(piece))
         out[start:end] += piece[:end - start]
 
     return out[:int(total_out_s * sr)]
+
+
+def _rubberband_shaken(src: np.ndarray, sr: int, seg: Segment, stretch: float,
+                       scale) -> np.ndarray:
+    """One syllable through Rubber Band's real-time mode, its pitch moving.
+
+    The offline mode fixes the pitch for a whole pass, so a borrowed vibrato
+    needs the real-time one: the input goes in VIBRATO_BLOCK samples at a
+    time, and before each block the pitch is set to the syllable's shift plus
+    the vibrato at the output time that block will land on. The engine's start
+    delay is trimmed off, so the piece starts where an offline render would.
+    """
+    import pylibrb
+
+    options = (pylibrb.Option.ENGINE_FINER | pylibrb.Option.PROCESS_REALTIME
+               | pylibrb.Option.FORMANT_PRESERVED)
+    rt = pylibrb.RubberBandStretcher(
+        sample_rate=sr, channels=1, options=options,
+        initial_time_ratio=stretch,
+        initial_pitch_scale=2.0 ** (seg.semitones / 12.0))
+    rt.formant_scale = scale
+    step = config.VIBRATO_BLOCK
+    rt.set_max_process_size(step)
+    pad = int(rt.get_preferred_start_pad())
+    delay = int(rt.get_start_delay())
+    feed = np.concatenate([np.zeros(pad, dtype=np.float32), src])
+    out = []
+
+    def collect():
+        got = rt.retrieve_available()
+        if got.size:
+            out.append(got[0])
+
+    for at in range(0, len(feed), step):
+        chunk = feed[at:at + step]
+        t_out = max(0.0, (at - pad) / sr * stretch)
+        shake = float(_vibrato_at(seg, np.array([t_out]))[0])
+        rt.pitch_scale = 2.0 ** ((seg.semitones + shake) / 12.0)
+        rt.process(np.ascontiguousarray(chunk[None, :]), final=False)
+        collect()
+    # Flushed with a block of silence marked final. Marking the syllable's own
+    # last, short block final returned its tail as NaN on some clips.
+    rt.process(np.zeros((1, step), dtype=np.float32), final=True)
+    collect()
+    piece = np.concatenate(out) if out else np.zeros(0, dtype=np.float32)
+    piece = np.nan_to_num(piece[delay:], nan=0.0, posinf=0.0, neginf=0.0)
+    want = int(round(len(src) * stretch))
+    if len(piece) < want:
+        piece = np.concatenate([piece, np.zeros(want - len(piece), dtype=np.float32)])
+    return piece[:want].astype(np.float32)
 
 
 def render_unit(mono: np.ndarray, sr: int, segments: list[Segment],

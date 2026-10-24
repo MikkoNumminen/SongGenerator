@@ -32,7 +32,11 @@ class TestDefaults:
         assert parse("--raw-clips").raw_clips is True
 
     def test_the_default_bank_exists_in_the_bank_table(self):
-        assert parse().bank in config.BANKS
+        """--bank has no parser default, so naming it beside --voices can be
+        refused; an unnamed bank resolves to DEFAULT_BANK."""
+        assert parse().bank is None
+        assert config.DEFAULT_BANK in config.BANKS
+        assert cli.singing_names(parse()) == [config.DEFAULT_BANK]
 
 
 class TestChoicesAreRealValues:
@@ -126,9 +130,9 @@ class TestOutputGoesInItsOwnFolder:
 
         from song_generator.cli import output_path
 
-        got = output_path(None, Path("input/musicHyva.mp4"), "ppbank")
+        got = output_path(None, Path("input/my_song.mp4"), "ppbank")
         assert got.parent.name == "ppbank"
-        assert got.parent.parent.name == "musicHyva"
+        assert got.parent.parent.name == "my_song"
         assert got.parent.parent.parent.name == "output"
 
     def test_the_filename_still_names_the_song(self):
@@ -137,8 +141,8 @@ class TestOutputGoesInItsOwnFolder:
 
         from song_generator.cli import output_path
 
-        got = output_path(None, Path("input/musicHyva.mp4"), "ppbank")
-        assert got.name == "musicHyva.mp3"
+        got = output_path(None, Path("input/my_song.mp4"), "ppbank")
+        assert got.name == "my_song.mp3"
 
     def test_an_explicit_output_is_folded_the_same_way(self):
         """Otherwise batch, which passes -o per song, would stay flat."""

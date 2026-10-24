@@ -69,10 +69,33 @@ jobs:
       # different one, and this is then the thing to change: the upload would
       # go on succeeding while the check at the end reported the site serving
       # something else forever.
-      SITE_URL: https://green-bay-0f4fe1d03.7.azurestaticapps.net
+      #
+      # It is the repository secret SITE_URL, so that neither this file nor a
+      # run's log publishes it: a secret is masked as *** in the log, and a plain
+      # variable is printed. Changing it starts no build, so run this workflow
+      # by hand afterwards.
+      SITE_URL: ${{ secrets.SITE_URL }}
 
     steps:
       - uses: actions/checkout@v4
+
+      # Before anything can print them. A secret is masked only as the exact
+      # string stored, and the bare host turns up on its own: in curl's errors
+      # and in the publish action's "Visit your site at".
+      - name: Mask the addresses
+        env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+        run: |
+          for url in "$SITE_URL" "$API_BASE_URL"; do
+            host=${url#*://}
+            host=${host%%/*}
+            host=${host##*@}
+            host=${host%%:*}
+            if [ -n "$host" ]; then
+              echo "::add-mask::$host"
+              echo "::add-mask::${host,,}"
+            fi
+          done
 
       # A dispatch can name any branch, and this publishes to the live site.
       # Refusing out loud beats a green run that quietly put a feature branch
@@ -104,15 +127,14 @@ jobs:
       - name: Build
         run: npx ng build
 
-      # Where the edge is and which client id signs people in. Neither value is
-      # secret and neither can be: the browser has to know where to send
-      # requests, so both are in the shipped files however they get there. The
-      # allowlist on the edge is the protection.
+      # Where the edge is and which client id signs people in. Neither is a
+      # credential, and neither can be kept from a visitor: the browser has to
+      # know where to send requests, so both are in the shipped files however
+      # they get there. The allowlist on the edge is the protection.
       #
-      # The address is committed, in `env` below, because the edge is reached
-      # through a proxy on a domain this repository names everywhere. The
-      # client id is a repository secret because it belongs to the deployment
-      # rather than to this file.
+      # Both are repository secrets, the address for the same reason as
+      # SITE_URL and the client id because it belongs to the deployment rather
+      # than to this file. Neither is printed: the file is written, not shown.
       #
       # Absent, the site falls back to reporting that nothing is answering,
       # which is a state it renders properly.
@@ -121,7 +143,7 @@ jobs:
       - name: Write the runtime config
         if: github.event_name != 'pull_request'
         env:
-          API_BASE_URL: https://mikkonumminen.dev/api/songgen
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
         run: |
           cat > dist/songgen-web/browser/config.json <<JSON
@@ -131,7 +153,6 @@ jobs:
           }
           JSON
           echo "wrote dist/songgen-web/browser/config.json"
-          cat dist/songgen-web/browser/config.json
 
       # Already built and tested above, so the action uploads rather than
       # building again with its own toolchain and its own idea of the config.

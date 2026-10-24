@@ -447,7 +447,7 @@ class TestWordsSingThrough:
 
     Each syllable used to be pinned to its slot and given that slot's length,
     so wherever the melody left a rest between two notes of the same word, the
-    word was cut in half by real silence. Measured on sanni against the curated
+    word was cut in half by real silence. Measured on one song against the curated
     bank, 101 of 150 multi-syllable words held silence inside them, 25.2
     seconds of it across the song.
     """

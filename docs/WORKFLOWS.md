@@ -67,8 +67,459 @@ costs is the files.
 | `--seed 42` | Fix the arrangement seed; otherwise a new one each run |
 | `--raw-clips` | Ignore the standardised tier, sing the recordings as they are |
 | `--no-shift` | Words at their own recorded pitch |
+| `--swallow 2-4` | Fold 2-4 of the original's words into one bank syllable, for rap; see below |
+| `--keep-original "0:24-0:30"` | Leave the original vocal in those stretches, for whistling and anything else that is not words; see below |
 | `--rows 30` | Print more of the extracted note table |
 | `--json` | Machine-readable summary |
+
+---
+
+## Sing a song with several voices taking turns
+
+```powershell
+.\.venv\Scripts\song-generator.exe input\song.mp4 --voices ppbank <voiceB>
+```
+
+For a posse cut where several people sing: each turn is sung by the next bank
+in the list, cycling, switching wherever the original singer changes. Not one
+voice per singer. With more singers than voices, mapping singers to voices can
+put two different singers next to each other in the same voice, and the
+listener never hears the change; alternating at every turn is what makes the
+switch audible regardless of how many people are actually on the track.
+
+Needs the optional extra: `pip install -e .[voices]`. It installs
+`speechbrain`, which measures who is singing when.
+
+Output lands in `output/<song>/<bankA+bankB>/`, named by every voice joined
+with `+`, so a turn-taking render never lands in one of its own banks' folders
+and overwrites that bank's plain take. Still two files, conservative and wild,
+both at full mimicry.
+
+The first `--voices` render of a rap posse cut came back with
+too many words far too fast: a bank syllable on every rapped syllable is a
+machine gun of words at rap tempo. `--swallow`, below the render section for
+rap material, is what turned that into something melodic.
+
+Refused rather than attempted: fewer than two distinct banks (use `--bank` for
+one), a bank named twice (turns go round the list, so a repeat puts one voice
+on two turns in a row where the list wraps), `--bank` beside `--voices`,
+`--words-dir` (`--voices` names banks from the bank table), and
+`--arrangement` (a `--voices` run writes one log per voice and there is no
+replay of a multi-voice run yet). Banks whose `bank.json` declare different
+`word_bus_lufs` are refused too, since the voices share one word bus.
+
+Required words are judged on what the take will actually sing. Each voice is
+arranged over the whole song and then loses every placement outside its turns,
+so coverage judged over the whole song was met at the first draw while the
+words that met it went to the other voice. `arrange.build` takes `sings`, the
+placements its voice is heard in, and its own redraws and its relaxing of
+preferences work on those. The voices are planned longest-singing first: the
+first is asked for every required word, and each after it (`wanted`,
+`pairing`) only for what the voices before it have not said. Asking every
+voice for every word in its own turns made a voice with one short turn spend
+every draw and relax every preference. A first version redrew the whole set
+from outside instead, which cost up to 288 planner runs a level and never let
+the relaxation see the coverage that mattered. The run prints its own seed,
+and `--seed` with it brings the whole take back.
+
+At a handover the voices were planned apart, so the incoming voice's first
+words could start while the outgoing voice's last word was still sounding, for
+a second or more when the two swallow at different paces. Those incoming words
+are dropped whole until the outgoing word has finished; nothing is cut.
+
+When fewer turns are found than there are voices (one singer, or one cluster
+for several), the voices past the last turn own nothing. They are not planned
+at all, and the run says which of them sings nothing, instead of spending
+every coverage redraw on a voice nobody hears.
+
+**Known limits, left as they are.** Each was found in review and judged not
+worth its cost yet:
+
+- `--voices` and `--swallow` take several values, so they swallow the song's
+  path when written before it. Put the song first:
+  `song-generator.exe input\song.mp4 --voices a b`.
+- Coverage is judged on the placements whose onset is in a voice's turn, so a
+  required word placed in the first moment of a turn and then dropped at the
+  handover still counts as said; the report's line of words never said is
+  the check.
+- Arrangement logs are named by seed and level only, so a swallowed and an
+  unswallowed run at the same `--seed` write the same `.arr`.
+- The run report adds both banks' units together, so two banks holding a clip
+  of the same label print it as one.
+- A reciting bank (`sequence` or `shuffled`) is recited over the whole song
+  and then cut to its turns, so in its second turn it picks up the text where
+  it would have been had it read through the other voice's turn. Reciting
+  only on the voice's own turn slots would fix it.
+
+**How turns are found.** The vocal stem is cut into overlapping windows and
+each becomes a speaker embedding; windows cluster by voice, and a run of
+windows shorter than `TURN_MIN_S` is folded into its neighbours rather than
+treated as its own singer. The result is cached as `work/<song>/turns.json`
+together with the settings that produced it, and reused while a run's settings
+still match. See `docs/DATA-FORMATS.md` for the file.
+
+**Tuning `TURN_DISTANCE`.** This is the knob to reach for first, in
+`config.py`'s `STAGE 4b` block. It is the cosine distance at which two voices
+stop being merged into one cluster. Measured on a 5:43 rap posse cut (521
+voiced windows):
+
+| `TURN_DISTANCE` | Result |
+|---|---|
+| 0.6 | five turns, matching the track by ear: 40-91, 91-132, 132-234, 234-285, 285-306 s |
+| 0.55 | the same five turns, with more short blips absorbed |
+| 0.5 | 27 clusters: single verses split into pieces |
+| 0.4 | 74 clusters, about one per line |
+
+Raise it when two different singers come out as one turn; lower it when one
+singer's turn keeps splitting. `TURN_MIN_S` (4.0 s as shipped) is the second
+knob: it decides how short a stretch has to be before it is folded into its
+neighbours rather than counted as a singer of its own.
+
+**Correcting a boundary by hand.** Turns are cached, so a boundary that is a
+few hundred milliseconds off can be fixed once rather than re-detected every
+run: open `work/<song>/turns.json`, move a `start_s` or `end_s`, and rerun with
+the same `--voices` and the same config. The file is read back as long as its
+`settings` block still matches what the current config would measure with;
+editing a turn's own times does not touch `settings`, so the edit sticks.
+Delete the file, or change one of the `STAGE 4b` constants, to force a fresh
+measurement.
+
+### Make a voice-converted copy of a bank
+
+For turning an existing bank into a second voice that says the same words with
+the same takes and the same sung delivery, only in a different timbre. Voice
+conversion keeps the delivery; text-to-speech would not, which is why it is
+the first thing to try. It worked by ear for a male speaking voice on this
+material. It did not for an elderly female voice, even though nothing about
+the recipe below measured as wrong; see "When it does not sound like the
+voice" below before assuming a converted bank is fine because the numbers
+are.
+
+1. Start from the bank's **source** clips, the hand-named recordings a bank
+   was built from (for `ppbank`, that is `words_hq`), not the built bank
+   itself: `build_bank` parses word identity out of the source filenames, so
+   converting the source and re-running `build_bank` on the result keeps every
+   name.
+2. Convert each source clip toward a reference recording of the target voice
+   with a sibling project's voice-conversion model, run in a venv that has
+   it installed. Load the pretrained model onto the GPU, generate from the
+   source clip against the reference wav, resample its output from the
+   model's 24 kHz to the source clip's own rate, and write it under the
+   source clip's own filename.
+
+   Write the converted audio into a sibling `words_<voice>_src/candidates/`
+   directory, one file per source clip, same filenames. The model's output
+   pitch does not need to match the source: `build_bank` measures pitch from
+   the audio it is given, and the renderer re-pitches every clip to its slot
+   regardless.
+3. Build the bank from the converted candidates:
+
+   ```powershell
+   python -m song_generator.build_bank --candidates words_<voice>_src/candidates --out words_<voice>
+   ```
+
+Durations should come back within tens of milliseconds of the source clips;
+much more than that means the conversion changed the pacing and the syllable
+boundaries `build_bank` measures will be off. Register the new bank in
+`vocabulary_local.py` (bank names are local, kept out of this repository) or
+point `--words-dir` at it directly.
+
+**When it does not sound like the voice.** The elderly female voice's bank,
+converted by the recipe above, measured fine and did not sound like her at
+all. Checked and ruled out, in order:
+
+- **The reference file.** The engine's own bundled reference and the
+  sibling project's own Finnish path (its own reference, cloned from a
+  Finnish text-to-speech finetune) measure 0.81 cosine similarity apart, so
+  they are the same voice; the reference was not the cause. Redoing the
+  conversion against that Finnish-path reference still only reached 0.40
+  similarity to her own reference, against 0.45 for the male speaking
+  voice's voice-converted clips.
+- **Pitch.** Her reference speaks at MIDI 52.8 (E3); the converted clips
+  measured 53.3, close to it and nowhere near the song's own median of 49.7
+  (D3).
+
+Text-to-speech through the sibling project's own Finnish path came closer
+than voice conversion of the sung source, and it took two tries to get clean
+words out of it. It still did not give her voice: the owner heard the third
+bank for this voice, the one made as described below, as wrong too. See the
+open item in [TODO.md](TODO.md).
+
+**The dead end.** Speaking several phrases as sentences in one 60-200
+character chunk, then cutting each word back out at the longest measured
+silence, failed on all 8 chunks after 6 rolls each. Her sentence pauses are
+not longer than her comma pauses, so the cuts landed in the wrong places, and
+faster-whisper hallucinated a trailing "Kiitos." onto the silence after the
+last piece. Abandoned rather than tuned further.
+
+**Clean words, not yet her voice.** The sibling project already has the tool
+for this, that project's word-bank script, which exists only in its git
+history: an old commit on a feature branch ("say the word in a sentence, then
+cut it back out"), not on its current checkout. It says each word inside a
+carrier sentence written for the expression asked for, locates the word by
+faster-whisper's own word timestamps, snaps each end to the quietest point
+nearby, trims it out, and verifies the cut by its own transcript; a word with
+no surviving carrier take falls back to rendering it alone and verifies that
+instead. Deliberately skips that project's audiobook post-processing (7 kHz
+low-pass, -20 dBFS), because a sample that is going to be transposed should
+not be muffled going in.
+
+1. Take the script out of history into a scratch directory, by checking out
+   that historical commit of the file.
+2. Point its own repo-root path at the sibling project's checkout (it imports
+   an engine loader from there), and run it with that project's own
+   voice-conversion-venv python:
+
+   ```
+   python build_word_bank.py --words paska,perse,pillu,pornolehti,paviaani \
+       --language fi \
+       --presets scream,shout,urgent,excited,command,bright,narrate,asking \
+       --whisper-device cuda --out words_<voice>_src --no-contact-sheet
+   ```
+
+   It calls a guard function that patches a source file in the voice model's
+   own checkout it runs against; check whether the patch is already applied
+   there before running, since this writes into another repo.
+3. Result: 40 of 40 kept (5 words times 8 presets), three of them via the
+   word-alone fallback (`pornolehti_excited`, `pornolehti_asking`,
+   `paviaani_command`). Clips land at
+   `words_<voice>_src/fi/roots/<word>_<preset>.wav`.
+4. `build_bank --candidates words_<voice>_src/fi/roots --out words_<voice>`.
+
+This voice says only real words this way: no "eee" shout and no "au", which
+the Finnish model cannot say. Those stay with whichever voice already has
+them; a word one voice of `--voices` lacks is not reported as missing from
+the song as long as another voice can say it.
+
+Speaker-embedding similarity to her reference does not rank these routes
+the way the ear did: 0.40 for the voice conversion, 0.53 for the
+phrase-by-phrase text-to-speech clips that failed by ear, 0.48 for the
+carrier-sentence clips that replaced them. An embedding score is not a
+pass/fail test for a converted or synthesised voice; listen before building
+the bank.
+
+**Never ask the Finnish model for a fragment under 60 characters.**
+The sibling project's own minimum-fragment guard, 60 characters, exists
+because the model rambles or repeats on a shorter fragment, and it is only
+enforced upstream of the audiobook path. Asking it directly for a bare
+phrase like `"Paska!"` (3 to 25 characters) skips that guard: one earlier
+attempt at this bank did exactly that, and Whisper large-v3, run as a hint
+on the clips afterwards, shows what came back: `paska_2.wav` said
+"Aukumaala", `perse-eee_2` said "Perse. Ei, ei, ei." (the shout written
+"Eeeeee!" comes back as "ei, ei, ei"), `au_1` said "Vähä", and
+`perse-pillu_1` said "Ainet. Pillu" against `pillu_2`'s "Joo, pillu". The
+carrier-sentence route above never hits this, because every utterance sent
+to the model is a full sentence.
+
+**A bank of generated or converted speech needs `never_split` before its
+first render, not after.** Without it, `arrange.build` cuts the speech into
+syllables and each is re-pitched and time-stretched to its own slot like a
+sung recording, and generated or converted speech survives that far worse
+than a real singer's take: a first render for the elderly female voice
+(built with no `bank.json`, so no `never_split` declared) came back
+sounding like a computer voice, fit at 0.59x natural speed, about 1.7x
+slower than she actually spoke. See "Tune a bank of generated voices" below,
+which already says this; the bank was built without reading it.
+`words_<voice>/bank.json` now declares `{"never_split": true}`, which is
+what makes `arrange.build` set
+`target_s = play_s`: the clip sounds at its own length or faster and is never
+slowed, a long swallowed slot leaves a pause after the word instead of
+stretching it, and her own intonation carries through, shifted by one
+constant.
+
+---
+
+## Keep whistling, or anything else that is not words: `--keep-original`
+
+The separator sends whatever sounds like a voice into the vocal stem, and
+whistling sounds like one. On a children's song with whistling, the
+whistling came out in the vocal stem, the analysis found notes in it, and
+the render sang swear words over it. The owner's verdict: the whistling is
+part of the song and has to stay.
+
+```powershell
+.\.venv\Scripts\song-generator.exe input\song.mp4 --keep-original "0:24-0:30,1:03-1:09"
+```
+
+Inside every range the original vocal stem goes back onto the bed with a
+`KEEP_ORIGINAL_FADE_S` fade inside each edge, and no word sounds. Four things
+make that hold whatever the planner does, and none of them cuts a word:
+
+- A slot that touches a range at all is dropped, and the range is widened to
+  cover that slot whole, repeatedly, until no slot touches the widened range.
+  The singer's note is then put back from where it started, instead of leaving
+  a stretch with neither a word nor the original and then the note coming in
+  halfway. Two ranges closer together than their two fades are joined, since
+  faded separately they dipped to neither the original nor a word between
+  them.
+- The first slot after a range is a hard break (`Slot.hard_break`), which
+  `group_phrases` and `swallow_slots` both respect. Without it `--swallow`
+  folded the last note before a range and the first after it into one slot
+  spanning the range, and `group_phrases`, which rebuilds phrases from gaps,
+  joined the two sides of any range narrower than `PHRASE_GAP_S`.
+- A word that would still be sounding inside a range, typically the last word
+  of a phrase ringing on past its slot, is dropped whole. It is measured with
+  `mapping.sounding_s`, what the render will play, and judged as not singing
+  inside `arrange.build`, so the redraws find its required word somewhere else
+  instead of the report counting a word nobody hears.
+- The word bus is gated inside the ranges before mixing, as the last
+  guarantee. After the three above it removes nothing; a first version relied
+  on it alone and chopped the words it caught.
+
+The bed is levelled on the band alone (`mix(level_from=...)`). Levelled whole,
+a bed holding a minute of kept vocal turned the band down everywhere, and the
+words sat louder over the verses than in a plain render of the same song. The
+final peak ceiling still scales the whole mix when the sum passes it, as it
+does for any render; measured with the original vocal added back, the band
+peaked at -2.6, 0.1 and -4.5 dBFS on the three songs tried, so the ceiling
+engaged only on the children's song with whistling, whose band alone
+already peaks at -0.2.
+
+The files are tagged `keep` plus a short hash of the merged ranges, e.g.
+`.keep3fa9c1`, so two sets of ranges on one song are two pieces side by side,
+and the same ranges typed again replace the take they made, which is kept in
+`previous/`. A range starting after the song ends is refused as the typo it
+is, and so is `--no-words`, which writes the band alone. The `.arr` log
+records the ranges to the microsecond in a `keep` header line, and
+`--arrangement` brings them back with it, read by the same parser as
+`--keep-original` and checked against the song's length; an explicit
+`--keep-original` that disagrees with the log is refused, since the lines were
+laid over the slots the log's ranges left. A replayed line that would sound
+inside a kept range (edited by hand, or re-laid by a reciting bank) is left
+out whole, as a fresh take's would be, and the run says how many.
+
+**Known limits, left as they are.** A bank that recites (`sequence` or
+`shuffled` in its `bank.json`) loses the unit that would ring into a kept
+range, and for such a bank the order is the content, so the recitation skips a
+line at each range. Replaying such a take also re-lays the remaining units end
+to end, so it does not come back exactly. Keeping the line would mean ending
+the recitation cursor at the range and pacing the unit into the time left,
+which is planner work that no song has needed yet.
+
+**The ranges are given by hand, on purpose.** A detector was tried: whistling
+is close to a pure tone, so frames with at least 60% of their 150 Hz to 8 kHz
+energy within two bins of one peak above 500 Hz, and nothing 4 dB near it an
+octave below, were marked. On this song it found steady tones near 785 Hz, but
+a child's voice held on one note is nearly as pure, and across 40 other cached
+songs it fired on long sung notes: 88 seconds of one power-metal song, 40 of
+a second, 34 of a third, each with long held notes. Run by default it would
+put real singing back into renders across the library. Listen to the song, or
+to its `work/<song>/vocal.wav`, and write down where the whistling is.
+
+**Keeping the choruses original.** The same flag makes a piece that is half
+the original song: the owner's call on the children's song with whistling
+was that the choruses are good places for the original voice, with the bank
+singing the verses. What it takes is where the choruses are, found like
+this:
+
+1. Transcribe `work/<song>/vocal.wav` with Whisper as a hint, only to learn
+   which line repeats. Pass `condition_on_previous_text=False`: with it on,
+   large-v3 locked into the chorus line after 83 seconds and printed it for
+   every remaining second of the song.
+2. Take one chorus the transcript places cleanly as a template, and slide its
+   chroma (`librosa.feature.chroma_cqt`, cosine similarity per frame) over the
+   whole vocal stem. Every chorus is a peak. On this song all seven came out
+   at 0.88 to 1.00, 19.6 seconds apart, where the transcript's word timings
+   had put the fifth one four seconds early.
+3. Start each range just before the chorus's first note and end it after the
+   chorus's measured length (9.0 s here). Snapping the edges to gaps between
+   notes does not work on legato singing: the analysis found no gap at all at
+   most chorus edges.
+
+Ranges from different reasons can go in one `--keep-original`; overlapping
+ones merge. The chorus piece and the whistling piece get different tags, so
+both stay in the song's folder.
+
+---
+
+## Slow rap down before singing it: `--swallow`
+
+```powershell
+.\.venv\Scripts\song-generator.exe input\song.mp4 --swallow 2.6
+.\.venv\Scripts\song-generator.exe input\song.mp4 --voices <voiceA> <voiceB> --swallow 2.6 <voiceA>=2.05
+```
+
+For rap and anything else where the melody gives close to one note per sung
+syllable. A bank syllable placed on every one of them is a machine gun of
+words at rap tempo, far more than the genre can carry as singing. `--swallow`
+folds several of the original's words into one bank syllable before the words
+are planned, so that syllable sounds for as long as the words it swallowed and
+is pronounced along with them, which is what reads as melodic rather than
+rushed. Off by default: this is for material dense enough to need it.
+
+`--swallow` is asked in *words* of the original song, because that is how a
+pace is naturally described. `2.6` swallows that many words per bank
+syllable; `2-4` is accepted too, but only its mean is used as the pace, so
+`2-4` and `3` render the same. Several values may be given at once: one
+unnamed value for every voice singing, plus a named value, `<voiceA>=2.05`,
+for any voice of `--voices` that should move at its own pace; the voice's own
+value wins over the general one. Refused rather than resolved: two unnamed
+values, the same voice named twice, and a voice not singing in this run.
+The filename lists the values in a fixed order (everybody's first, then each
+voice's own by name), so the same request always writes the same file.
+
+A swallowed take's `.arr` log records the grid in a `swallow` header line, and
+`--arrangement` rebuilds that grid from it, so the take comes back without
+`--swallow` being typed again. An explicit `--swallow` that disagrees with the
+log is refused: replayed on the unswallowed notes, every line would land at
+more than twice the pace it was planned for.
+
+A swallowed run needs its bank plans laid over fewer, wider slots, so it also
+places fewer, longer units. Filenames carry the setting,
+`<song>.conservative.swallow2p6.mp3`, a named voice's own pace appended
+after it (`swallow2p6-<voiceA>2p05`), combined with any other tag by
+`join_tags` (`mim0p60.swallow2p6`), so a swallowed take never lands on top of
+a plain one.
+
+**Words to notes.** The analysis measures notes, roughly one per sung
+syllable, but `--swallow` is asked in words. The word count is converted to
+notes per bank syllable as `words * RAP_WORD_SYLLABLES / (bank's mean
+syllables per word)`, floored at one note, since a bank syllable cannot sound
+on part of one. `RAP_WORD_SYLLABLES` (2.5 in `config.py`) is an estimate for
+Finnish rap, not a measurement. The run report prints the notes-per-syllable
+figure each voice actually used, so it can be checked against the ear rather
+than the word count typed on the command line.
+
+**What is actually folded.** `swallow_slots` in `mapping.py` keeps the mean
+exactly, because the mean is the pace: a phrase of N notes becomes
+`round(N / per_syllable)` slots, split as evenly as the notes allow. Each
+boundary can then move up to `SWALLOW_SNAP_NOTES` (1) note toward the widest
+gap within reach, the nearest thing to a word boundary a run of sung
+syllables offers. A group never crosses a phrase. The group's slot takes its
+onset from the first note, its offset from the last, and its pitch from the
+longest note in it, the one the rapper actually leant on. Each voice of
+`--voices` gets its own slots, folded at its own pace.
+
+Keeping the mean exactly is what makes a percentage change possible to ask
+for at all. An earlier version of `swallow_slots` chose each group's size by
+widest gap within a whole-number range and did not hold the mean: asked for
+`2-4` (meant as 3.54 notes per bank syllable, against the male speaking
+voice's bank), it actually delivered 3.09 (998 notes folded to 323 slots),
+so there was no number to move by a known percentage.
+
+**Measured on a rap posse cut, the male speaking voice's bank (2.12
+syllables per word), 988 notes after cleanup:**
+
+| `--swallow` | slots |
+|---|---|
+| 2.0 | 422 |
+| 2.1 | 396 |
+| 2.2 | 383 |
+| 2.6 | 323 |
+| 3.0 | 282 |
+
+323 slots is the pace that had already been heard and judged too slow; the
+owner asked for 25% faster, i.e. not swallowing that many words. `2.05`
+gives about 409 slots, roughly +26% against 323. Note melody extraction
+re-runs on every render and gave 1004, 998 and 988 notes across three runs of
+the same song, so a slot count moves by about 1% between otherwise identical
+runs; treat a count near a table value as a match rather than expecting it
+exactly.
+
+**Replaying an arrangement.** A saved arrangement is laid over the slots it
+was drawn against, so replaying it with `--arrangement` needs the same
+`--swallow` value the render was made with. A different value folds the
+slots differently and the arrangement no longer lines up with them.
 
 ---
 
@@ -240,6 +691,42 @@ a knob to 0 will not remove a required word from a song.
 ---
 
 ## Make a bank behave differently
+
+A voice that renders best a particular way can say so in its `bank.json`
+`defaults` block (`swallow`, `engine`, `separator`; see
+[DATA-FORMATS.md](DATA-FORMATS.md)), so `--bank <voice>` alone is the whole
+recipe and nobody has to remember three flags. Measure before choosing the
+engine: on a bright, mostly voiced sung voice Rubber Band did less than half
+WORLD's spectral damage (1.5 against 3.9 dB at a 1.6x stretch, 1.8 against
+3.8 dB for a two-semitone shift and back), the reverse of the breathy
+generated voices in "Tune a bank of generated voices" below.
+
+For a ballad sung in long legato lines, declare `legato` as well, and lean the
+level towards whole recorded words (`slice_cost` and `spelled_cost` up, the
+shout's cost up, `crown_cost` down). On one ballad that took a converted copy
+of the singer's own voice from 64-71 words with 14-16 cut short to 40-43
+words with 4-5 cut short, and left exactly as many rests inside phrases as the
+original had (two over 0.15 s). Rubber Band holds such a vowel cleanly far
+past the ordinary fitting range: 1.66 dB from the source at 2x, 1.82 at 4x.
+
+If the range seems to jump about, look at two things before touching the cap.
+First, a clip converted into the wrong octave: in one converted bank a single
+word came out at MIDI 50 among syllables at 60 to 67, and every time it was
+sung the fold chose the nearer octave, a full octave under the line. Set such a
+clip aside. Then declare `fold_by_phrase`: on the same ballad it cut leaps over
+seven semitones inside phrases from 6-8 to 4-5, against 9 in the original
+melody on the same slots, most of those the tracker's octave errors. Lowering
+the shift cap changed nothing there, because the shifts were already small.
+
+Long held words want the singer's own vibrato. On that ballad she shook at
+5.6 Hz and 1.13 semitones; the converted clips at 4.0 Hz and 0.67, and
+stretched two or three times to a long note at 3.4-3.5 Hz and 0.42-0.47, a
+lazy wobble. `borrow_vibrato` puts hers back: a test syllable stretched 2x
+came out at 5.6 Hz and 1.13 semitones through Rubber Band. Rubber Band also
+used to fade each syllable in and out over 5 ms and butt it against the next,
+so words jolted; syllables now run 40 ms into the next and crossfade
+(`RUBBERBAND_JOIN_S`), which took the level dip at a join from 2.7 to 1.7 dB
+and the spectral jolt from 1.4x a clip's median flux to none.
 
 How a bank should be placed is a property of its recordings, so it is
 declared beside them: a `bank.json` in the bank directory, read from
@@ -458,7 +945,7 @@ banks, mel-spectral distance from the source at a five semitone shift:
 
 ```powershell
 .\.venv\Scripts\python.exe -m song_generator.doctor
-.\.venv\Scripts\python.exe -m song_generator.doctor --song input\musicHyva.mp4
+.\.venv\Scripts\python.exe -m song_generator.doctor --song input\song.mp4
 ```
 
 Prints, in one go: whether the environment is sound, what the bank contains,
@@ -484,7 +971,7 @@ listening. It is the one part that cannot be automated.
 .\.venv\Scripts\python.exe -m song_generator.flatten
 
 # 3. LISTEN. Delete junk. Rename keepers after what you hear.
-#       TODO_2syl__kirby__c07__1.42-1.98.wav   ->   bravo7.wav
+#       TODO_2syl__src1__c07__1.42-1.98.wav   ->   bravo7.wav
 
 # 4. Build
 .\.venv\Scripts\python.exe -m song_generator.build_bank
@@ -521,7 +1008,7 @@ sounding**:
 
 | source | voice against the band under it |
 |---|---|
-| `pilluvittu*`, which built `words_hq4` | **+1.5 dB** |
+| the source videos that built `words_hq4` | **+1.5 dB** |
 | a buried vocal that produced nothing usable | **−3.1 dB** |
 
 ```powershell
@@ -699,13 +1186,15 @@ with its trigger off so the two can be read side by side.
 [AZURE.md](AZURE.md) has why it moved. The short version is that it stopped
 producing runs and nothing in the repository could tell.
 
-**3. Give the repository two secrets.** GitHub, Settings, Secrets and
+**3. Give the repository four secrets.** GitHub, Settings, Secrets and
 variables, Actions:
 
 | Secret | Value |
 |---|---|
 | `AZURE_STATIC_WEB_APPS_API_TOKEN` | see below |
 | `GOOGLE_CLIENT_ID` | the OAuth client id, once there is one |
+| `SITE_URL` | the Static Web App's own address, `https://` and no trailing slash |
+| `API_BASE_URL` | the proxy in front of the edge, `https://`, ending `/api/songgen` |
 
 The token is the one credential here, and it is enough on its own to publish to
 the site, so it is never committed:
@@ -714,6 +1203,8 @@ the site, so it is never committed:
 az staticwebapp secrets list --name songgen-web --query "properties.apiKey" -o tsv
 gh secret set AZURE_STATIC_WEB_APPS_API_TOKEN
 gh secret set GOOGLE_CLIENT_ID
+gh secret set SITE_URL
+gh secret set API_BASE_URL
 ```
 
 `gh secret set` with no value prompts for one and does not echo it, which is
@@ -723,18 +1214,26 @@ The client id is not secret and cannot be. The browser has to know which client
 signs people in, so it is in the shipped files however it gets there. The
 allowlist on the edge is what actually protects the service.
 
-Both are secrets here even though only one is. GitHub's plain variables are
-readable by any workflow in any fork's pull request, and the client id being
-public in the shipped files is not a reason to hand it to arbitrary workflow
-code as well.
+The client id is a secret here even though it is public anyway. GitHub's
+plain variables are readable by any workflow in any fork's pull request, and
+the client id being public in the shipped files is not a reason to hand it to
+arbitrary workflow code as well.
 
-The backend address is not among these. It is `API_BASE_URL` in
-`.github/workflows/deploy.yml`, because the edge is reached through a proxy on
-a domain this repository names everywhere, and hiding a public hostname bought
-nothing. Committing it also removes a trap worth knowing about even now:
-**editing a value in a web UI does not start a build**, and `config.json` is
-written during one, so the value changed and the site did not. Editing the
-workflow triggers the deploy that applies it.
+The two addresses are secrets for a different reason. Neither is a
+credential, but this repository publishes nothing that identifies the
+deployment, and a run's log is public: a secret is masked there and a plain
+variable is printed in every step that uses it.
+
+That leaves a trap: **changing a secret does not start a build**, and
+`config.json` is written during one, so the value changes and the site does
+not. Run the workflow by hand after changing either:
+
+```powershell
+gh workflow run deploy.yml --ref main
+```
+
+Without `SITE_URL` the last step cannot ask the site what it serves and
+fails, which is the right outcome for a deploy nobody can check.
 
 Missing the client id is not a failure. Sign-in is unavailable and the site
 says so, which it renders honestly. Missing the address is not a failure
@@ -796,9 +1295,8 @@ tailscale funnel 8000
 ```
 
 The address it prints is where the edge answers. The site does not call it
-directly: `mikkonumminen.dev` proxies `/api/songgen/*` to it, and
-`API_BASE_URL` in `.github/workflows/deploy.yml` points at that proxy
-instead.
+directly: the site's domain proxies `/api/songgen/*` to it, and the
+`API_BASE_URL` repository secret points the site at that proxy instead.
 
 The proxy is not decoration. On any machine signed in to the tailnet, MagicDNS
 resolves a `*.ts.net` name to the node's own `100.x` address, so a browser sees
@@ -940,7 +1438,7 @@ doing its job.
 ```powershell
 $env:PYTHONPATH='.\src'
 .\.venv\Scripts\python.exe -m pytest tests\ -q
-.\.venv\Scripts\song-generator.exe input\musicHyva.mp4 --rows 0
+.\.venv\Scripts\song-generator.exe input\song.mp4 --rows 0
 ```
 
 The second matters more. Watch these numbers. They move when behaviour changes:
