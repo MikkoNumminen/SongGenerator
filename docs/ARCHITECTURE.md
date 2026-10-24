@@ -196,8 +196,8 @@ rather than only recognising the ones the tool generated.
 
 `standardize.py` works in tiers. The recorded clips are the source of truth and
 are never written to; the pass reads them and produces new files in a sibling
-directory, `words_<bank>.std`, each traceable to the clip it came from by a hash of
-that clip's bytes. Every write goes through one function that refuses any
+directory, `words_<bank>.std`, each traceable to the clip it came from by a hash
+of that clip's bytes. Every write goes through one function that refuses any
 destination which is, contains, or sits inside a source directory, so
 overwriting a recording is structurally impossible rather than merely avoided.
 

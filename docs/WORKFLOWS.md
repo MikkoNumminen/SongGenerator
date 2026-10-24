@@ -271,7 +271,7 @@ not be muffled going in.
    voice-conversion-venv python:
 
    ```
-   python build_word_bank.py --words paska,perse,pillu,pornolehti,paviaani \
+   python build_word_bank.py --words <word>,<word>,<word>,<word>,<word> \
        --language fi \
        --presets scream,shout,urgent,excited,command,bright,narrate,asking \
        --whisper-device cuda --out words_<voice>_src --no-contact-sheet
@@ -281,8 +281,7 @@ not be muffled going in.
    own checkout it runs against; check whether the patch is already applied
    there before running, since this writes into another repo.
 3. Result: 40 of 40 kept (5 words times 8 presets), three of them via the
-   word-alone fallback (`pornolehti_excited`, `pornolehti_asking`,
-   `paviaani_command`). Clips land at
+   word-alone fallback. Clips land at
    `words_<voice>_src/fi/roots/<word>_<preset>.wav`.
 4. `build_bank --candidates words_<voice>_src/fi/roots --out words_<voice>`.
 
@@ -302,12 +301,12 @@ the bank.
 The sibling project's own minimum-fragment guard, 60 characters, exists
 because the model rambles or repeats on a shorter fragment, and it is only
 enforced upstream of the audiobook path. Asking it directly for a bare
-phrase like `"Paska!"` (3 to 25 characters) skips that guard: one earlier
-attempt at this bank did exactly that, and Whisper large-v3, run as a hint
-on the clips afterwards, shows what came back: `paska_2.wav` said
-"Aukumaala", `perse-eee_2` said "Perse. Ei, ei, ei." (the shout written
-"Eeeeee!" comes back as "ei, ei, ei"), `au_1` said "Vähä", and
-`perse-pillu_1` said "Ainet. Pillu" against `pillu_2`'s "Joo, pillu". The
+phrase like a single shouted word (3 to 25 characters) skips that guard: one
+earlier attempt at this bank did exactly that, and Whisper large-v3, run as a
+hint on the clips afterwards, shows what came back: a one-word take said a
+four-syllable word nobody wrote, a word followed by the shout said the word
+and then "ei, ei, ei" (the shout written "Eeeeee!" comes back that way), and
+two-word phrases came back with other words in front of them. The
 carrier-sentence route above never hits this, because every utterance sent
 to the model is a full sentence.
 
@@ -1008,7 +1007,7 @@ sounding**:
 
 | source | voice against the band under it |
 |---|---|
-| the source videos that built the default bank | **+1.5 dB** |
+| the source videos of one curated bank | **+1.5 dB** |
 | a buried vocal that produced nothing usable | **−3.1 dB** |
 
 ```powershell
@@ -1078,7 +1077,7 @@ anything else makes it a different singer.
 
 ### The bank's own level
 
-The default bank declares no `bank.json`, so it uses `config.WORD_BUS_LUFS`,
+A bank that declares no `bank.json` uses `config.WORD_BUS_LUFS`,
 **−14.0**. Copying `−11.0` from a spoken bank without measuring made every
 render sound wrong in a way that was not simply loudness: the hotter word bus
 tripped the −1 dB ceiling in `mapping.mix`, which scales the whole mix down,
@@ -1101,7 +1100,7 @@ losing a name, label or syllable boundary.
 
 ```powershell
 .\.venv\Scripts\python.exe -m song_generator.separate_hq --for-bank "sources\*.mp4"
-.\.venv\Scripts\python.exe -m song_generator.recut_bank --out words_recut
+.\.venv\Scripts\python.exe -m song_generator.recut_bank
 ```
 
 `--for-bank` narrows the files you pass to the ones the current bank was cut

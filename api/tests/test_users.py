@@ -822,7 +822,7 @@ class TestAFolderThatIsNoLongerABank:
     """
 
     def _retired(self, tmp_path):
-        out = tmp_path / "output" / "a_song" / "AB-syllables"
+        out = tmp_path / "output" / "a_song" / "retired_bank"
         out.mkdir(parents=True, exist_ok=True)
         (out / "a_song.wild.mp3").write_bytes(b"still mine")
         return out
@@ -833,13 +833,13 @@ class TestAFolderThatIsNoLongerABank:
 
         tracks = admin.get("/library", headers=AUTH).json()["tracks"]
 
-        assert [t["bank"] for t in tracks] == ["AB-syllables"]
+        assert [t["bank"] for t in tracks] == ["retired_bank"]
 
     def test_an_administrator_can_still_play_it(self, tmp_path):
         self._retired(tmp_path)
         admin, _ = _app(tmp_path, ADMIN)
 
-        answer = admin.get("/library/a_song/AB-syllables/a_song.wild.mp3",
+        answer = admin.get("/library/a_song/retired_bank/a_song.wild.mp3",
                            headers=AUTH)
 
         assert answer.status_code == 200
@@ -855,7 +855,7 @@ class TestAFolderThatIsNoLongerABank:
         guest, _ = _app(tmp_path, GUEST)
 
         assert guest.get("/library", headers=AUTH).json()["tracks"] == []
-        assert guest.get("/library/a_song/AB-syllables/a_song.wild.mp3",
+        assert guest.get("/library/a_song/retired_bank/a_song.wild.mp3",
                          headers=AUTH).status_code == 404
 
     def test_a_backslash_does_not_walk_out_of_the_bank_it_was_granted(
@@ -883,7 +883,7 @@ class TestAFolderThatIsNoLongerABank:
         assert guest.get("/library/a_song/example/a_song.wild.mp3",
                          headers=AUTH).content == b"granted"
         escaped = guest.get(
-            "/library/a_song/example/..%5CAB-syllables%5Ca_song.wild.mp3",
+            "/library/a_song/example/..%5Cretired_bank%5Ca_song.wild.mp3",
             headers=AUTH)
         assert escaped.status_code == 404
         assert b"still mine" not in escaped.content

@@ -111,7 +111,7 @@ def test_parse_name_accepts_every_naming_style(stem, expected):
 
 @pytest.mark.parametrize("stem", [
     "c07__3syl__C4__5.06-5.75",   # still carrying its candidate name
-    "vittu1",
+    "kahvi1",
     "random",
     "",
 ])

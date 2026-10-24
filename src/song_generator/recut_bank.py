@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from dataclasses import dataclass
@@ -241,6 +242,17 @@ def main(argv: list[str] | None = None) -> int:
               file=sys.stderr)
         return 2
 
+    # The index is hand work too: boundaries corrected by ear live in it, and
+    # a curated bank whose clips this run does not touch would still lose
+    # every entry when the index below is replaced.
+    if (args.out / "words.json").is_file() and not args.overwrite:
+        print(f"\nerror: {args.out} already holds a bank index (words.json), and "
+              "re-cutting\n       would replace it, corrections by ear included.\n"
+              "       Pick an --out that does not exist yet, or pass --overwrite "
+              "if you are\n       certain the bank there is this tool's own output.",
+              file=sys.stderr)
+        return 2
+
     missing = [s for s in sources if not (Path(config.WORK_DIR) / s / args.stem).is_file()]
     if missing:
         print(f"\n  {len(missing)} sources have no {args.stem} yet.")
@@ -252,14 +264,6 @@ def main(argv: list[str] | None = None) -> int:
     protected: list[str] = []
     degenerate: list[str] = []
     for name, origin in found.items():
-        # The guard above ran against a snapshot taken before this loop, and
-        # write_wav overwrites without asking. A clip that appears in --out
-        # while the loop runs, say somebody renaming a keeper by ear into the
-        # bank mid-run, is the same hand work the snapshot guard protects, so
-        # the check has to happen again at write time.
-        if (args.out / name).exists() and not args.overwrite:
-            protected.append(name)
-            continue
         vocal = audio_io.read_wav(origin.work_dir / args.stem)
         lo = max(0, int(origin.start_s * config.SAMPLE_RATE))
         hi = min(vocal.shape[1], int(origin.end_s * config.SAMPLE_RATE))
@@ -277,8 +281,28 @@ def main(argv: list[str] | None = None) -> int:
             ramp = np.linspace(0.0, 1.0, fade, dtype=np.float32)
             clip[:, :fade] *= ramp
             clip[:, -fade:] *= ramp[::-1]
-        audio_io.write_wav(args.out / name, clip)
-        rebuilt += 1
+        # The guard above ran against a snapshot taken before this loop, and
+        # write_wav overwrites without asking. A clip that appears in --out
+        # while the loop runs, say somebody renaming a keeper by ear into the
+        # bank mid-run, is the same hand work the snapshot guard protects. A
+        # check before the write would still leave the time it takes to cut
+        # the clip, so the clip is written aside and linked into place, which
+        # fails if anything got there first.
+        target = args.out / name
+        part = args.out / f".{name}.part"
+        audio_io.write_wav(part, clip)
+        try:
+            if args.overwrite:
+                os.replace(part, target)
+            else:
+                try:
+                    os.link(part, target)
+                except FileExistsError:
+                    protected.append(name)
+                    continue
+            rebuilt += 1
+        finally:
+            part.unlink(missing_ok=True)
 
     # If nothing was written, nothing claims to be there. A protected clip's
     # audio is somebody's hand work, not this tool's cut, and describing it
@@ -286,8 +310,11 @@ def main(argv: list[str] | None = None) -> int:
     # file at all, and load_bank believes the index alone.
     excluded = set(protected) | set(degenerate)
     kept = {k: v for k, v in entries.items() if k in found and k not in excluded}
-    (args.out / "words.json").write_text(
-        json.dumps(kept, indent=2, ensure_ascii=False), encoding="utf-8")
+    # Exclusive unless --overwrite: an index that appeared while this ran is
+    # hand work as much as a clip is.
+    with open(args.out / "words.json", "w" if args.overwrite else "x",
+              encoding="utf-8") as index:
+        index.write(json.dumps(kept, indent=2, ensure_ascii=False))
 
     if excluded:
         print(f"\n  {len(excluded)} clips were not re-cut, and their entries "

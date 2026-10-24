@@ -209,6 +209,23 @@ class TestRecutWillNotClobberHandNamedClips:
         assert "bravo_1.wav" in said
         assert "--overwrite" in said
 
+    def test_it_refuses_an_output_whose_index_it_would_replace(
+            self, tmp_path, monkeypatch, capsys):
+        """A curated bank holding none of these clips still has an index, and
+        its corrections by ear would go with it."""
+        from song_generator.recut_bank import main
+
+        stem = self._sources(tmp_path, monkeypatch)
+        source = self._bank(tmp_path / "words", stem, ["bravo_1.wav"])
+        out = self._bank(tmp_path / "curated", stem, ["tango_1.wav"])
+        before = (out / "words.json").read_bytes()
+
+        code = main(["--bank", str(source), "--out", str(out)])
+        assert code == 2
+        assert "words.json" in capsys.readouterr().err
+        assert (out / "words.json").read_bytes() == before
+        assert not (out / "bravo_1.wav").exists()
+
     def test_an_empty_output_directory_is_not_refused(self, tmp_path, monkeypatch):
         """The ordinary case still works: nothing there, nothing to lose."""
         from song_generator.recut_bank import main
@@ -285,6 +302,30 @@ class TestTheGuardRunsAgainAtWriteTime:
         assert "tango_1.wav" not in index, (
             "the index must not describe hand work with this tool's numbers"
         )
+
+    def test_a_clip_that_appears_while_its_cut_is_being_written_survives(
+            self, tmp_path, monkeypatch, capsys):
+        """After the stem is read, not before: the window a check before the
+        write would still leave open."""
+        from song_generator.recut_bank import main
+
+        stem = self._sources(tmp_path, monkeypatch)
+        bank = self._bank(tmp_path, stem)
+        out = tmp_path / "fresh"
+        real = audio_io.write_wav
+
+        def write_and_plant(path, audio, *args, **kwargs):
+            if Path(path).name == ".tango_1.wav.part":
+                (out / "tango_1.wav").write_bytes(b"hand work, mid-write")
+            return real(path, audio, *args, **kwargs)
+
+        monkeypatch.setattr(audio_io, "write_wav", write_and_plant)
+
+        code = main(["--bank", str(bank), "--out", str(out)])
+
+        assert code == 0
+        assert (out / "tango_1.wav").read_bytes() == b"hand work, mid-write"
+        assert not list(out.glob(".*.part")), "nothing is left half-written"
 
     def test_overwrite_still_means_overwrite(self, tmp_path, monkeypatch):
         from song_generator.recut_bank import main

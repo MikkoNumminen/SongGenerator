@@ -1,18 +1,18 @@
 """Cut the words out of the recorded phrases, so they can be said in any order.
 
 The bank is not a set of words. It is fourteen recorded phrases, and most of
-them hold several words at once: perse+pillu, paska+perse+pornolehti,
-eee+paviaani. That is why the singer sounds like a person rather than a
+them hold several words at once: tango+delta, bravo+tango+kilometer,
+eee+calculator. That is why the singer sounds like a person rather than a
 sampler, and it is also why the automation could only ever repeat what was
-recorded. There is no clip of pillu on its own, so "paska pillu" was not a
+recorded. There is no clip of delta on its own, so "bravo delta" was not a
 sequence the tool could produce at all.
 
 It does not need one. build_bank already measured where every word starts
 inside every clip, because stage 3 needs those boundaries to land syllables on
 notes. The same numbers cut a phrase back into its words.
 
-So a bare pillu is a slice of perse+pillu, and paska pillu is that slice
-crossfaded onto the recorded paska. Both are DERIVED: they carry the clip they
+So a bare delta is a slice of tango+delta, and bravo delta is that slice
+crossfaded onto the recorded bravo. Both are DERIVED: they carry the clip they
 came from in their name, they are never written to disk over anything, and the
 recorded phrase is always preferred where one exists, because a real recording
 carries the singer's own transition between two words and a crossfade does not.
@@ -81,8 +81,8 @@ def _cut(unit: Unit, start_s: float, end_s: float,
 def slice_words(units: list[Unit], sr: int = config.SAMPLE_RATE) -> list[Unit]:
     """Every word that appears inside a multi-word clip, on its own.
 
-    One slice per word occurrence, so a phrase holding perse+pillu+perse gives
-    two perse slices and one pillu. They are worth keeping apart: they were
+    One slice per word occurrence, so a phrase holding tango+delta+tango gives
+    two tango slices and one delta. They are worth keeping apart: they were
     sung at different points in the phrase and carry different pitch and
     attack, which is exactly the variety the bank is otherwise short of.
     """
@@ -128,7 +128,7 @@ def join_words(parts: list[Unit], sr: int = config.SAMPLE_RATE) -> Unit | None:
 
     The join is a crossfade, not a recorded transition, which is why a real
     clip of the same sequence always wins when one exists. What this is for is
-    the sequences nobody ever sang: paska pillu, eee paska, pillu pornolehti.
+    the sequences nobody ever sang: bravo delta, eee bravo, delta kilometer.
     """
     parts = [p for p in parts if p.audio.shape[1] > 0]
     if not parts:

@@ -125,7 +125,7 @@ def test_the_bank_warning_line_is_not_mistaken_for_the_bank_stage():
     """The pipeline also prints `  BANK      holds no clip saying: ...`, which
     differs from the stage line only in case."""
     progress = Progress(Stage.ANALYSING)
-    after = progress.advance("  BANK      holds no clip saying: paviaani")
+    after = progress.advance("  BANK      holds no clip saying: calculator")
     assert after.stage is Stage.ANALYSING
 
 

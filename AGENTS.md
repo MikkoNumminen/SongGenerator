@@ -43,16 +43,16 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   takes any value and `--ladder` asks for the whole sweep. Both are things a
   person types on purpose. Anything new that starts a render inherits this
   rule; it is not a preference, and it has been stated twice.
-- **Never publish anything identifying.** No person's name, no voice or
-  persona name, no voice bank or the name of one, no email address, no domain, hostname or resource id of the
-  deployment, and no title or artist of a song rendered here, nor any slug,
-  shorthand or source-video tag that stands for one, in any tracked file, ref
-  name, commit message or pull request. This is absolute. In examples and
-  measurements a song is "one song" or "song A", a file is `song.mp4`, an
-  address is on `example.com` or `.invalid`, and the deployment's addresses
-  come from the repository secrets that `.github/workflows/deploy.yml` reads,
-  or from `~/.config/songgenerator.env`.
-  Real environment files stay untracked; only `*.env.example` is committed.
+- **Never publish anything identifying.** No person's name, no voice or persona
+  name, no voice bank or the name of one, no email address, no domain, hostname
+  or resource id of the deployment, and no title or artist of a song rendered
+  here, nor any slug, shorthand or source-video tag that stands for one, in any
+  tracked file, ref name, commit message or pull request. This is absolute. In
+  examples and measurements a song is "one song" or "song A", a file is
+  `song.mp4`, an address is on `example.com` or `.invalid`, and the deployment's
+  addresses come from the repository secrets that `.github/workflows/deploy.yml`
+  reads, or from `~/.config/songgenerator.env`. Real environment files stay
+  untracked; only `*.env.example` is committed.
 
   `tests/test_privacy.py` fails on a tracked `.env` and on any email address
   outside the reserved example domains, on any machine. The terms that cannot be
@@ -90,13 +90,13 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   (whole-source, clip-by-clip, shape-ranked shortlist) and was wrong nearly
   every time on shouted singing. It is kept only as a labelling *hint*.
   Identification is done by ear.
-- **Never point a tool's output at a bank somebody curated by hand.** The
-  clips in a bank get renamed by ear and added to over time, and none of that
-  is regenerable. `recut_bank --out` once defaulted to the directory it had
-  first created, a curated bank by then, and would have written over
-  eighteen hand-named recordings; it now refuses unless told otherwise, and checks again at write
-  time, since a clip renamed into the folder mid-run is the same hand work.
-  Any new tool that writes clips needs the same refusal.
+- **Never point a tool's output at a bank somebody curated by hand.** The clips
+  in a bank get renamed by ear and added to over time, and none of that is
+  regenerable. `recut_bank --out` once defaulted to the directory it had first
+  created, a curated bank by then, and would have written over eighteen
+  hand-named recordings; it now refuses unless told otherwise, and checks again
+  at write time, since a clip renamed into the folder mid-run is the same hand
+  work. Any new tool that writes clips needs the same refusal.
 - **Never re-separate needlessly.** Stems are cached under `work/<song>/`.
   Separation is by far the slowest stage; everything else is seconds.
 
@@ -280,12 +280,12 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   `docs/WORKFLOWS.md`, "Keep whistling, or anything else that is not words".
 - **Generated Finnish speech must never be asked for a fragment under 60
   characters.** The sibling project's Finnish model rambles or repeats on a
-  fragment shorter than its own minimum-fragment guard, 60 characters, and
-  that guard only sits upstream of its audiobook path; asking the model
-  directly for a bare word or phrase skips it. A take for the elderly female
-  voice, built by asking for short phrases like `"Paska!"` (3-25 characters),
-  came back saying things nobody wrote: "Paska!" as "Aukumaala", "Eeeeee!" as
-  "Ei, ei, ei.". Say the word inside a full sentence instead; see
+  fragment shorter than its own minimum-fragment guard, 60 characters, and that
+  guard only sits upstream of its audiobook path; asking the model directly for
+  a bare word or phrase skips it. A take for the elderly female voice, built by
+  asking for short phrases like a single shouted word (3-25 characters), came
+  back saying things nobody wrote: a one-word take as a four-syllable word,
+  "Eeeeee!" as "Ei, ei, ei." Say the word inside a full sentence instead; see
   `docs/WORKFLOWS.md`, "Make a voice-converted copy of a bank".
 - **A bank of generated or converted speech needs `never_split` before its
   first render, not after.** Without it, a spoken or synthesised clip is cut

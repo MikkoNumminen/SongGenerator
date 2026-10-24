@@ -746,7 +746,7 @@ class TestNamesThatAreNotPaths:
                 write_derivative(tmp_path / "tier", name, _clip(), [bank])
 
     def test_an_ordinary_name_still_writes(self, bank, tmp_path):
-        written = write_derivative(tmp_path / "tier", "paska_1.wav", _clip(), [bank])
+        written = write_derivative(tmp_path / "tier", "bravo_1.wav", _clip(), [bank])
         assert written.is_file()
         assert (tmp_path / "tier").resolve() in written.resolve().parents
 

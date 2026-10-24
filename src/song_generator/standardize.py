@@ -69,10 +69,10 @@ def check_destination(root: Path, sources: list[Path]) -> Path:
     Three ways a derivative could land on top of an original, all refused
     before anything is written:
 
-      --out words_example          the tier IS the source
-      --out words_example/std      the tier is inside the source, so a later
-                              rglob over the source sweeps derivatives up
-      --out .                 the tier contains the source
+      --out words_example       the tier IS the source
+      --out words_example/std   the tier is inside the source, so a later
+                                rglob over the source sweeps derivatives up
+      --out .                   the tier contains the source
 
     Checked on resolved paths, so a symlink pointing back at the source is
     caught as well as a literal path.

@@ -296,8 +296,8 @@ never overwritten, so an older arrangement stays reproducible.
 #           the words are built out of slices if nothing recorded says them.
 
 phrase 1
-   0:02.57  x8  =2.37  pillu paska pornolehti   [pillu-paska-pornolehti_1.wav]
-   0:04.94  x6  =1.96  perse pillu perse        [perse-pillu-perse_1.wav]
+   0:02.57  x8  =2.37  delta bravo kilometer    [delta-bravo-kilometer_1.wav]
+   0:04.94  x6  =1.96  tango delta tango        [tango-delta-tango_1.wav]
    0:07.26  x1  =0.35  eee                      [eee_then__src3__50.76.wav]
 ```
 

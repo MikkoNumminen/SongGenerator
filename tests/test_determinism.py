@@ -1,4 +1,4 @@
-"""What paskapillu sings, pinned exactly.
+"""What the pipeline sings, pinned exactly.
 
 Every bank shares `arrange.py` and `mapping.py`. A new bank that wants
 different behaviour, words replayed in the order they were spoken rather than

@@ -153,7 +153,7 @@ DETECT_HOP_S = 0.02
 WORD_SILENCE_DB = -24.0
 
 # Silences shorter than this do not split a word. Finnish double consonants
-# (the "kk" in a sung bravo, the "ll" in delta) contain a real stop, so this
+# (the "kk" in a sung "lakki", the "pp" in "kuppi") contain a real stop, so this
 # has to exceed a plosive gap or single words get cut in half.
 #
 # Swept against the source scene: no value cleanly separates words there,
@@ -330,7 +330,7 @@ PREFER_LONGER_UNITS = 0.45
 # A melody slot holds exactly one syllable and a syllable clip fills exactly
 # one slot, so a bank of syllables maps onto a tune 1:1 -- no counting, no
 # leftover slot to fudge. It also means any word can be spelled from parts:
-# calculator needs no intact recording, only pa + vi + aa + ni.
+# calculator needs no intact recording, only cal + cu + la + tor.
 #
 # Whole-word and multi-word clips are still preferred wherever they exist,
 # because they carry the singer's own transitions between syllables, and a
@@ -346,7 +346,7 @@ WORD_SPELLING = {
 
 # Extra syllable fragments a clip name may use, beyond the ones that appear in
 # WORD_SPELLING. Somebody naming by ear writes what they hear, and a sung
-# stutter ("pi pillu", "pe perse") is a real thing in the recordings that no
+# stutter ("bra bravo", "ta tango") is a real thing in sung recordings that no
 # canonical spelling contains. Listing them here lets those names parse instead
 # of being refused, which is the difference between a clip being usable and
 # sitting on disk. They are fragments, never sung alone.
@@ -580,11 +580,13 @@ WORD_SEQUENCE = None
 # No real bank is named here. The banks are recordings, and which ones exist
 # and what they are called stays on the machine that holds them: they are
 # registered in vocabulary_local.py, which is gitignored and replaces this
-# table and DEFAULT_BANK wholesale (see the end of this file). What ships is
-# three placeholders, so a fresh checkout has a default to point at and the
-# tests have voices to give --voices.
+# table, and DEFAULT_BANK when it names one (see the end of this file). What
+# ships is three placeholders, so a fresh checkout has a default to point at
+# and the tests have voices to give --voices. The default is `words`, where
+# build_bank writes when given no --out, so a clone that follows the docs and
+# builds a bank can sing with it.
 BANKS = {
-    "example": "words_example",
+    "example": "words",
     "other": "words_other",
     "third": "words_third",
 }
@@ -1157,6 +1159,8 @@ OUTPUT_PEAK_CEILING_DB = -1.0
 #     SHOUT_WORDS = ("ooh",)
 #     CLIMAX_WORDS = ("barbaz",)
 #     SHOUT_CHARS = "oh"
+#     BANKS = {"mine": "words_mine", "spare": "words_spare"}
+#     DEFAULT_BANK = "mine"   # left out, the first bank in BANKS is the default
 # SONG_GENERATOR_NO_LOCAL_VOCAB disables the override. The test suite sets it,
 # so tests exercise the shipped example vocabulary and pass or fail the same way
 # on every machine, rather than depending on whichever words happen to be
@@ -1166,8 +1170,35 @@ import os as _os
 if not _os.environ.get("SONG_GENERATOR_NO_LOCAL_VOCAB"):
     try:  # pragma: no cover - presence depends on the machine, not the code
         from .vocabulary_local import *
-    except ImportError:
-        pass
+    except ModuleNotFoundError as _missing:
+        # Only the file itself being absent is ordinary. Anything that fails
+        # inside it is a broken override, and swallowing that would quietly
+        # drop every bank it registers and sing with the placeholders.
+        if _missing.name != f"{__package__}.vocabulary_local":
+            raise
+
+
+def default_first(banks: dict[str, str],
+                  default: str) -> tuple[dict[str, str], str]:
+    """The bank table with its default resolved and listed first.
+
+    A local override that registers banks and names no default, or names one
+    it does not register, would otherwise leave the shipped placeholder as the
+    default: argparse never checks a default against its choices, so every run
+    without --bank died on a KeyError. Such an override takes its first bank.
+
+    The default goes first because the edge's bank picker lists the table in
+    order and puts the default at the top.
+    """
+    if not banks:
+        return banks, default
+    if default not in banks:
+        default = next(iter(banks))
+    rest = {k: v for k, v in banks.items() if k != default}
+    return {default: banks[default], **rest}, default
+
+
+BANKS, DEFAULT_BANK = default_first(BANKS, DEFAULT_BANK)
 
 
 def validate_vocabulary() -> list[str]:

@@ -271,9 +271,9 @@ never see. Resolve it on a real vocal.
      of an octave away, and the unit breaks in the middle. Shifting the shout
      too is not the answer, that is what `SHOUT_KEEP_RAW` exists to prevent.
      Choosing the *word's* octave to sit beside the shout is. Measured over 304
-     units mixing a raw shout with sung words, median internal spread 7.5 to
-     6.9 semitones and units breaking more than half an octave 230 to 200.
-     Where it applies the win is large, `perse+eee` goes from 10.6 to 3.0.
+     units mixing a raw shout with sung words, median internal spread 7.5 to 6.9
+     semitones and units breaking more than half an octave 230 to 200. Where it
+     applies the win is large, one word+shout unit goes from 10.6 to 3.0.
 
      A shout also leaves a gap in time, not only in pitch. It keeps the length
      it was recorded at, so it does not hold its vowel across a rest the way a
@@ -282,12 +282,12 @@ never see. Resolve it on a real vocal.
      30 ms, both after `eee`. Whatever is decided about the octave should
      decide this at the same time: both come from the same exemption.
 
-  2. **Record a bare `paviaani`.** There is not one. All six takes in the
-     curated bank are `eee-paviaani`, so every placement of the climax word
-     carries the shout and its break. This removes the problem rather than
-     reducing it, and no code change reaches as far.
+  2. **Record the climax word bare.** There is no such take. All six takes in
+     the curated bank have the `eee` shout before it, so every placement of the
+     climax word carries the shout and its break. This removes the problem
+     rather than reducing it, and no code change reaches as far.
 
-  3. **The `paviaani` takes disagree.** `eee-paviaani_8` descends across its
+  3. **The climax word's takes disagree.** One of the six descends across its
      syllables where the other five ascend, so which take the arrangement picks
      changes the shape of the word. Worth deciding whether that is range or a
      take to set aside.
@@ -296,10 +296,10 @@ never see. Resolve it on a real vocal.
      singer's portamento and confirmed by ear, not by measurement. The
      surrounding constants in that block all carry numbers.
 
-  Worth knowing before re-measuring any of this: most remaining `eee+paviaani`
-  breaks are not octave artefacts. The word's own recorded melody spans about
-  9.6 semitones around the held shout, which is real and no octave choice
-  should flatten it.
+  Worth knowing before re-measuring any of this: most remaining breaks in the
+  shout and climax word are not octave artefacts. The word's own recorded melody
+  spans about 9.6 semitones around the held shout, which is real and no octave
+  choice should flatten it.
 
 - **Record word takes at higher pitches. Still the way to reach the last of
   it, but much less urgent than it was.**
@@ -355,7 +355,7 @@ never see. Resolve it on a real vocal.
   | song C | 62.2 | +8.6 | 0.75 | 0.86 |
   | song D | 63.4 | +9.9 | 0.68 | 0.96 |
   | song E | 58.7 | +5.1 | 0.87 | 0.99 |
-  | paskaperse | 53.5 | 0.0 | 0.95 | 1.00 |
+  | the bank's own source | 53.5 | 0.0 | 0.95 | 1.00 |
 
   Mean 0.78 then, 0.90 now. The bank sits at MIDI 53.6 with a 10-90 percentile
   span of 53.3 to 61.0, so it has almost no register of its own, and the songs
@@ -467,7 +467,8 @@ never see. Resolve it on a real vocal.
   Re-fetching at a decent resolution needs the link as much as the thirteen
   with no picture at all do.
 
-  `paskaperse.wav` is not in that table and not in the index. It is not a song
+  The recording the default bank was cut from is not in that table and not in
+  the index. It is not a song
   that was fetched from anywhere: it is the source the first word clips were
   cut out of, so there is no address to find for it. That is a different answer
   from one nobody has written down, and worth keeping distinct, because a gap
@@ -511,9 +512,9 @@ never see. Resolve it on a real vocal.
   What it does not fix is the backlog: those rows are a sitting-down-and-writing
   job for whoever has the links, and nothing can automate it.
 
-- **A live site: drop a song in, get a paskaperse back.** Nothing about the
-  pipeline needs a person once the bank exists, so the interesting question is
-  not whether it can be a web service but what it costs and what it hands a
+- **A live site: drop a song in, get it back sung by the bank.** Nothing about
+  the pipeline needs a person once the bank exists, so the interesting question
+  is not whether it can be a web service but what it costs and what it hands a
   stranger.
 
   What a request actually costs, measured on this machine today, an RTX 3080 Ti:
