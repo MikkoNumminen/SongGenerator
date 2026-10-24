@@ -157,6 +157,11 @@ class Placement:
     # sings legato and the original did not rest before the next word. None
     # is the ordinary ending: the last syllable stops on its own note.
     hold_to_s: float | None = None
+    # Set by fold_phrases for a bank declaring fold_by_phrase: the octave the
+    # whole phrase moves by, and the line its syllables are measured against.
+    # None is the ordinary per-word folding.
+    octave_offset: float | None = None
+    phrase_line: float | None = None
 
     def raw_distance(self) -> float:
         """Furthest any of this unit's syllables would have to move, unfolded."""
@@ -1321,6 +1326,41 @@ def decide_shifts(plan: Plan, mix: float | None = None, mode: str | None = None,
         p.do_shift = i < n_shift
 
 
+def _phrase_shift(p: Placement, raw: float) -> float:
+    """One syllable's shift under the phrase's octave, its outliers folded back."""
+    shift = raw + p.octave_offset
+    if p.phrase_line is not None:
+        while shift - p.phrase_line > config.PHRASE_OCTAVE_OUTLIER:
+            shift -= 12.0
+        while p.phrase_line - shift > config.PHRASE_OCTAVE_OUTLIER:
+            shift += 12.0
+    return shift
+
+
+def fold_phrases(placements: list[Placement]) -> None:
+    """One octave decision per phrase, for a bank declaring fold_by_phrase.
+
+    The octave is the one bringing the median of the phrase's wanted shifts
+    nearest zero, so the line as a whole lands in the voice's own register,
+    and every interval inside it stays the one the melody asked for.
+    """
+    by_phrase: dict[int, list[Placement]] = {}
+    for p in placements:
+        by_phrase.setdefault(p.phrase, []).append(p)
+    for group in by_phrase.values():
+        wanted = [slot.midi - src
+                  for p in group for i, slot in enumerate(p.slots)
+                  if (src := p.unit.source_midi(i)) is not None
+                  and not (config.SHOUT_KEEP_RAW and p.unit.is_shout_syllable(i))]
+        if not wanted:
+            continue
+        middle = float(np.median(wanted))
+        offset = -12.0 * round(middle / 12.0)
+        for p in group:
+            p.octave_offset = offset
+            p.phrase_line = middle + offset
+
+
 def build_segments(p: Placement) -> tuple[list, float]:
     """Where each piece of this unit lands, how long it sounds, how far it moves.
 
@@ -1355,6 +1395,9 @@ def build_segments(p: Placement) -> tuple[list, float]:
         first = p.slots[0] if p.slots else None
         shift = (0.0 if (source is None or first is None)
                  else fold_shift(first.midi - source, p.shift_cap))
+        if (p.octave_offset is not None and source is not None
+                and first is not None):
+            shift = _phrase_shift(p, first.midi - source)
         p.shifts = [shift]
         natural = p.unit.duration_s or 1e-3
         target = p.target_s if p.target_s is not None else natural
@@ -1392,8 +1435,10 @@ def build_segments(p: Placement) -> tuple[list, float]:
         # One octave for the whole word rather than one per syllable, so the
         # intervals inside it are the ones the melody asked for. A shout keeps
         # its own pitch, so it neither votes on the octave nor takes it.
-        folded = iter(fold_unit([w for *_, raw, w in pieces if not raw],
-                                p.shift_cap))
+        wanted = [w for *_, raw, w in pieces if not raw]
+        folded = iter([_phrase_shift(p, w) for w in wanted]
+                      if p.octave_offset is not None
+                      else fold_unit(wanted, p.shift_cap))
 
         for i, (src_a, src_b, slot, raw, _) in enumerate(pieces):
             shift = 0.0 if raw else next(folded)

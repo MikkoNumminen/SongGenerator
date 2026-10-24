@@ -709,6 +709,15 @@ words with 4-5 cut short, and left exactly as many rests inside phrases as the
 original had (two over 0.15 s). Rubber Band holds such a vowel cleanly far
 past the ordinary fitting range: 1.66 dB from the source at 2x, 1.82 at 4x.
 
+If the range seems to jump about, look at two things before touching the cap.
+First, a clip converted into the wrong octave: in one converted bank a single
+word came out at MIDI 50 among syllables at 60 to 67, and every time it was
+sung the fold chose the nearer octave, a full octave under the line. Set such a
+clip aside. Then declare `fold_by_phrase`: on the same ballad it cut leaps over
+seven semitones inside phrases from 6-8 to 4-5, against 9 in the original
+melody on the same slots, most of those the tracker's octave errors. Lowering
+the shift cap changed nothing there, because the shifts were already small.
+
 How a bank should be placed is a property of its recordings, so it is
 declared beside them: a `bank.json` in the bank directory, read from
 whichever directory is actually being sung from. `docs/DATA-FORMATS.md`

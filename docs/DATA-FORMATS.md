@@ -154,6 +154,15 @@ has, whichever strategy places the clips. `mix.word_bus_lufs` lets the
 bank's words sit at their own level against the bed, in LUFS; a speaking
 voice needs more than a shouted one to be heard over a band.
 
+`fold_by_phrase` chooses the octave once per phrase instead of once per word:
+the one bringing the median of the phrase's wanted shifts nearest zero, so a
+line keeps its own contour and sits, as a whole, in the voice's register. Per
+word, a melody near the shift cap flipped one word up and the next an octave
+down, a leap mid-line heard as the range jumping about. A single note further
+than `PHRASE_OCTAVE_OUTLIER` from the phrase's line is folded back an octave,
+since the pitch tracker reads a held note at half its frequency now and then.
+The shift cap does not apply to a bank declaring it.
+
 `legato` holds each word's last syllable on into the next word wherever the
 original singer did not rest between them (a gap under `LEGATO_REST_S`
 between the last note under one word and the first under the next), inside

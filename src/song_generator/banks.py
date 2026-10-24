@@ -309,6 +309,11 @@ def _declared(bank_dir: Path) -> dict:
                 f"defaults.{key} in {path} must be one of"
                 f" {', '.join(allowed)}, got {value!r}.")
 
+    by_phrase = settings.get("fold_by_phrase", False)
+    if not _a_boolean(by_phrase):
+        raise ValueError(
+            f"fold_by_phrase in {path} must be true or false, got {by_phrase!r}.")
+
     legato = settings.get("legato", False)
     if not _a_boolean(legato):
         raise ValueError(f"legato in {path} must be true or false, got {legato!r}.")
@@ -390,6 +395,13 @@ def shift_cap(bank_dir: Path | None) -> float:
         return config.SHIFT_CAP_SEMITONES
     declared = _declared(bank_dir).get("shift_cap_semitones")
     return config.SHIFT_CAP_SEMITONES if declared is None else float(declared)
+
+
+def fold_by_phrase(bank_dir: Path | None) -> bool:
+    """True when the octave is chosen once per phrase rather than per word."""
+    if bank_dir is None:
+        return False
+    return bool(_declared(bank_dir).get("fold_by_phrase", False))
 
 
 def legato(bank_dir: Path | None) -> bool:

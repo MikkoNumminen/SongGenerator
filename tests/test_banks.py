@@ -19,6 +19,7 @@ import pytest
 from factories import make_unit as _unit
 
 from song_generator import arrange, audio_io, banks, cli, config
+from song_generator import mapping as mapping_mod
 from song_generator.mapping import (
     Placement, Plan, Slot, build_segments, group_phrases, load_bank,
     mix as mix_buses, plan_sequence, render,
@@ -1328,3 +1329,52 @@ class TestLegato:
     def test_a_declaration_that_cannot_work_is_refused(self, tmp_path, declared):
         with pytest.raises(ValueError, match="legato"):
             banks.legato(self._bank(tmp_path, **declared))
+
+
+class TestFoldByPhrase:
+    """One octave per phrase, so a line keeps its contour in the voice's
+    register instead of flipping octaves word by word."""
+
+    def _placement(self, unit, onset, midis, phrase=0):
+        slots = [Slot(onset + 0.3 * k, onset + 0.3 * (k + 1), m, phrase)
+                 for k, m in enumerate(midis)]
+        return Placement(unit=unit, onset_s=onset, slot_span_s=0.3 * len(midis),
+                         play_s=0.6, n_slots=len(midis), phrase=phrase, slots=slots)
+
+    def _unit_at(self, midi):
+        unit = _unit(["tango"])
+        unit.syllable_midi = [midi] * unit.syllables
+        unit.midi = midi
+        return unit
+
+    def test_a_whole_line_moves_by_one_octave(self):
+        """Wanted shifts around +12 move the whole line down an octave, and
+        every interval inside it stays as the melody asked."""
+        a = self._placement(self._unit_at(60.0), 0.0, [71.0, 73.0])
+        b = self._placement(self._unit_at(60.0), 0.6, [74.0, 72.0])
+        mapping_mod.fold_phrases([a, b])
+        build_segments(a)
+        build_segments(b)
+        assert a.shifts == pytest.approx([-1.0, 1.0])
+        assert b.shifts == pytest.approx([2.0, 0.0])
+
+    def test_a_note_an_octave_off_the_line_is_folded_back(self):
+        """The tracker reads a held note at half its frequency now and then."""
+        a = self._placement(self._unit_at(62.0), 0.0, [62.0, 50.0])
+        b = self._placement(self._unit_at(62.0), 0.6, [63.0, 61.0])
+        mapping_mod.fold_phrases([a, b])
+        build_segments(a)
+        assert a.shifts == pytest.approx([0.0, 0.0])
+
+    def test_phrases_are_decided_apart(self):
+        a = self._placement(self._unit_at(60.0), 0.0, [72.0, 72.0], phrase=0)
+        b = self._placement(self._unit_at(60.0), 5.0, [60.0, 61.0], phrase=1)
+        mapping_mod.fold_phrases([a, b])
+        assert a.octave_offset == -12.0 and b.octave_offset == 0.0
+
+    def test_off_unless_declared(self, tmp_path):
+        assert banks.fold_by_phrase(None) is False
+        (tmp_path / "bank.json").write_text(json.dumps({"fold_by_phrase": "yes"}),
+                                            encoding="utf-8")
+        with pytest.raises(ValueError, match="fold_by_phrase"):
+            banks.fold_by_phrase(tmp_path)

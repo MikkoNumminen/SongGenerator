@@ -763,7 +763,7 @@ def build(slots, units: list[Unit], level: str, seed: int,
         covered = wanted <= judged.words_used()
         paired = judged.has_pairing() or not possible
         if covered and paired:
-            join_legato(plan, bank_dir)
+            shape_voice(plan, bank_dir)
             return _stamp_cap(plan, bank_dir, cap), arrangement, attempt + 1
         if best is None or scored(judged) > best[0]:
             best = (scored(judged), plan, arrangement, attempt + 1)
@@ -771,7 +771,7 @@ def build(slots, units: list[Unit], level: str, seed: int,
     # tries is clamped to at least one, so the loop ran and recorded a best.
     assert best is not None
     _, plan, arrangement, draws = best
-    join_legato(plan, bank_dir)
+    shape_voice(plan, bank_dir)
     return _stamp_cap(plan, bank_dir, cap), arrangement, draws
 
 
@@ -784,6 +784,17 @@ def unreachable_words(units: list[Unit]) -> list[str]:
     """
     sayable = {w for u in units for w in u.words}
     return sorted(set(required_words()) - sayable)
+
+
+def shape_voice(plan, bank_dir) -> None:
+    """What the bank declares about how its voice sings a line, applied to a
+    finished plan: the octave chosen per phrase, then the legato holds."""
+    from . import banks
+    from .mapping import fold_phrases
+
+    if bank_dir is not None and banks.fold_by_phrase(bank_dir):
+        fold_phrases(plan.placements)
+    join_legato(plan, bank_dir)
 
 
 def join_legato(plan, bank_dir) -> None:
@@ -1005,7 +1016,7 @@ def realise(arrangement: Arrangement, slots, units: list[Unit],
         for placement in plan.placements:
             if placement.target_s is None:
                 placement.target_s = placement.play_s
-    join_legato(plan, bank_dir)
+    shape_voice(plan, bank_dir)
     return _stamp_cap(plan, bank_dir)
 
 

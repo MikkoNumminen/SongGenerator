@@ -1050,6 +1050,18 @@ TURN_MIN_S = 4.0
 VOICES_LOG_DIR = "voices"
 
 
+# A bank declaring "fold_by_phrase" chooses one octave for a whole phrase
+# instead of one per word. Per word, a melody that wanders near the shift cap
+# flips one word up and the next an octave down, a twelve-semitone leap in the
+# middle of a line, heard as the voice's range jumping about. Per phrase the
+# line keeps its own contour and sits, as a whole, in the voice's register.
+#
+# Inside a phrase, a single note further than this from the phrase's own line
+# is folded back by an octave. The pitch tracker reads a held note at half its
+# frequency now and then, and one such note in a phrase is a sudden drop that
+# the singer never sang.
+PHRASE_OCTAVE_OUTLIER = 9.0
+
 # A bank declaring "legato" holds each word's last syllable on into the next
 # word wherever the original singer did not rest between them. A gap shorter
 # than this, between the last note under one word and the first under the
