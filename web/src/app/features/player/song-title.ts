@@ -9,7 +9,7 @@
  * The cleaning is deliberately timid. It only removes words from the end,
  * because that is where the noise a video site adds lives, and a word that
  * looks like noise in the middle is usually part of the title: `music_box`
- * keeps its `music`, and `Dusk of a Thousand Rivers Universe` keeps `Universe`
+ * keeps its `music`, and `Songs of a Quiet Universe` keeps `Universe`
  * because the stripping stops at the first word that is not noise.
  */
 

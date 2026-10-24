@@ -48,9 +48,9 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   rendered here, in any tracked file, commit message or pull request. This is
   absolute. In examples and measurements a song is "one song" or "song A", a
   file is `song.mp4`, an address is on `example.com` or `.invalid`, and the
-  deployment's addresses come from the repository variables that
-  `.github/workflows/deploy.yml` reads, or from `~/.config/songgenerator.env`. Real environment files
-  stay untracked; only `*.env.example` is committed.
+  deployment's addresses come from the repository secrets that
+  `.github/workflows/deploy.yml` reads, or from `~/.config/songgenerator.env`.
+  Real environment files stay untracked; only `*.env.example` is committed.
 
   `tests/test_privacy.py` fails on a tracked `.env` and on any email address
   outside the reserved example domains, on any machine. The terms that cannot be

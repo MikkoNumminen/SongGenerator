@@ -3,12 +3,13 @@
 An absolute rule of the owner's. Most of what it forbids cannot be written
 into a test, since the test is published, so those terms live in
 .local/private-terms.txt, which .local/ keeps out of git: one case-insensitive
-regular expression per line, # for a comment. On a machine without that file
-there is nothing to check against and that test skips, saying so.
+regular expression per line, # for a comment. A worktree has no .local of its
+own and reads the main checkout's. On a machine with no list at all there is
+nothing to check against and that test skips, saying so.
 
 What can be checked without naming anything is checked everywhere: no real
-environment file is tracked, and every email address in a tracked file is on a
-domain reserved for examples.
+environment file is tracked, and every email address in a tracked file, or in
+a tracked file's path, is on a domain reserved for examples.
 
 Commit messages and pull request text are not files and cannot be seen from
 here; the pre-push hook in .local/hooks/ reads the same list for those.
@@ -44,7 +45,11 @@ TERMS = _terms_file()
 
 # RFC 2606 and RFC 6761: names that can never belong to anybody.
 RESERVED = re.compile(r"(^|\.)(example\.(com|net|org)|example|invalid|test|localhost)$")
-EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@((?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,})")
+EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@((?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,})\b")
+
+# .env, .envrc, .env.local, .env-prod, settings.env. Not env.py or env.d.ts,
+# which are code.
+ENV_FILE = re.compile(r"^\.env(rc)?$|^\.env[.-].+|.+\.env$")
 
 
 def _terms() -> list[re.Pattern]:
@@ -60,19 +65,44 @@ def _tracked() -> list[Path]:
 
 
 def _lines():
+    """Every tracked path, as line 0 of its file, then every line of text."""
     for path in _tracked():
+        rel = path.relative_to(ROOT)
+        yield rel, 0, rel.as_posix()
         try:
-            text = path.read_text(encoding="utf-8")
-        except (UnicodeDecodeError, OSError):
-            continue  # binary, or gone from the working tree
+            data = path.read_bytes()
+        except OSError:
+            continue  # gone from the working tree
+        if b"\0" in data:
+            continue  # binary
+        # Replaced rather than skipped: a file in another encoding still says
+        # whatever it says in ASCII.
+        text = data.decode("utf-8", errors="replace")
         for number, line in enumerate(text.splitlines(), start=1):
-            yield path.relative_to(ROOT), number, line
+            yield rel, number, line
+
+
+def test_the_address_pattern_can_fail():
+    # It once carried a control character where \b belonged and matched
+    # nothing, which made the test below pass on anything.
+    real = "someone@" + "mail.fi"
+    assert EMAIL.search(real)
+    assert not RESERVED.search(EMAIL.search(real).group(1))
+    assert RESERVED.search(EMAIL.search("someone@example.com").group(1))
+
+
+def test_the_environment_pattern_tells_settings_from_code():
+    for name in (".env", ".envrc", ".env.local", ".env-prod", "settings.env"):
+        assert ENV_FILE.search(name), name
+    for name in ("env.py", "env.d.ts", "x.env.ts", "pyvenv.cfg", "environment.ts"):
+        assert not ENV_FILE.search(name), name
 
 
 @pytest.mark.skipif(not TERMS.is_file(),
                     reason="no .local/private-terms.txt on this machine")
 def test_no_tracked_file_names_anything_private():
     terms = _terms()
+    assert terms, f"{TERMS} holds no terms"
     found = [f"{path}:{number}: {term.pattern}"
              for path, number, line in _lines()
              for term in terms if term.search(line)]
@@ -83,15 +113,14 @@ def test_no_real_environment_file_is_tracked():
     # A .env holds the machine's real addresses and allowlist. Only the shape,
     # in a .env.example, belongs in the repository.
     tracked = [path.relative_to(ROOT) for path in _tracked()
-               if re.search(r"(^|\.)env(rc)?(\.|$)", path.name)
-               and not path.name.endswith(".example")]
+               if ENV_FILE.search(path.name) and not path.name.endswith(".example")]
     assert not tracked, f"environment files are tracked: {tracked}"
 
 
 def test_every_email_address_is_an_example():
     found = []
     for path, number, line in _lines():
-        if path.name == "package-lock.json":
+        if path.name == "package-lock.json" and number:
             continue  # npm@version pins and registry metadata, nobody's address
         for match in EMAIL.finditer(line):
             if not RESERVED.search(match.group(1).lower()):

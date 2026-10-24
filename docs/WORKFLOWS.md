@@ -706,8 +706,8 @@ variables, Actions:
 |---|---|
 | `AZURE_STATIC_WEB_APPS_API_TOKEN` | see below |
 | `GOOGLE_CLIENT_ID` | the OAuth client id, once there is one |
-| `SITE_URL` | the Static Web App's own `https://` address |
-| `API_BASE_URL` | the proxy in front of the edge, ending `/api/songgen` |
+| `SITE_URL` | the Static Web App's own address, `https://` and no trailing slash |
+| `API_BASE_URL` | the proxy in front of the edge, `https://`, ending `/api/songgen` |
 
 The token is the one credential here, and it is enough on its own to publish to
 the site, so it is never committed:
@@ -727,7 +727,7 @@ The client id is not secret and cannot be. The browser has to know which client
 signs people in, so it is in the shipped files however it gets there. The
 allowlist on the edge is what actually protects the service.
 
-Both are secrets here even though only one is. GitHub's plain variables are
+The client id is a secret here even though it is public anyway. GitHub's plain variables are
 readable by any workflow in any fork's pull request, and the client id being
 public in the shipped files is not a reason to hand it to arbitrary workflow
 code as well.

@@ -11,16 +11,16 @@ describe('reading a folder name as a title', () => {
 
   it('strips what a video site appended', () => {
     expect(
-      prettySongTitle('eka_laulaja_-_missä_kuu_on_official_music_video'),
-    ).toBe('Eka Laulaja · Missä Kuu on');
+      prettySongTitle('eka_laulaja_-_kesä_tulee_official_music_video'),
+    ).toBe('Eka Laulaja · Kesä Tulee');
   });
 
   it('stops stripping at the first word that is not noise', () => {
     // "universe" is part of the title and "lyrics in subs" is not. Removing
     // noise wherever it appeared would take "in" out of the middle too.
     expect(
-      prettySongTitle('yhtye_-_dusk_of_a_thousand_rivers_universe_lyrics_in_subs'),
-    ).toBe('Yhtye · Dusk of a Thousand Rivers Universe');
+      prettySongTitle('yhtye_-_songs_of_a_quiet_universe_lyrics_in_subs'),
+    ).toBe('Yhtye · Songs of a Quiet Universe');
   });
 
   it('keeps a noise word that is part of the name', () => {
@@ -33,15 +33,15 @@ describe('reading a folder name as a title', () => {
   });
 
   it('leaves a name that is already plain alone', () => {
-    expect(prettySongTitle('satamaan')).toBe('Satamaan');
+    expect(prettySongTitle('iltalaulu')).toBe('Iltalaulu');
     expect(prettySongTitle('kesäpäivä')).toBe('Kesäpäivä');
   });
 
   it('keeps hyphens that mean something', () => {
-    expect(prettySongTitle('yhtye_-_pakkanen_re-recorded_2018')).toBe(
-      'Yhtye · Pakkanen Re-recorded 2018',
+    expect(prettySongTitle('yhtye_-_kevät_re-recorded_1999')).toBe(
+      'Yhtye · Kevät Re-recorded 1999',
     );
-    expect(prettySongTitle('laulaja_-_2090-luvulla')).toBe('Laulaja · 2090-luvulla');
+    expect(prettySongTitle('laulaja_-_ilta-aurinko')).toBe('Laulaja · Ilta-aurinko');
   });
 
   it('never strips a name down to nothing', () => {

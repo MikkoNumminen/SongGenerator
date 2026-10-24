@@ -79,6 +79,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Before anything can print them. A secret is masked only as the exact
+      # string stored, and the bare host turns up on its own: in curl's errors
+      # and in the publish action's "Visit your site at".
+      - name: Mask the addresses
+        env:
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
+        run: |
+          for url in "$SITE_URL" "$API_BASE_URL"; do
+            host=${url#*://}
+            host=${host%%/*}
+            if [ -n "$host" ]; then echo "::add-mask::$host"; fi
+          done
+
       # A dispatch can name any branch, and this publishes to the live site.
       # Refusing out loud beats a green run that quietly put a feature branch
       # in front of visitors, which is the same class of failure as the one
@@ -109,10 +122,10 @@ jobs:
       - name: Build
         run: npx ng build
 
-      # Where the edge is and which client id signs people in. Neither value is
-      # secret and neither can be: the browser has to know where to send
-      # requests, so both are in the shipped files however they get there. The
-      # allowlist on the edge is the protection.
+      # Where the edge is and which client id signs people in. Neither is a
+      # credential, and neither can be kept from a visitor: the browser has to
+      # know where to send requests, so both are in the shipped files however
+      # they get there. The allowlist on the edge is the protection.
       #
       # Both are repository secrets, the address for the same reason as
       # SITE_URL and the client id because it belongs to the deployment rather

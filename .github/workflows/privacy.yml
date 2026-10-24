@@ -8,8 +8,11 @@
 
 name: privacy
 
+# Pushes to main, and pull requests: a branch push with a pull request open
+# would otherwise run it twice.
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
@@ -23,5 +26,5 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install pytest
+      - run: pip install pytest==9.1.1
       - run: python -m pytest tests/test_privacy.py --noconftest -q -p no:cacheprovider -rs
