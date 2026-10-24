@@ -21,6 +21,8 @@ from .mapping import (
     Plan,
     clean_slots,
     swallow_slots,
+    attach_vibrato,
+    vibrato_curve,
     decide_shifts,
     load_bank,
     mimicry,
@@ -1097,6 +1099,18 @@ def main(argv: list[str] | None = None) -> int:
         if missing and not args.json:
             print(f"  MISSING   {label} never says: {', '.join(missing)}")
         word_plan.merged, word_plan.split = merged, split
+
+        # A bank that borrows the original singer's vibrato gets her shake
+        # over every placement it sings, cut from the contour the analysis
+        # measured.
+        if any(banks.borrow_vibrato(d) for _, d, _, _ in voices):
+            curve = vibrato_curve(analysis.f0_hz, analysis.f0_voiced,
+                                  analysis.f0_hop_s)
+            owners_now = (owners if len(voices) > 1 and level is not None
+                          else [0] * len(word_plan.placements))
+            attach_vibrato([p for p, v in zip(word_plan.placements, owners_now)
+                            if banks.borrow_vibrato(voices[v][1])],
+                           curve, analysis.f0_hop_s)
 
         # The resynthesis is shared across the mimicry sweep: which units a
         # variant shifts is only a selection over the same shifted set.

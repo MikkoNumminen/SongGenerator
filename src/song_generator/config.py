@@ -918,6 +918,21 @@ WORDS_SING_THROUGH = True
 # length still spends most of itself on its own pitch.
 GLIDE_MS = 60.0
 
+# Rubber Band cannot glide, so its syllables are rendered one at a time and
+# joined. Each used to be faded in and out over 5 ms and butted against the
+# next, so a word came out as separately struck pieces with the pitch stepping
+# between them, heard as words that jolt rather than ring. Now every syllable
+# but a word's last runs on this far into the next one, rendered from the
+# source that follows it, and the two are crossfaded over that overlap: the
+# vowel carries into the next syllable and the pitch changes inside the
+# crossfade. 40 ms sits under GLIDE_MS, so a short syllable keeps most of its
+# own pitch.
+RUBBERBAND_JOIN_S = 0.040
+
+# How a Rubber Band word ends: faded out over this, instead of the 5 ms that
+# cut a sung vowel off like a switch.
+RUBBERBAND_RELEASE_S = 0.030
+
 # Prefer the take whose recorded pitch is nearest the note it has to land on,
 # so it is shifted as little as possible.
 #
@@ -1062,20 +1077,42 @@ VOICES_LOG_DIR = "voices"
 # the singer never sang.
 PHRASE_OCTAVE_OUTLIER = 9.0
 
+# A bank declaring "borrow_vibrato" gives each long syllable the original
+# singer's own vibrato from the same moment of the song. A converted clip's
+# vibrato is not hers, and stretched to a long note it slows with the clip:
+# measured on a ballad, her held notes shook at 5.6 Hz and 1.13 semitones,
+# the converted clips at 4.0 Hz and 0.67, and stretched 2-3x at 3.4-3.5 Hz and
+# 0.42-0.47, a lazy wobble where she sang a vibrato.
+#
+# The vibrato is her pitch contour minus its own moving average over
+# VIBRATO_SMOOTH_S: the shake, not the melody, which the shift already
+# follows. Only syllables sounding at least VIBRATO_MIN_S get it, and no
+# deviation larger than VIBRATO_MAX_ST is passed on, since a pitch-tracking
+# slip would otherwise arrive as a lurch.
+VIBRATO_SMOOTH_S = 0.25
+VIBRATO_MIN_S = 0.30
+VIBRATO_MAX_ST = 2.0
+
+# Rubber Band takes a borrowed vibrato in its real-time mode, fed in blocks of
+# this many samples with the pitch set before each one: about 12 ms at 44.1
+# kHz, fifteen steps across one cycle of a 5.6 Hz vibrato.
+VIBRATO_BLOCK = 512
+
 # A bank declaring "legato" holds each word's last syllable on into the next
 # word wherever the original singer did not rest between them. A gap shorter
 # than this, between the last note under one word and the first under the
 # next, is a breath inside a line, not a rest; the word sings through it.
 # Longer, the singer stopped, and so does the word.
-LEGATO_REST_S = 0.12
+LEGATO_REST_S = PHRASE_GAP_S
 
 # How far Rubber Band may stretch a held syllable to reach the next word.
 # WORLD holds by repeating a frame and needs no limit; Rubber Band has to
 # stretch. Measured on a bright, mostly voiced sung bank (log-mel distance
-# from the source): 1.66 dB at 2x, 1.73 at 2.5x, 1.81 at 3x, 1.82 at 4x, so a
-# hold stays clean well past TIME_STRETCH_RANGE, which bounds an ordinary
-# syllable's fit and not a vowel being held.
-HOLD_STRETCH_MAX = 4.0
+# from the source): 1.66 dB at 2x, 1.73 at 2.5x, 1.81 at 3x, 1.88 at 4x and
+# 2.18 at 6x, so a hold stays clean well past TIME_STRETCH_RANGE, which bounds
+# an ordinary syllable's fit and not a vowel being held. 6x covers the longest
+# holds a ballad's legato needed; at 4x a few lines still broke.
+HOLD_STRETCH_MAX = 6.0
 
 # --keep-original: how long the original vocal takes to fade in and out at the
 # edges of a kept range. Long enough not to click, short enough that a whistle

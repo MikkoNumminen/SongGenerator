@@ -162,6 +162,10 @@ class Placement:
     # None is the ordinary per-word folding.
     octave_offset: float | None = None
     phrase_line: float | None = None
+    # The original singer's vibrato around this placement, set by
+    # attach_vibrato for a bank declaring borrow_vibrato: (hop_s, semitones
+    # from onset_s on). build_segments hands each long syllable its stretch.
+    vibrato: tuple | None = None
 
     def raw_distance(self) -> float:
         """Furthest any of this unit's syllables would have to move, unfolded."""
@@ -1337,6 +1341,50 @@ def _phrase_shift(p: Placement, raw: float) -> float:
     return shift
 
 
+def vibrato_curve(f0_hz, voiced, hop_s: float) -> np.ndarray:
+    """The original singer's vibrato: her pitch minus its own moving average.
+
+    In semitones, zero where she was unvoiced, clipped to VIBRATO_MAX_ST. The
+    moving average is taken over her voiced frames with the gaps bridged, so a
+    breath does not drag the line down and leave a false shake either side.
+    """
+    hz = np.asarray(f0_hz, dtype=float)
+    on = np.asarray(voiced, dtype=bool) & (hz > 0)
+    if not on.any():
+        return np.zeros_like(hz)
+    midi = np.zeros_like(hz)
+    midi[on] = 69.0 + 12.0 * np.log2(hz[on] / 440.0)
+    idx = np.arange(hz.size)
+    bridged = np.interp(idx, idx[on], midi[on])
+    width = max(1, int(round(config.VIBRATO_SMOOTH_S / hop_s)))
+    line = np.convolve(bridged, np.ones(width) / width, mode="same")
+    shake = np.where(on, bridged - line, 0.0)
+    return np.clip(shake, -config.VIBRATO_MAX_ST, config.VIBRATO_MAX_ST)
+
+
+def attach_vibrato(placements: list[Placement], curve: np.ndarray,
+                   hop_s: float) -> None:
+    """Give each placement the stretch of the singer's vibrato it sings over."""
+    for p in placements:
+        a = max(0, int(p.onset_s / hop_s))
+        span = max(p.slot_span_s, p.hold_to_s or 0.0, p.unit.duration_s * 4)
+        b = min(curve.size, a + int(span / hop_s) + 2)
+        p.vibrato = (hop_s, curve[a:b])
+
+
+def _borrowed(p: Placement, out_start: float, out_dur: float,
+              hold_to: float | None, raw: bool) -> dict:
+    """The Segment fields carrying a long syllable's borrowed vibrato."""
+    if p.vibrato is None or raw:
+        return {}
+    sounding = max(out_dur, (hold_to - out_start) if hold_to else 0.0)
+    if sounding < config.VIBRATO_MIN_S:
+        return {}
+    hop, curve = p.vibrato
+    a = int(out_start / hop)
+    return {"vibrato": curve[a:a + int(sounding / hop) + 2], "vibrato_hop_s": hop}
+
+
 def fold_phrases(placements: list[Placement]) -> None:
     """One octave decision per phrase, for a bank declaring fold_by_phrase.
 
@@ -1469,6 +1517,7 @@ def build_segments(p: Placement) -> tuple[list, float]:
                 semitones=shift,
                 glide=not raw,
                 sustain_to_s=hold_to,
+                **_borrowed(p, slot.onset_s - origin, out_dur, hold_to, raw),
             ))
 
         total = (p.slots[-1].offset_s - origin) if p.slots else p.unit.duration_s

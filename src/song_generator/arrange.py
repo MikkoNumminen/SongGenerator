@@ -800,16 +800,18 @@ def shape_voice(plan, bank_dir) -> None:
 def join_legato(plan, bank_dir) -> None:
     """Hold each word into the next wherever the original did not rest.
 
-    Only inside a phrase, and only where the gap between the last note under
-    one placement and the first under the next is under LEGATO_REST_S. The
-    held syllable ends where the next word starts, so nothing overlaps.
+    Wherever the gap between the last note under one placement and the first
+    under the next is no longer than LEGATO_REST_S, whatever phrase numbers
+    they carry: group_phrases also cuts a long line at PHRASE_MAX_S where the
+    singer never paused, and a gap left there broke a line she sang through.
+    The held syllable ends where the next word starts, so nothing overlaps.
     """
     from . import banks
 
     if bank_dir is None or not banks.legato(bank_dir):
         return
     for a, b in zip(plan.placements, plan.placements[1:]):
-        if not (a.slots and b.slots) or a.phrase != b.phrase:
+        if not (a.slots and b.slots):
             continue
         rest = b.slots[0].onset_s - a.slots[-1].offset_s
         if rest <= config.LEGATO_REST_S and b.onset_s > a.onset_s:

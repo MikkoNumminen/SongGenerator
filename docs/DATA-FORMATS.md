@@ -164,13 +164,22 @@ since the pitch tracker reads a held note at half its frequency now and then.
 The shift cap does not apply to a bank declaring it.
 
 `legato` holds each word's last syllable on into the next word wherever the
-original singer did not rest between them (a gap under `LEGATO_REST_S`
-between the last note under one word and the first under the next), inside
-a phrase only. A sung bank whose clips are shorter than the original's long
+original singer did not rest between them: a gap no longer than
+`LEGATO_REST_S`, which is `PHRASE_GAP_S`, between the last note under one
+word and the first under the next. Whatever the phrase numbers say, since
+`group_phrases` also cuts a long line at `PHRASE_MAX_S` where nobody paused.
+Everything sung together in the original is sung together here. A sung bank whose clips are shorter than the original's long
 notes otherwise leaves a gap after every word, heard as many small words over
 a line sung as one. WORLD holds by repeating a voiced frame; Rubber Band
 stretches the syllable, up to `HOLD_STRETCH_MAX`. Refused with
 `never_split`, whose clips have no syllables to hold.
+
+`borrow_vibrato` gives every syllable sounding at least `VIBRATO_MIN_S` the
+original singer's own vibrato from the same moment: her pitch contour from
+`analysis.json` minus its moving average over `VIBRATO_SMOOTH_S`, so the shake
+and not the melody, clipped to `VIBRATO_MAX_ST`. Rubber Band takes it in its
+real-time mode, the pitch set every `VIBRATO_BLOCK` samples; WORLD adds it to
+its per-frame shift.
 
 `defaults` says how the bank's voice is rendered best, for whatever the
 command line leaves out: `swallow` (a positive number of words, as for

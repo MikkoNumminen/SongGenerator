@@ -718,6 +718,16 @@ seven semitones inside phrases from 6-8 to 4-5, against 9 in the original
 melody on the same slots, most of those the tracker's octave errors. Lowering
 the shift cap changed nothing there, because the shifts were already small.
 
+Long held words want the singer's own vibrato. On that ballad she shook at
+5.6 Hz and 1.13 semitones; the converted clips at 4.0 Hz and 0.67, and
+stretched two or three times to a long note at 3.4-3.5 Hz and 0.42-0.47, a
+lazy wobble. `borrow_vibrato` puts hers back: a test syllable stretched 2x
+came out at 5.6 Hz and 1.13 semitones through Rubber Band. Rubber Band also
+used to fade each syllable in and out over 5 ms and butt it against the next,
+so words jolted; syllables now run 40 ms into the next and crossfade
+(`RUBBERBAND_JOIN_S`), which took the level dip at a join from 2.7 to 1.7 dB
+and the spectral jolt from 1.4x a clip's median flux to none.
+
 How a bank should be placed is a property of its recordings, so it is
 declared beside them: a `bank.json` in the bank directory, read from
 whichever directory is actually being sung from. `docs/DATA-FORMATS.md`

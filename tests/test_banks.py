@@ -1296,15 +1296,15 @@ class TestLegato:
     def test_a_real_rest_is_kept(self, tmp_path):
         bank_dir = self._bank(tmp_path, legato=True)
         a = self._placement(0.0, [Slot(0.0, 0.5, 60, 0)])
-        b = self._placement(1.0, [Slot(1.0, 1.5, 60, 0)])
+        b = self._placement(1.0, [Slot(1.0, 1.5, 60, 0)])  # 0.5 s, over PHRASE_GAP_S
         plan = types.SimpleNamespace(placements=[a, b])
         arrange.join_legato(plan, bank_dir)
         assert a.hold_to_s is None
 
-    def test_never_across_a_phrase(self, tmp_path):
+    def test_never_across_a_real_pause(self, tmp_path):
         bank_dir = self._bank(tmp_path, legato=True)
         a = self._placement(0.0, [Slot(0.0, 0.5, 60, 0)], phrase=0)
-        b = self._placement(0.55, [Slot(0.55, 1.0, 60, 1)], phrase=1)
+        b = self._placement(1.5, [Slot(1.5, 2.0, 60, 1)], phrase=1)
         plan = types.SimpleNamespace(placements=[a, b])
         arrange.join_legato(plan, bank_dir)
         assert a.hold_to_s is None
@@ -1378,3 +1378,69 @@ class TestFoldByPhrase:
                                             encoding="utf-8")
         with pytest.raises(ValueError, match="fold_by_phrase"):
             banks.fold_by_phrase(tmp_path)
+
+
+class TestBorrowedVibrato:
+    """Long syllables take the original singer's own vibrato from the song."""
+
+    def test_the_curve_is_the_shake_without_the_melody(self):
+        hop = 0.01
+        t = np.arange(0, 3, hop)
+        hz = 440.0 * 2 ** ((5.0 * (t > 1.5) + 1.0 * np.sin(2 * np.pi * 5.6 * t)) / 12)
+        curve = mapping_mod.vibrato_curve(hz, [True] * len(t), hop)
+        middle = curve[20:130]
+        assert np.abs(middle).max() == pytest.approx(1.0, abs=0.25)
+        assert abs(middle.mean()) < 0.1
+
+    def test_unvoiced_frames_carry_no_shake_and_slips_are_clipped(self):
+        hop = 0.01
+        hz = np.full(300, 440.0)
+        hz[100] = 1760.0          # a tracking slip two octaves up
+        voiced = [True] * 300
+        voiced[200:250] = [False] * 50
+        curve = mapping_mod.vibrato_curve(hz, voiced, hop)
+        assert np.all(curve[200:250] == 0.0)
+        assert curve.max() <= config.VIBRATO_MAX_ST
+
+    def test_only_a_long_syllable_is_given_it(self):
+        unit = _unit(["tango"])
+        long_slots = [Slot(0.0, 0.5, 60, 0), Slot(0.5, 0.6, 60, 0)]
+        p = Placement(unit=unit, onset_s=0.0, slot_span_s=0.6, play_s=0.4,
+                      n_slots=2, phrase=0, slots=long_slots)
+        mapping_mod.attach_vibrato([p], np.ones(200), 0.01)
+        segments, _ = build_segments(p)
+        assert segments[0].vibrato is not None
+        assert segments[1].vibrato is None
+
+    @pytest.mark.parametrize("engine", ["world", "rubberband"])
+    def test_both_engines_render_it_at_the_asked_length(self, engine):
+        from song_generator.pitchshift import Segment, render_unit
+        unit = _unit(["tango", "bravo"])
+        mono = audio_io.to_mono(unit.audio)
+        d = unit.duration_s
+        shake = np.sin(2 * np.pi * 5.6 * np.arange(0, 4, 0.01))
+        y = render_unit(mono, config.SAMPLE_RATE,
+                        [Segment(0, d, 0, d * 2, 0.0, vibrato=shake)], d * 2, engine)
+        assert np.isfinite(y).all()
+        assert abs(len(y) - int(d * 2 * config.SAMPLE_RATE)) < config.SAMPLE_RATE * 0.05
+
+    def test_off_unless_declared(self, tmp_path):
+        assert banks.borrow_vibrato(None) is False
+        (tmp_path / "bank.json").write_text(json.dumps({"borrow_vibrato": 1}),
+                                            encoding="utf-8")
+        with pytest.raises(ValueError, match="borrow_vibrato"):
+            banks.borrow_vibrato(tmp_path)
+
+
+class TestLegatoAcrossACutLine:
+    def test_a_line_cut_at_the_phrase_length_cap_is_still_sung_through(self, tmp_path):
+        """group_phrases cuts a long line where the singer never paused; the
+        words either side must still be joined."""
+        (tmp_path / "bank.json").write_text(json.dumps({"legato": True}), encoding="utf-8")
+        unit = _unit(["tango"])
+        a = Placement(unit=unit, onset_s=0.0, slot_span_s=0.5, play_s=0.4, n_slots=1,
+                      phrase=0, slots=[Slot(0.0, 0.5, 60, 0)])
+        b = Placement(unit=unit, onset_s=0.6, slot_span_s=0.5, play_s=0.4, n_slots=1,
+                      phrase=1, slots=[Slot(0.6, 1.1, 60, 1)])
+        arrange.join_legato(types.SimpleNamespace(placements=[a, b]), tmp_path)
+        assert a.hold_to_s == pytest.approx(0.6)

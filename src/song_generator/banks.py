@@ -309,6 +309,11 @@ def _declared(bank_dir: Path) -> dict:
                 f"defaults.{key} in {path} must be one of"
                 f" {', '.join(allowed)}, got {value!r}.")
 
+    shake = settings.get("borrow_vibrato", False)
+    if not _a_boolean(shake):
+        raise ValueError(
+            f"borrow_vibrato in {path} must be true or false, got {shake!r}.")
+
     by_phrase = settings.get("fold_by_phrase", False)
     if not _a_boolean(by_phrase):
         raise ValueError(
@@ -395,6 +400,13 @@ def shift_cap(bank_dir: Path | None) -> float:
         return config.SHIFT_CAP_SEMITONES
     declared = _declared(bank_dir).get("shift_cap_semitones")
     return config.SHIFT_CAP_SEMITONES if declared is None else float(declared)
+
+
+def borrow_vibrato(bank_dir: Path | None) -> bool:
+    """True when long syllables take the original singer's own vibrato."""
+    if bank_dir is None:
+        return False
+    return bool(_declared(bank_dir).get("borrow_vibrato", False))
 
 
 def fold_by_phrase(bank_dir: Path | None) -> bool:
