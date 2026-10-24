@@ -13,10 +13,10 @@ from app.stages import Progress, Stage, final_stage, read
 # A cached-stems run, so separation is skipped. This is the common case: the
 # stems are cached after the first run of a song.
 CACHED_RUN = """\
-  song      ellinoora_-_nartut_lyric_video.mp4  (3:08)
+  song      artist_-_song_lyric_video.mp4  (3:08)
   device    cuda
   separator demucs
-  stems     cached -> work\\ellinoora_-_nartut_lyric_video
+  stems     cached -> work\\artist_-_song_lyric_video
 
   vocal presence
     stem loudness      -14.1 LUFS
@@ -29,29 +29,29 @@ CACHED_RUN = """\
     notes found       931 in 18 phrases
   bank      ppbank (words_hq4.std, standardised)
   play      conservative, seed 984547
-  words     work\\ellinoora\\arrangements\\984547-conservative.arr
-  wrote 14 versions to D:\\output\\ellinoora\\ppbank
+  words     work\\song\\arrangements\\984547-conservative.arr
+  wrote 14 versions to D:\\output\\song\\ppbank
 """.splitlines()
 
 # A first run of a song, where the separator does the work and reports it.
 FRESH_RUN = """\
-  song      takatalvi.mp3  (2:43)
+  song      other.mp3  (2:43)
   device    cuda
   separator roformer
   0%|          | 0/40 [00:00<?, ?it/s]
  32%|###2      | 13/40 [00:08<00:15,  1.69it/s]
 100%|##########| 40/40 [00:23<00:00,  1.67it/s]
-  stems     31.7s -> work\\mokoma_-_takatalvi
+  stems     31.7s -> work\\band_-_other
     verdict           MODE A -- vocals present
   bank      muslimbank (words_muslim.std, standardised)
   play      conservative, seed 157290
-  wrote 7 versions to D:\\output\\takatalvi\\muslimbank
+  wrote 7 versions to D:\\output\\other\\muslimbank
 """.splitlines()
 
 REFUSED_RUN = """\
-  song      music45.mp4  (0:30)
+  song      short.mp4  (0:30)
   separator roformer
-  stems     18.2s -> work\\music45
+  stems     18.2s -> work\\short
   vocal presence
     voiced frames        0.9 %      (needs >= 5.0, via torchcrepe)
     verdict           MODE B -- no vocals

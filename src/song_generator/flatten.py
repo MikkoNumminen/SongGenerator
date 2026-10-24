@@ -6,9 +6,9 @@ Mining writes one subfolder per source, which is fine for the machine and
 useless for a person: reviewing means opening fifty folders. This puts every
 clip in one place and tags the ones nobody has confirmed yet.
 
-    TODO_bravo__kirby2__c07__1.42-1.98.wav      a guess, unconfirmed
-    TODO_shout__muumit__c11__3.20-3.80.wav      a held shout, unidentified
-    TODO_4syl__uutiset__c03__0.50-1.10.wav      four syllables, no guess
+    TODO_bravo__src2__c07__1.42-1.98.wav      a guess, unconfirmed
+    TODO_shout__src3__c11__3.20-3.80.wav      a held shout, unidentified
+    TODO_4syl__src4__c03__0.50-1.10.wav      four syllables, no guess
     bravo1.wav                                  confirmed by you
 
 Removing the TODO_ prefix IS the act of confirming a clip. Nothing tagged can
@@ -138,7 +138,7 @@ def main(argv: list[str] | None = None) -> int:
 
     print("\n  Sort by name and the guesses group together. Rename a clip to")
     print(f"  confirm it -- dropping the {TODO} prefix is what makes it count:")
-    print(f"      {TODO}bravo__kirby2__c07__1.42-1.98.wav   ->   bravo1.wav")
+    print(f"      {TODO}bravo__src2__c07__1.42-1.98.wav   ->   bravo1.wav")
     print("  Anything still tagged is ignored by build_bank, so leaving a clip")
     print("  alone is always safe.")
     return 0

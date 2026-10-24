@@ -43,6 +43,38 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   takes any value and `--ladder` asks for the whole sweep. Both are things a
   person types on purpose. Anything new that starts a render inherits this
   rule; it is not a preference, and it has been stated twice.
+- **Never publish anything identifying.** No person's name, no voice or
+  persona name, no email address, no domain, hostname or resource id of the
+  deployment, and no title or artist of a song rendered here, nor any slug,
+  shorthand or source-video tag that stands for one, in any tracked file, ref
+  name, commit message or pull request. This is absolute. In examples and
+  measurements a song is "one song" or "song A", a file is `song.mp4`, an
+  address is on `example.com` or `.invalid`, and the deployment's addresses
+  come from the repository secrets that `.github/workflows/deploy.yml` reads,
+  or from `~/.config/songgenerator.env`.
+  Real environment files stay untracked; only `*.env.example` is committed.
+
+  `tests/test_privacy.py` fails on a tracked `.env` and on any email address
+  outside the reserved example domains, on any machine. The terms that cannot be
+  written into a published test live in `.local/private-terms.txt`
+  (gitignored); the same test reads it where it exists, and the pre-push hook in
+  `.local/hooks/` checks outgoing commit messages, file paths and added lines
+  against it, and refuses the push when it cannot. Both live only on the
+  owner's machine, so a fresh clone has neither: there, install the hook with
+  `cp .local/hooks/pre-push .git/hooks/pre-push` once `.local/` is restored. A
+  worktree shares the hook, and both the hook and the test read the list from
+  the main checkout when the worktree has none of its own. Terms are written in
+  the syntax Python and grep share: plain words, `\b`, `[...]`, `(a|b)`.
+
+  On the owner's machine a `.local/` without the list fails the test rather
+  than skipping it.
+
+  `.github/workflows/privacy.yml` runs the test on pull requests and on pushes
+  to main. There the list is absent and only the `.env` and address checks
+  run, which is still the part a stranger's change could break. The hook sees
+  only pushes from this machine, never a merge made on GitHub, so before
+  merging a pull request there, run `tests/test_privacy.py` locally on its
+  merge result.
 - **Never commit audio.** Not source material, not rendered output, not the
   word samples. All of it is excluded by `.gitignore` on extension, so it is
   refused wherever it lands. The repo is the tool, not the media.
@@ -231,7 +263,7 @@ words' 29%" does not.
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests\ -q
-.\.venv\Scripts\song-generator.exe input\musicHyva.mp4 --rows 0
+.\.venv\Scripts\song-generator.exe input\song.mp4 --rows 0
 ```
 
 The second is the real check: it prints how many units were placed, how much of

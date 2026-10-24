@@ -180,7 +180,7 @@ class TestFoldUnit:
 
     Judged alone, two syllables of the same word sitting either side of the cap
     are moved an octave apart from each other, and the word comes apart in the
-    middle rather than bending. Measured on ellinoora against the curated bank,
+    middle rather than bending. Measured on one song against the curated bank,
     that happened to 32 of 156 words with more than one pitched syllable.
     """
 

@@ -122,7 +122,10 @@ web/public/config.json
 # api/.env.example for the shape.
 .env
 *.env
+.env.*
+.envrc
 !*.env.example
+!.env.*.example
 
 # Wrangler's local state. Its account cache carries a Cloudflare account id and
 # the account holder's email, and this repository is public. Ignored rather

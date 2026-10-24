@@ -7,7 +7,7 @@ Runs entirely locally on one GPU. No cloud, no paid services, no vocal
 synthesis: the words are real recordings, and the tool only separates,
 analyses, re-pitches, re-times and mixes them.
 
-**Web player:** <https://mikkonumminen.dev/songgenerator>. Sign in with Google to
+**Web player:** published from `web/` by `.github/workflows/deploy.yml`. Sign in with Google to
 play what has already been rendered; the administrator account also grants and
 revokes access, from the Admin Panel. The rendering still happens on
 the local GPU, so the player answers only while that machine is on.
@@ -215,7 +215,7 @@ payoff rather than becoming the texture. In the example vocabulary that is
 ## Status
 
 All four build stages are done: separation and mode detection, melody and timing
-extraction, word mapping, and formant-corrected pitch shifting. 662 tests.
+extraction, word mapping, and formant-corrected pitch shifting. 669 tests.
 
 The HTTP edge and the Angular front end are built and carry their own suites.
 Neither is deployed: that needs a Google client id and somewhere to host static
