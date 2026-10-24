@@ -2,7 +2,7 @@
 
 The bank is not a set of words. It is fourteen recorded phrases, and most of
 them hold several words at once: tango+delta, bravo+tango+kilometer,
-eee+calculator. That is why the singer sounds like a person rather than a
+aah+calculator. That is why the singer sounds like a person rather than a
 sampler, and it is also why the automation could only ever repeat what was
 recorded. There is no clip of delta on its own, so "bravo delta" was not a
 sequence the tool could produce at all.

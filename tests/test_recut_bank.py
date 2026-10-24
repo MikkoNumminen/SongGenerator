@@ -315,7 +315,8 @@ class TestTheGuardRunsAgainAtWriteTime:
         real = audio_io.write_wav
 
         def write_and_plant(path, audio, *args, **kwargs):
-            if Path(path).name == ".tango_1.wav.part":
+            name = Path(path).name
+            if name.startswith(".tango_1.wav.") and name.endswith(".part"):
                 (out / "tango_1.wav").write_bytes(b"hand work, mid-write")
             return real(path, audio, *args, **kwargs)
 
@@ -326,6 +327,27 @@ class TestTheGuardRunsAgainAtWriteTime:
         assert code == 0
         assert (out / "tango_1.wav").read_bytes() == b"hand work, mid-write"
         assert not list(out.glob(".*.part")), "nothing is left half-written"
+        index = json.loads((out / "words.json").read_text(encoding="utf-8"))
+        assert "tango_1.wav" not in index
+
+    def test_without_hard_links_the_name_is_still_claimed_exclusively(
+            self, tmp_path, monkeypatch):
+        from song_generator import recut_bank
+        from song_generator.recut_bank import main
+
+        stem = self._sources(tmp_path, monkeypatch)
+        bank = self._bank(tmp_path, stem)
+        out = tmp_path / "fresh"
+
+        def no_links(src, dst):
+            raise OSError("this filesystem has no hard links")
+
+        monkeypatch.setattr(recut_bank.os, "link", no_links)
+        code = main(["--bank", str(bank), "--out", str(out)])
+
+        assert code == 0
+        assert (out / "bravo_1.wav").is_file() and (out / "tango_1.wav").is_file()
+        assert not list(out.glob(".*.part"))
 
     def test_overwrite_still_means_overwrite(self, tmp_path, monkeypatch):
         from song_generator.recut_bank import main

@@ -476,11 +476,11 @@ never see. Resolve it on a real vocal.
   with no picture at all do.
 
   The recording the default bank was cut from is not in that table and not in
-  the index. It is not a song
-  that was fetched from anywhere: it is the source the first word clips were
-  cut out of, so there is no address to find for it. That is a different answer
-  from one nobody has written down, and worth keeping distinct, because a gap
-  invites somebody to go looking for something that was never there.
+  the index. It is not a song that was fetched from anywhere: it is the source
+  the first word clips were cut out of, so there is no address to find for it.
+  That is a different answer from one nobody has written down, and worth keeping
+  distinct, because a gap invites somebody to go looking for something that was
+  never there.
 
   The index is `input/SOURCES.md`, one row per song, keyed on the slug the tool
   derives from the input filename. That slug names the `work/` directory

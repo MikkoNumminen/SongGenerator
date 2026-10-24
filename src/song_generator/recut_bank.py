@@ -30,7 +30,9 @@ import argparse
 import json
 import os
 import re
+import shutil
 import sys
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -157,6 +159,31 @@ def by_correlation(clip: np.ndarray, dirs: dict[str, Path],
             best_score, best = float(score[i]), Origin(d, start, start + dur, "correlation")
 
     return best if best_score > 0.6 else None
+
+
+def _place(part: Path, target: Path) -> bool:
+    """Put `part` at `target` only if nothing is there. False if something was.
+
+    A hard link claims the name and fills it in one step. Where the filesystem
+    has no hard links, the name is claimed by an exclusive create and the
+    audio copied into it, which still never opens anything that already
+    existed.
+    """
+    try:
+        os.link(part, target)
+        return True
+    except FileExistsError:
+        return False
+    except OSError:
+        pass
+    try:
+        claimed = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY
+                          | getattr(os, "O_BINARY", 0))
+    except FileExistsError:
+        return False
+    with os.fdopen(claimed, "wb") as out, open(part, "rb") as src:
+        shutil.copyfileobj(src, out)
+    return True
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -288,18 +315,21 @@ def main(argv: list[str] | None = None) -> int:
         # check before the write would still leave the time it takes to cut
         # the clip, so the clip is written aside and linked into place, which
         # fails if anything got there first.
+        #
+        # The part file is this run's own, so two runs into one --out cannot
+        # rewrite each other's, and through a hard link a clip already placed.
         target = args.out / name
-        part = args.out / f".{name}.part"
-        audio_io.write_wav(part, clip)
+        handle, held = tempfile.mkstemp(prefix=f".{name}.", suffix=".part",
+                                        dir=args.out)
+        os.close(handle)
+        part = Path(held)
         try:
+            audio_io.write_wav(part, clip)
             if args.overwrite:
                 os.replace(part, target)
-            else:
-                try:
-                    os.link(part, target)
-                except FileExistsError:
-                    protected.append(name)
-                    continue
+            elif not _place(part, target):
+                protected.append(name)
+                continue
             rebuilt += 1
         finally:
             part.unlink(missing_ok=True)
@@ -312,9 +342,15 @@ def main(argv: list[str] | None = None) -> int:
     kept = {k: v for k, v in entries.items() if k in found and k not in excluded}
     # Exclusive unless --overwrite: an index that appeared while this ran is
     # hand work as much as a clip is.
-    with open(args.out / "words.json", "w" if args.overwrite else "x",
-              encoding="utf-8") as index:
-        index.write(json.dumps(kept, indent=2, ensure_ascii=False))
+    try:
+        with open(args.out / "words.json", "w" if args.overwrite else "x",
+                  encoding="utf-8") as index:
+            index.write(json.dumps(kept, indent=2, ensure_ascii=False))
+    except FileExistsError:
+        print(f"\nerror: a words.json appeared in {args.out} while this ran, and "
+              f"was left alone.\n       {rebuilt} clips were re-cut into it; "
+              "the index for them was not written.", file=sys.stderr)
+        return 1
 
     if excluded:
         print(f"\n  {len(excluded)} clips were not re-cut, and their entries "

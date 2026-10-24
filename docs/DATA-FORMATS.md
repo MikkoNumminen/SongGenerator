@@ -284,7 +284,7 @@ never overwritten, so an older arrangement stays reproducible.
 ```
 # SongGenerator arrangement
 #   song    some_song
-#   bank    words_example.std
+#   bank    words.std
 #   level   wild
 #   seed    543686
 #
@@ -298,7 +298,7 @@ never overwritten, so an older arrangement stays reproducible.
 phrase 1
    0:02.57  x8  =2.37  delta bravo kilometer    [delta-bravo-kilometer_1.wav]
    0:04.94  x6  =1.96  tango delta tango        [tango-delta-tango_1.wav]
-   0:07.26  x1  =0.35  eee                      [eee_then__src3__50.76.wav]
+   0:07.26  x1  =0.35  aah                      [aah_1.wav]
 ```
 
 `phrase N` counts the phrases the mapper sings to, which are the detector's
@@ -360,7 +360,7 @@ How each derivative was made, and what it was made from. Written by
   "format": 1,
   "params_sha256": "9f2c...",     // every threshold and target, as one hash
   "shout_mode": "offset",
-  "source_dir": "words_example",
+  "source_dir": "words",
   "clips": {
     "aah-calculator_1.wav": {
       "source_sha256": "4a81...", // of the recorded clip's bytes
@@ -394,7 +394,7 @@ Exits non-zero unless everything matches, so it can gate a build.
 
 The tier alongside it is an ordinary bank: `words.json` in the same directory,
 with `duration_s` and `syllable_bounds_s` rewritten to match the trimmed audio.
-`--words-dir words_example.std` reads it like any other.
+`--words-dir words.std` reads it like any other.
 
 ---
 

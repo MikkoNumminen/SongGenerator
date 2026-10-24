@@ -406,7 +406,7 @@ MATCH_PREFIX_MIN_LEN = 4
 # Used by `python -m song_generator.standardize`, not by the main pipeline.
 
 # Suffix appended to a bank directory to name its standardised tier, so
-# words_example becomes words_example.std. A sibling rather than a
+# words becomes words.std. A sibling rather than a
 # subdirectory, because the result is a complete bank in its own right:
 # --words-dir points at it and every existing tool reads it with no special
 # case.
@@ -1160,45 +1160,61 @@ OUTPUT_PEAK_CEILING_DB = -1.0
 #     CLIMAX_WORDS = ("barbaz",)
 #     SHOUT_CHARS = "oh"
 #     BANKS = {"mine": "words_mine", "spare": "words_spare"}
-#     DEFAULT_BANK = "mine"   # left out, the first bank in BANKS is the default
+#     DEFAULT_BANK = "mine"   # left out, the first bank in BANKS is the default;
+#                             # naming one BANKS lacks is an error
 # SONG_GENERATOR_NO_LOCAL_VOCAB disables the override. The test suite sets it,
 # so tests exercise the shipped example vocabulary and pass or fail the same way
 # on every machine, rather than depending on whichever words happen to be
 # installed locally.
 import os as _os
 
+# What the override set, so an inherited setting can be told from one it chose.
+_local: dict = {}
 if not _os.environ.get("SONG_GENERATOR_NO_LOCAL_VOCAB"):
-    try:  # pragma: no cover - presence depends on the machine, not the code
-        from .vocabulary_local import *
+    try:
+        # import_module, not `from . import`: a missing submodule reaches
+        # `from . import` as a bare ImportError without the module's name.
+        import importlib as _importlib
+        _vocabulary_local = _importlib.import_module(f"{__package__}.vocabulary_local")
     except ModuleNotFoundError as _missing:
         # Only the file itself being absent is ordinary. Anything that fails
         # inside it is a broken override, and swallowing that would quietly
         # drop every bank it registers and sing with the placeholders.
         if _missing.name != f"{__package__}.vocabulary_local":
             raise
+    else:
+        _local = {k: v for k, v in vars(_vocabulary_local).items()
+                  if not k.startswith("_")}
+        globals().update(_local)
 
 
-def default_first(banks: dict[str, str],
-                  default: str) -> tuple[dict[str, str], str]:
+def resolve_banks(banks: dict[str, str], default: str,
+                  local: dict) -> tuple[dict[str, str], str]:
     """The bank table with its default resolved and listed first.
 
-    A local override that registers banks and names no default, or names one
-    it does not register, would otherwise leave the shipped placeholder as the
-    default: argparse never checks a default against its choices, so every run
-    without --bank died on a KeyError. Such an override takes its first bank.
+    `local` is what the override set. One that registers banks and names no
+    default would otherwise keep the shipped placeholder as the default:
+    argparse never checks a default against its choices, so every run without
+    --bank died on a KeyError. Such an override takes its first bank. A default
+    that is named and not registered, or a table with no bank at all, is an
+    error said at once, rather than the wrong voice singing.
 
     The default goes first because the edge's bank picker lists the table in
     order and puts the default at the top.
     """
     if not banks:
-        return banks, default
-    if default not in banks:
+        raise ValueError("BANKS registers no bank; name at least one in "
+                         "vocabulary_local.py")
+    if "BANKS" in local and "DEFAULT_BANK" not in local:
         default = next(iter(banks))
+    if default not in banks:
+        raise ValueError(f"DEFAULT_BANK {default!r} is not a bank BANKS "
+                         f"registers: {', '.join(banks)}")
     rest = {k: v for k, v in banks.items() if k != default}
     return {default: banks[default], **rest}, default
 
 
-BANKS, DEFAULT_BANK = default_first(BANKS, DEFAULT_BANK)
+BANKS, DEFAULT_BANK = resolve_banks(BANKS, DEFAULT_BANK, _local)
 
 
 def validate_vocabulary() -> list[str]:

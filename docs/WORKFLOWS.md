@@ -195,11 +195,11 @@ the recipe below measured as wrong; see "When it does not sound like the
 voice" below before assuming a converted bank is fine because the numbers
 are.
 
-1. Start from the bank's **source** clips, the hand-named recordings a bank
-   was built from (its `words_<bank>` source directory), not the built bank
-   itself: `build_bank` parses word identity out of the source filenames, so
-   converting the source and re-running `build_bank` on the result keeps every
-   name.
+1. Start from the bank's **source** clips, the hand-named recordings a bank was
+   built from (the directory once given to `build_bank --candidates`, such as
+   `words_<voice>_src/fi/roots` below), not the built bank itself: `build_bank`
+   parses word identity out of the source filenames, so converting the source
+   and re-running `build_bank` on the result keeps every name.
 2. Convert each source clip toward a reference recording of the target voice
    with a sibling project's voice-conversion model, run in a venv that has
    it installed. Load the pretrained model onto the GPU, generate from the
