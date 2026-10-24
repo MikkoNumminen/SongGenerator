@@ -103,10 +103,10 @@ never see. Resolve it on a real vocal.
 
 - **One bank was built from candidates nobody has listened to.**
 
-  141 candidates were mined into a `words_<song>_src/` directory and built straight into a
-  bank of 137 units, unheard and unnamed, junk included. Four did not make it,
-  and nobody has looked at which four or why. Deleting the bad ones and
-  rebuilding is what turns it into a bank rather than a pile.
+  141 candidates were mined into a `words_<song>_src/` directory and built
+  straight into a bank of 137 units, unheard and unnamed, junk included. Four
+  did not make it, and nobody has looked at which four or why. Deleting the bad
+  ones and rebuilding is what turns it into a bank rather than a pile.
 
   It declares no `bank.json`, and that part is deliberate rather than missing:
   it is cut from a sung song, not from generated speech, so it takes the
@@ -179,10 +179,10 @@ never see. Resolve it on a real vocal.
 
 - **Old and new render names sit side by side, and they are not duplicates.**
 
-  `output/<song>/ttsfi/` for one song holds four files: two `.mim1p00` from before
-  the naming rule and two untagged from after. They are four different renders,
-  a day apart, with four different audio checksums, and `previous/` holds a
-  third generation again.
+  For one song, `output/<song>/ttsfi/` holds four files: two `.mim1p00` from
+  before the naming rule and two untagged from after. They are four different
+  renders, a day apart, with four different audio checksums, and `previous/`
+  holds a third generation again.
 
   So there is no safe sweep for `*.mim1p00.mp3` beside an untagged twin, and
   the earlier version of this note suggested one. It would delete real takes.
