@@ -701,6 +701,14 @@ WORLD's spectral damage (1.5 against 3.9 dB at a 1.6x stretch, 1.8 against
 3.8 dB for a two-semitone shift and back), the reverse of the breathy
 generated voices in "Tune a bank of generated voices" below.
 
+For a ballad sung in long legato lines, declare `legato` as well, and lean the
+level towards whole recorded words (`slice_cost` and `spelled_cost` up, the
+shout's cost up, `crown_cost` down). On one ballad that took a converted copy
+of the singer's own voice from 64-71 words with 14-16 cut short to 40-43
+words with 4-5 cut short, and left exactly as many rests inside phrases as the
+original had (two over 0.15 s). Rubber Band holds such a vowel cleanly far
+past the ordinary fitting range: 1.66 dB from the source at 2x, 1.82 at 4x.
+
 How a bank should be placed is a property of its recordings, so it is
 declared beside them: a `bank.json` in the bank directory, read from
 whichever directory is actually being sung from. `docs/DATA-FORMATS.md`

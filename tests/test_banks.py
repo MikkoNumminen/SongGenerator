@@ -1269,3 +1269,62 @@ class TestRenderDefaults:
     def test_a_default_that_cannot_work_is_refused(self, tmp_path, defaults):
         with pytest.raises(ValueError, match="default"):
             banks.render_defaults(self._bank(tmp_path, **defaults))
+
+
+class TestLegato:
+    """A word held into the next wherever the original did not rest."""
+
+    def _bank(self, tmp_path, **declared):
+        (tmp_path / "bank.json").write_text(json.dumps(declared), encoding="utf-8")
+        return tmp_path
+
+    def _placement(self, onset, slots, phrase=0):
+        unit = _unit(["tango"])
+        return Placement(unit=unit, onset_s=onset, slot_span_s=slots[-1].offset_s - onset,
+                         play_s=0.4, n_slots=len(slots), phrase=phrase, slots=slots)
+
+    def test_a_word_holds_into_the_next_when_the_singer_did_not_rest(self, tmp_path):
+        bank_dir = self._bank(tmp_path, legato=True)
+        a = self._placement(0.0, [Slot(0.0, 0.5, 60, 0), Slot(0.5, 1.0, 60, 0)])
+        b = self._placement(1.05, [Slot(1.05, 1.5, 60, 0)])
+        plan = types.SimpleNamespace(placements=[a, b])
+        arrange.join_legato(plan, bank_dir)
+        assert a.hold_to_s == pytest.approx(1.05)
+        assert b.hold_to_s is None
+
+    def test_a_real_rest_is_kept(self, tmp_path):
+        bank_dir = self._bank(tmp_path, legato=True)
+        a = self._placement(0.0, [Slot(0.0, 0.5, 60, 0)])
+        b = self._placement(1.0, [Slot(1.0, 1.5, 60, 0)])
+        plan = types.SimpleNamespace(placements=[a, b])
+        arrange.join_legato(plan, bank_dir)
+        assert a.hold_to_s is None
+
+    def test_never_across_a_phrase(self, tmp_path):
+        bank_dir = self._bank(tmp_path, legato=True)
+        a = self._placement(0.0, [Slot(0.0, 0.5, 60, 0)], phrase=0)
+        b = self._placement(0.55, [Slot(0.55, 1.0, 60, 1)], phrase=1)
+        plan = types.SimpleNamespace(placements=[a, b])
+        arrange.join_legato(plan, bank_dir)
+        assert a.hold_to_s is None
+
+    def test_off_unless_declared(self, tmp_path):
+        a = self._placement(0.0, [Slot(0.0, 0.5, 60, 0)])
+        b = self._placement(0.52, [Slot(0.52, 1.0, 60, 0)])
+        plan = types.SimpleNamespace(placements=[a, b])
+        arrange.join_legato(plan, self._bank(tmp_path))
+        assert a.hold_to_s is None
+
+    def test_the_held_syllable_reaches_the_next_word(self):
+        a = self._placement(0.0, [Slot(0.0, 0.2, 60, 0), Slot(0.2, 0.4, 60, 0)])
+        a.unit = _unit(["tango"])
+        a.hold_to_s = 0.9
+        segments, total = build_segments(a)
+        assert segments[-1].sustain_to_s == pytest.approx(0.9)
+        assert total == pytest.approx(0.9)
+
+    @pytest.mark.parametrize("declared", [
+        {"legato": "true"}, {"legato": True, "never_split": True}])
+    def test_a_declaration_that_cannot_work_is_refused(self, tmp_path, declared):
+        with pytest.raises(ValueError, match="legato"):
+            banks.legato(self._bank(tmp_path, **declared))

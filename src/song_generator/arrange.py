@@ -763,6 +763,7 @@ def build(slots, units: list[Unit], level: str, seed: int,
         covered = wanted <= judged.words_used()
         paired = judged.has_pairing() or not possible
         if covered and paired:
+            join_legato(plan, bank_dir)
             return _stamp_cap(plan, bank_dir, cap), arrangement, attempt + 1
         if best is None or scored(judged) > best[0]:
             best = (scored(judged), plan, arrangement, attempt + 1)
@@ -770,6 +771,7 @@ def build(slots, units: list[Unit], level: str, seed: int,
     # tries is clamped to at least one, so the loop ran and recorded a best.
     assert best is not None
     _, plan, arrangement, draws = best
+    join_legato(plan, bank_dir)
     return _stamp_cap(plan, bank_dir, cap), arrangement, draws
 
 
@@ -782,6 +784,25 @@ def unreachable_words(units: list[Unit]) -> list[str]:
     """
     sayable = {w for u in units for w in u.words}
     return sorted(set(required_words()) - sayable)
+
+
+def join_legato(plan, bank_dir) -> None:
+    """Hold each word into the next wherever the original did not rest.
+
+    Only inside a phrase, and only where the gap between the last note under
+    one placement and the first under the next is under LEGATO_REST_S. The
+    held syllable ends where the next word starts, so nothing overlaps.
+    """
+    from . import banks
+
+    if bank_dir is None or not banks.legato(bank_dir):
+        return
+    for a, b in zip(plan.placements, plan.placements[1:]):
+        if not (a.slots and b.slots) or a.phrase != b.phrase:
+            continue
+        rest = b.slots[0].onset_s - a.slots[-1].offset_s
+        if rest <= config.LEGATO_REST_S and b.onset_s > a.onset_s:
+            a.hold_to_s = b.onset_s - a.onset_s
 
 
 def _stamp_cap(plan, bank_dir, cap=None):
@@ -984,6 +1005,7 @@ def realise(arrangement: Arrangement, slots, units: list[Unit],
         for placement in plan.placements:
             if placement.target_s is None:
                 placement.target_s = placement.play_s
+    join_legato(plan, bank_dir)
     return _stamp_cap(plan, bank_dir)
 
 

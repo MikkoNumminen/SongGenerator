@@ -1050,6 +1050,21 @@ TURN_MIN_S = 4.0
 VOICES_LOG_DIR = "voices"
 
 
+# A bank declaring "legato" holds each word's last syllable on into the next
+# word wherever the original singer did not rest between them. A gap shorter
+# than this, between the last note under one word and the first under the
+# next, is a breath inside a line, not a rest; the word sings through it.
+# Longer, the singer stopped, and so does the word.
+LEGATO_REST_S = 0.12
+
+# How far Rubber Band may stretch a held syllable to reach the next word.
+# WORLD holds by repeating a frame and needs no limit; Rubber Band has to
+# stretch. Measured on a bright, mostly voiced sung bank (log-mel distance
+# from the source): 1.66 dB at 2x, 1.73 at 2.5x, 1.81 at 3x, 1.82 at 4x, so a
+# hold stays clean well past TIME_STRETCH_RANGE, which bounds an ordinary
+# syllable's fit and not a vowel being held.
+HOLD_STRETCH_MAX = 4.0
+
 # --keep-original: how long the original vocal takes to fade in and out at the
 # edges of a kept range. Long enough not to click, short enough that a whistle
 # starting on the beat still starts on it. Inside the range, never outside it.

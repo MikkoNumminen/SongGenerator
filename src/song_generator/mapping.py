@@ -153,6 +153,10 @@ class Placement:
     # the clip came from: a spoken voice tears at a distance a sung one
     # survives, and a batch renders several banks in one process.
     shift_cap: float | None = None
+    # Seconds after onset that the last syllable holds until, when the bank
+    # sings legato and the original did not rest before the next word. None
+    # is the ordinary ending: the last syllable stops on its own note.
+    hold_to_s: float | None = None
 
     def raw_distance(self) -> float:
         """Furthest any of this unit's syllables would have to move, unfolded."""
@@ -1407,6 +1411,10 @@ def build_segments(p: Placement) -> tuple[list, float]:
             hold_to = None
             if config.WORDS_SING_THROUGH and not raw and i + 1 < len(pieces):
                 hold_to = pieces[i + 1][2].onset_s - origin
+            elif (not raw and i + 1 == len(pieces) and p.hold_to_s is not None
+                    and p.hold_to_s > slot.offset_s - origin):
+                # Legato: the word's last vowel runs on into the next word.
+                hold_to = p.hold_to_s
 
             segments.append(Segment(
                 src_start_s=src_a,
@@ -1419,6 +1427,8 @@ def build_segments(p: Placement) -> tuple[list, float]:
             ))
 
         total = (p.slots[-1].offset_s - origin) if p.slots else p.unit.duration_s
+        if p.hold_to_s is not None and segments:
+            total = max(total, p.hold_to_s)
         p.shifts = shifts
         return segments, max(total, 1e-3)
 

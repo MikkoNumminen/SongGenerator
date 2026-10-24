@@ -359,6 +359,13 @@ def render_segments_rubberband(mono: np.ndarray, sr: int, segments: list[Segment
             continue
 
         stretch = clamp_stretch(seg.out_dur_s, seg.src_dur_s)
+        if seg.sustain_to_s is not None and seg.src_dur_s > 0:
+            # Rubber Band cannot repeat a frame the way WORLD holds a vowel,
+            # so it reaches the next syllable by stretching, up to
+            # HOLD_STRETCH_MAX, which measured clean far past the ordinary
+            # fitting range.
+            wanted = (seg.sustain_to_s - seg.out_start_s) / seg.src_dur_s
+            stretch = max(stretch, min(wanted, config.HOLD_STRETCH_MAX))
         stretcher = pylibrb.RubberBandStretcher(
             sample_rate=sr, channels=1,
             options=options,

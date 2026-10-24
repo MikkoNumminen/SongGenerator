@@ -154,6 +154,15 @@ has, whichever strategy places the clips. `mix.word_bus_lufs` lets the
 bank's words sit at their own level against the bed, in LUFS; a speaking
 voice needs more than a shouted one to be heard over a band.
 
+`legato` holds each word's last syllable on into the next word wherever the
+original singer did not rest between them (a gap under `LEGATO_REST_S`
+between the last note under one word and the first under the next), inside
+a phrase only. A sung bank whose clips are shorter than the original's long
+notes otherwise leaves a gap after every word, heard as many small words over
+a line sung as one. WORLD holds by repeating a voiced frame; Rubber Band
+stretches the syllable, up to `HOLD_STRETCH_MAX`. Refused with
+`never_split`, whose clips have no syllables to hold.
+
 `defaults` says how the bank's voice is rendered best, for whatever the
 command line leaves out: `swallow` (a positive number of words, as for
 `--swallow`), `engine` (`world` or `rubberband`) and `separator` (`demucs`

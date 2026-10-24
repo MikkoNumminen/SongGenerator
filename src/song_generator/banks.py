@@ -309,6 +309,15 @@ def _declared(bank_dir: Path) -> dict:
                 f"defaults.{key} in {path} must be one of"
                 f" {', '.join(allowed)}, got {value!r}.")
 
+    legato = settings.get("legato", False)
+    if not _a_boolean(legato):
+        raise ValueError(f"legato in {path} must be true or false, got {legato!r}.")
+    if legato and settings.get("never_split", False):
+        raise ValueError(
+            f"legato in {path} cannot be combined with never_split.\n"
+            "    legato holds a word's last syllable into the next word, and a"
+            " never_split clip has no syllables to hold; it is fitted whole.")
+
     keep_whole = settings.get("never_split", False)
     if not _a_boolean(keep_whole):
         raise ValueError(
@@ -381,6 +390,17 @@ def shift_cap(bank_dir: Path | None) -> float:
         return config.SHIFT_CAP_SEMITONES
     declared = _declared(bank_dir).get("shift_cap_semitones")
     return config.SHIFT_CAP_SEMITONES if declared is None else float(declared)
+
+
+def legato(bank_dir: Path | None) -> bool:
+    """True when each word holds into the next wherever the singer did not
+    rest. A sung bank with clips shorter than the original's long notes
+    otherwise leaves a gap after every word, heard as many small words over
+    a line the singer sang as one.
+    """
+    if bank_dir is None:
+        return False
+    return bool(_declared(bank_dir).get("legato", False))
 
 
 def never_split(bank_dir: Path | None) -> bool:
