@@ -62,7 +62,7 @@ variables:
   # the pipeline UI overrides one set here, so reusing the name would leave the
   # stale UI value winning silently.
   - name: apiBaseUrl
-    value: https://mikkonumminen.dev/api/songgen
+    value: https://<site domain>/api/songgen
 
 steps:
   - task: NodeTool@0
@@ -85,7 +85,7 @@ steps:
   # here would 404 every script after the page loaded.
   #
   # It carried `--base-href /songGenerator/` for a while, for a proxy that was
-  # going to serve the app under a subpath. It does not: mikkonumminen.dev
+  # going to serve the app under a subpath. It does not: the site's domain
   # redirects `/songgenerator` here rather than proxying it, so the browser
   # ends up on this hostname and the root is correct. A prefix would have
   # pointed every asset at a path nothing serves.

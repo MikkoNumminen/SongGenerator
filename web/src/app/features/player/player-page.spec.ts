@@ -17,9 +17,9 @@ function track(song: string, bank: string, level: string): TrackReply {
 }
 
 const TRACKS: TrackReply[] = [
-  track('musicHyva', 'nbank', 'conservative'),
-  track('musicHyva', 'nbank', 'wild'),
-  track('ukkometso', 'ppbank', 'conservative'),
+  track('eveningSong', 'nbank', 'conservative'),
+  track('eveningSong', 'nbank', 'wild'),
+  track('tuulimylly', 'ppbank', 'conservative'),
 ];
 
 class FakeLibrary implements Library {
@@ -155,13 +155,13 @@ describe('the player', () => {
     fixture.componentInstance.level.set('wild');
 
     expect(fixture.componentInstance.matching().map((t) => t.name)).toEqual([
-      'musicHyva.wild.mp3',
+      'eveningSong.wild.mp3',
     ]);
 
     fixture.componentInstance.shuffle();
     await fixture.whenStable();
 
-    expect(library.asked).toEqual(['musicHyva/nbank/musicHyva.wild.mp3']);
+    expect(library.asked).toEqual(['eveningSong/nbank/eveningSong.wild.mp3']);
   });
 
   it('shuffle plays on to the next when one finishes', async () => {
@@ -219,16 +219,16 @@ describe('the player', () => {
   });
 
   it('groups the takes under their song', async () => {
-    // Newest first by default, which is why ukkometso leads: its takes were
-    // made after musicHyva's. Order is asserted by the tests below.
+    // Newest first by default, which is why tuulimylly leads: its takes were
+    // made after eveningSong's. Order is asserted by the tests below.
     const fixture = await render(library);
 
     const songs = fixture.componentInstance.songs();
     expect(new Set(songs.map((s) => s.song)))
-      .toEqual(new Set(['musicHyva', 'ukkometso']));
+      .toEqual(new Set(['eveningSong', 'tuulimylly']));
     // Named rather than taken by position, because the list is ordered now
     // and position is what the order tests are for.
-    const hyva = songs.find((s) => s.song === 'musicHyva')!;
+    const hyva = songs.find((s) => s.song === 'eveningSong')!;
     expect(hyva.takes.length).toBe(2);
   });
 
@@ -247,17 +247,17 @@ describe('the player', () => {
     fixture.detectChanges();
 
     expect(fixture.componentInstance.songs().map((s) => s.title))
-      .toEqual(['Music Hyva', 'Ukkometso']);
+      .toEqual(['Evening Song', 'Tuulimylly']);
   });
 
   it('puts a and o with umlauts after z, where Finnish keeps them', async () => {
-    // The default collation sorts Ahtari-with-an-umlaut under A, which is
+    // The default collation sorts a name starting with an umlaut under A, which is
     // where a Finnish reader would never look for it. Half these songs are
     // Finnish, so the locale is named rather than left to the browser.
     const finnish = new FakeLibrary([
-      track('ähtäri', 'nbank', 'wild'),
-      track('baarikärpänen', 'nbank', 'wild'),
-      track('ukkometso', 'nbank', 'wild'),
+      track('äänimaisema', 'nbank', 'wild'),
+      track('kaarnalaiva', 'nbank', 'wild'),
+      track('tuulimylly', 'nbank', 'wild'),
     ]);
     const fixture = await render(finnish);
 
@@ -265,7 +265,7 @@ describe('the player', () => {
     fixture.detectChanges();
 
     expect(fixture.componentInstance.songs().map((s) => s.song))
-      .toEqual(['baarikärpänen', 'ukkometso', 'ähtäri']);
+      .toEqual(['kaarnalaiva', 'tuulimylly', 'äänimaisema']);
   });
 
   it('takes a song to be as new as its newest take', async () => {
@@ -305,9 +305,9 @@ describe('the player', () => {
 
     const songs = fixture.componentInstance.songs();
     expect(new Set(songs.map((s) => s.title)))
-      .toEqual(new Set(['Music Hyva', 'Ukkometso']));
+      .toEqual(new Set(['Evening Song', 'Tuulimylly']));
     expect(new Set(songs.map((s) => s.song)))
-      .toEqual(new Set(['musicHyva', 'ukkometso']));
+      .toEqual(new Set(['eveningSong', 'tuulimylly']));
   });
 
   it('says on the button how much it would play', async () => {
@@ -373,7 +373,7 @@ describe('the player', () => {
     fixture.componentInstance.play(TRACKS[0]!);
     await fixture.whenStable();
 
-    expect(library.asked).toEqual(['musicHyva/nbank/musicHyva.conservative.mp3']);
+    expect(library.asked).toEqual(['eveningSong/nbank/eveningSong.conservative.mp3']);
     expect(fixture.componentInstance.source()).toBe('blob:fake/1');
   });
 

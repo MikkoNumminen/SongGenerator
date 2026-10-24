@@ -1,7 +1,7 @@
 """Everything you need to diagnose or tune, in one command.
 
     python -m song_generator.doctor
-    python -m song_generator.doctor --song input/musicHyva.mp4
+    python -m song_generator.doctor --song input/song.mp4
 
 Written because the alternative was worse. Diagnosing a bad-sounding render
 meant a dozen separate commands and a throwaway script each time -- what is in

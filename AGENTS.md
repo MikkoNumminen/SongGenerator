@@ -43,6 +43,21 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   takes any value and `--ladder` asks for the whole sweep. Both are things a
   person types on purpose. Anything new that starts a render inherits this
   rule; it is not a preference, and it has been stated twice.
+- **Never publish anything identifying.** No person's name, no email address,
+  no domain or hostname of the deployment, and no title or artist of a song
+  rendered here, in any tracked file, commit message or pull request. This is
+  absolute. In examples and measurements a song is "one song" or "song A", a
+  file is `song.mp4`, an address is on `example.com` or `.invalid`, and the
+  deployment's addresses come from the repository variables that
+  `.github/workflows/deploy.yml` reads, or from `~/.config/songgenerator.env`. Real environment files
+  stay untracked; only `*.env.example` is committed.
+
+  `tests/test_privacy.py` fails on a tracked `.env` and on any email address
+  outside the reserved example domains, everywhere. The terms that cannot be
+  written into a published test live in `.local/private-terms.txt`
+  (gitignored); the same test reads it where it exists, and the pre-push hook in
+  `.local/hooks/` checks outgoing commit messages and added lines against it.
+  Copy that hook to `.git/hooks/pre-push` in every clone; worktrees share it.
 - **Never commit audio.** Not source material, not rendered output, not the
   word samples. All of it is excluded by `.gitignore` on extension, so it is
   refused wherever it lands. The repo is the tool, not the media.
@@ -231,7 +246,7 @@ words' 29%" does not.
 
 ```powershell
 .\.venv\Scripts\python.exe -m pytest tests\ -q
-.\.venv\Scripts\song-generator.exe input\musicHyva.mp4 --rows 0
+.\.venv\Scripts\song-generator.exe input\song.mp4 --rows 0
 ```
 
 The second is the real check: it prints how many units were placed, how much of

@@ -175,7 +175,7 @@ never overwritten, so an older arrangement stays reproducible.
 
 ```
 # SongGenerator arrangement
-#   song    rocketman_bluegrass
+#   song    some_song
 #   bank    words_hq3.std
 #   level   wild
 #   seed    543686

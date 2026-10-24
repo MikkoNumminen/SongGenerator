@@ -69,7 +69,10 @@ jobs:
       # different one, and this is then the thing to change: the upload would
       # go on succeeding while the check at the end reported the site serving
       # something else forever.
-      SITE_URL: https://green-bay-0f4fe1d03.7.azurestaticapps.net
+      #
+      # Held in the repository variable SITE_URL rather than here, so the
+      # repository does not publish the address.
+      SITE_URL: ${{ vars.SITE_URL }}
 
     steps:
       - uses: actions/checkout@v4
@@ -121,7 +124,8 @@ jobs:
       - name: Write the runtime config
         if: github.event_name != 'pull_request'
         env:
-          API_BASE_URL: https://mikkonumminen.dev/api/songgen
+          # The repository variable API_BASE_URL, for the same reason as SITE_URL.
+          API_BASE_URL: ${{ vars.API_BASE_URL }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
         run: |
           cat > dist/songgen-web/browser/config.json <<JSON

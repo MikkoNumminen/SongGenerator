@@ -458,7 +458,7 @@ banks, mel-spectral distance from the source at a five semitone shift:
 
 ```powershell
 .\.venv\Scripts\python.exe -m song_generator.doctor
-.\.venv\Scripts\python.exe -m song_generator.doctor --song input\musicHyva.mp4
+.\.venv\Scripts\python.exe -m song_generator.doctor --song input\song.mp4
 ```
 
 Prints, in one go: whether the environment is sound, what the bank contains,
@@ -796,7 +796,7 @@ tailscale funnel 8000
 ```
 
 The address it prints is where the edge answers. The site does not call it
-directly: `mikkonumminen.dev` proxies `/api/songgen/*` to it, and
+directly: the site's domain proxies `/api/songgen/*` to it, and
 `API_BASE_URL` in `.github/workflows/deploy.yml` points at that proxy
 instead.
 
@@ -940,7 +940,7 @@ doing its job.
 ```powershell
 $env:PYTHONPATH='.\src'
 .\.venv\Scripts\python.exe -m pytest tests\ -q
-.\.venv\Scripts\song-generator.exe input\musicHyva.mp4 --rows 0
+.\.venv\Scripts\song-generator.exe input\song.mp4 --rows 0
 ```
 
 The second matters more. Watch these numbers. They move when behaviour changes:
