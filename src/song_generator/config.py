@@ -153,7 +153,7 @@ DETECT_HOP_S = 0.02
 WORD_SILENCE_DB = -24.0
 
 # Silences shorter than this do not split a word. Finnish double consonants
-# (the "kk" in a sung bravo, the "ll" in delta) contain a real stop, so this
+# (the "kk" in a sung "lakki", the "pp" in "kuppi") contain a real stop, so this
 # has to exceed a plosive gap or single words get cut in half.
 #
 # Swept against the source scene: no value cleanly separates words there,
@@ -330,7 +330,7 @@ PREFER_LONGER_UNITS = 0.45
 # A melody slot holds exactly one syllable and a syllable clip fills exactly
 # one slot, so a bank of syllables maps onto a tune 1:1 -- no counting, no
 # leftover slot to fudge. It also means any word can be spelled from parts:
-# calculator needs no intact recording, only pa + vi + aa + ni.
+# calculator needs no intact recording, only cal + cu + la + tor.
 #
 # Whole-word and multi-word clips are still preferred wherever they exist,
 # because they carry the singer's own transitions between syllables, and a
@@ -346,7 +346,7 @@ WORD_SPELLING = {
 
 # Extra syllable fragments a clip name may use, beyond the ones that appear in
 # WORD_SPELLING. Somebody naming by ear writes what they hear, and a sung
-# stutter ("pi pillu", "pe perse") is a real thing in the recordings that no
+# stutter ("bra bravo", "ta tango") is a real thing in sung recordings that no
 # canonical spelling contains. Listing them here lets those names parse instead
 # of being refused, which is the difference between a clip being usable and
 # sitting on disk. They are fragments, never sung alone.
@@ -406,9 +406,10 @@ MATCH_PREFIX_MIN_LEN = 4
 # Used by `python -m song_generator.standardize`, not by the main pipeline.
 
 # Suffix appended to a bank directory to name its standardised tier, so
-# words_hq becomes words_hq.std. A sibling rather than a subdirectory, because
-# the result is a complete bank in its own right: --words-dir points at it and
-# every existing tool reads it with no special case.
+# words becomes words.std. A sibling rather than a
+# subdirectory, because the result is a complete bank in its own right:
+# --words-dir points at it and every existing tool reads it with no special
+# case.
 STD_SUFFIX = ".std"
 
 # The manifest filename inside a standardised tier. Its presence is also what
@@ -573,27 +574,23 @@ EDGE_FADE_S = 0.015
 WORD_ROTATION_SEED = 1987
 WORD_SEQUENCE = None
 
-# Prebuilt banks, switchable per run with --bank. Both are built ahead of time
-# and the song's stems are cached, so switching costs only a re-render.
+# Prebuilt banks, switchable per run with --bank: a name for each, and the
+# directory its clips sit in.
 #
-# "ppbank" - clips named by ear, from the song the bank is named after. The
-#            words are actually words, which is the whole point, so this is
-#            the default.
-# "chaos"  - every candidate clip taken as raw material, names ignored. The
-#            mapper only needs each clip's syllable count and pitch, so this
-#            still sings; it just stops saying anything.
+# No real bank is named here. The banks are recordings, and which ones exist
+# and what they are called stays on the machine that holds them: they are
+# registered in vocabulary_local.py, which is gitignored and replaces this
+# table, and DEFAULT_BANK when it names one (see the end of this file). What
+# ships is three placeholders, so a fresh checkout has a default to point at
+# and the tests have voices to give --voices. The default is `words`, where
+# build_bank writes when given no --out, so a clone that follows the docs and
+# builds a bank can sing with it.
 BANKS = {
-    # Cut from Mel-Band Roformer stems. Around 47% of each clip's content in
-    # the older bank turned out to be instrumental Demucs had left behind,
-    # audible as a synthesiser tone under some words. Cleaner separation also
-    # lets pitch detection read the sung note more accurately, so clips match
-    # their targets better and fold less often.
-    "ppbank": "words_hq",
-    # The original Demucs-cut bank, kept for comparison.
-    "demucs": "words",
-    "chaos": "words_chaos",
+    "example": "words",
+    "other": "words_other",
+    "third": "words_third",
 }
-DEFAULT_BANK = "ppbank"
+DEFAULT_BANK = "example"
 
 # --swallow LO-HI: each bank word swallows LO to HI of the original's words,
 # for rap, where a bank syllable on every rapped syllable came out as too many
@@ -1162,17 +1159,62 @@ OUTPUT_PEAK_CEILING_DB = -1.0
 #     SHOUT_WORDS = ("ooh",)
 #     CLIMAX_WORDS = ("barbaz",)
 #     SHOUT_CHARS = "oh"
+#     BANKS = {"mine": "words_mine", "spare": "words_spare"}
+#     DEFAULT_BANK = "mine"   # left out, the first bank in BANKS is the default;
+#                             # naming one BANKS lacks is an error
 # SONG_GENERATOR_NO_LOCAL_VOCAB disables the override. The test suite sets it,
 # so tests exercise the shipped example vocabulary and pass or fail the same way
 # on every machine, rather than depending on whichever words happen to be
 # installed locally.
 import os as _os
 
+# What the override set, so an inherited setting can be told from one it chose.
+_local: dict = {}
 if not _os.environ.get("SONG_GENERATOR_NO_LOCAL_VOCAB"):
-    try:  # pragma: no cover - presence depends on the machine, not the code
-        from .vocabulary_local import *
-    except ImportError:
-        pass
+    try:
+        # import_module, not `from . import`: a missing submodule reaches
+        # `from . import` as a bare ImportError without the module's name.
+        import importlib as _importlib
+        _vocabulary_local = _importlib.import_module(f"{__package__}.vocabulary_local")
+    except ModuleNotFoundError as _missing:
+        # Only the file itself being absent is ordinary. Anything that fails
+        # inside it is a broken override, and swallowing that would quietly
+        # drop every bank it registers and sing with the placeholders.
+        if _missing.name != f"{__package__}.vocabulary_local":
+            raise
+    else:
+        _local = {k: v for k, v in vars(_vocabulary_local).items()
+                  if not k.startswith("_")}
+        globals().update(_local)
+
+
+def resolve_banks(banks: dict[str, str], default: str,
+                  local: dict) -> tuple[dict[str, str], str]:
+    """The bank table with its default resolved and listed first.
+
+    `local` is what the override set. One that registers banks and names no
+    default would otherwise keep the shipped placeholder as the default:
+    argparse never checks a default against its choices, so every run without
+    --bank died on a KeyError. Such an override takes its first bank. A default
+    that is named and not registered, or a table with no bank at all, is an
+    error said at once, rather than the wrong voice singing.
+
+    The default goes first because the edge's bank picker lists the table in
+    order and puts the default at the top.
+    """
+    if not banks:
+        raise ValueError("BANKS registers no bank; name at least one in "
+                         "vocabulary_local.py")
+    if "BANKS" in local and "DEFAULT_BANK" not in local:
+        default = next(iter(banks))
+    if default not in banks:
+        raise ValueError(f"DEFAULT_BANK {default!r} is not a bank BANKS "
+                         f"registers: {', '.join(banks)}")
+    rest = {k: v for k, v in banks.items() if k != default}
+    return {default: banks[default], **rest}, default
+
+
+BANKS, DEFAULT_BANK = resolve_banks(BANKS, DEFAULT_BANK, _local)
 
 
 def validate_vocabulary() -> list[str]:

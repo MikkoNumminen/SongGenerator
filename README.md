@@ -182,8 +182,10 @@ holds the singer's own transition between them, and a transition cannot be
 rebuilt by butting two recordings together.
 
 **There can be more than one bank, and they need not behave alike.**
-`--bank` picks between the ones `BANKS` in `config.py` names, and each renders
-into its own folder so two banks never overwrite each other's work.
+`--bank` picks between the ones the machine registers in its gitignored
+`vocabulary_local.py` (`config.py` ships only placeholders, since no bank is in
+the repository), and each renders into its own folder so two banks never
+overwrite each other's work.
 
 A bank may also declare how it wants to be sung, by dropping a `bank.json`
 beside its clips. That file can choose a placement strategy per level, override
@@ -215,7 +217,7 @@ payoff rather than becoming the texture. In the example vocabulary that is
 ## Status
 
 All four build stages are done: separation and mode detection, melody and timing
-extraction, word mapping, and formant-corrected pitch shifting. 847 tests.
+extraction, word mapping, and formant-corrected pitch shifting. 856 tests.
 
 The HTTP edge and the Angular front end are built and carry their own suites.
 Neither is deployed: that needs a Google client id and somewhere to host static

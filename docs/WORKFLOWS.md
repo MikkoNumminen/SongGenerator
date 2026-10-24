@@ -63,7 +63,7 @@ costs is the files.
 | `--ladder` | Every mimicry rung, fourteen files instead of two |
 | `--play wild` | One level instead of both |
 | `--arrangement <path>` | Replay a saved arrangement exactly, or an edited one, named `.replay` |
-| `--bank chaos` | Sing with every candidate clip, identity ignored |
+| `--bank <name>` | Sing with another bank registered in `vocabulary_local.py` |
 | `--seed 42` | Fix the arrangement seed; otherwise a new one each run |
 | `--raw-clips` | Ignore the standardised tier, sing the recordings as they are |
 | `--no-shift` | Words at their own recorded pitch |
@@ -77,7 +77,7 @@ costs is the files.
 ## Sing a song with several voices taking turns
 
 ```powershell
-.\.venv\Scripts\song-generator.exe input\song.mp4 --voices ppbank <voiceB>
+.\.venv\Scripts\song-generator.exe input\song.mp4 --voices <voiceA> <voiceB>
 ```
 
 For a posse cut where several people sing: each turn is sung by the next bank
@@ -195,11 +195,11 @@ the recipe below measured as wrong; see "When it does not sound like the
 voice" below before assuming a converted bank is fine because the numbers
 are.
 
-1. Start from the bank's **source** clips, the hand-named recordings a bank
-   was built from (for `ppbank`, that is `words_hq`), not the built bank
-   itself: `build_bank` parses word identity out of the source filenames, so
-   converting the source and re-running `build_bank` on the result keeps every
-   name.
+1. Start from the bank's **source** clips, the hand-named recordings a bank was
+   built from (the directory once given to `build_bank --candidates`, such as
+   `words_<voice>_src/fi/roots` below), not the built bank itself: `build_bank`
+   parses word identity out of the source filenames, so converting the source
+   and re-running `build_bank` on the result keeps every name.
 2. Convert each source clip toward a reference recording of the target voice
    with a sibling project's voice-conversion model, run in a venv that has
    it installed. Load the pretrained model onto the GPU, generate from the
@@ -271,7 +271,7 @@ not be muffled going in.
    voice-conversion-venv python:
 
    ```
-   python build_word_bank.py --words paska,perse,pillu,pornolehti,paviaani \
+   python build_word_bank.py --words <word>,<word>,<word>,<word>,<word> \
        --language fi \
        --presets scream,shout,urgent,excited,command,bright,narrate,asking \
        --whisper-device cuda --out words_<voice>_src --no-contact-sheet
@@ -281,8 +281,7 @@ not be muffled going in.
    own checkout it runs against; check whether the patch is already applied
    there before running, since this writes into another repo.
 3. Result: 40 of 40 kept (5 words times 8 presets), three of them via the
-   word-alone fallback (`pornolehti_excited`, `pornolehti_asking`,
-   `paviaani_command`). Clips land at
+   word-alone fallback. Clips land at
    `words_<voice>_src/fi/roots/<word>_<preset>.wav`.
 4. `build_bank --candidates words_<voice>_src/fi/roots --out words_<voice>`.
 
@@ -302,12 +301,12 @@ the bank.
 The sibling project's own minimum-fragment guard, 60 characters, exists
 because the model rambles or repeats on a shorter fragment, and it is only
 enforced upstream of the audiobook path. Asking it directly for a bare
-phrase like `"Paska!"` (3 to 25 characters) skips that guard: one earlier
-attempt at this bank did exactly that, and Whisper large-v3, run as a hint
-on the clips afterwards, shows what came back: `paska_2.wav` said
-"Aukumaala", `perse-eee_2` said "Perse. Ei, ei, ei." (the shout written
-"Eeeeee!" comes back as "ei, ei, ei"), `au_1` said "Vähä", and
-`perse-pillu_1` said "Ainet. Pillu" against `pillu_2`'s "Joo, pillu". The
+phrase like a single shouted word (3 to 25 characters) skips that guard: one
+earlier attempt at this bank did exactly that, and Whisper large-v3, run as a
+hint on the clips afterwards, shows what came back: a one-word take said a
+four-syllable word nobody wrote, a word followed by the shout said the word
+and then "ei, ei, ei" (the shout written "Eeeeee!" comes back that way), and
+two-word phrases came back with other words in front of them. The
 carrier-sentence route above never hits this, because every utterance sent
 to the model is a full sentence.
 
@@ -646,7 +645,7 @@ moves the file it is about to overwrite into a `previous` folder beside it, and
 `--rollback` puts it back.
 
 ```powershell
-.\.venv\Scripts\song-generator.exe input\song.mp4 --bank ppbank --rollback
+.\.venv\Scripts\song-generator.exe input\song.mp4 --bank <name> --rollback
 ```
 
 It restores every level for that song and bank at once, because a run writes
@@ -777,7 +776,7 @@ reflect what is on disk, and an ordinary run says nothing about it.
 
 ## Tune a bank of generated voices
 
-Everything below was settled by tuning `asuntoautoBank` over one long session,
+Everything below was settled by tuning one spoken bank over one long session,
 mostly by getting it wrong first. Walk it in order. Each step's decision
 depends on a measurement, and the measurement is cheap.
 
@@ -801,7 +800,7 @@ Two figures, and they are not the same measurement. **Per clip**, the phrases
 in these banks run 57 to 86 per cent unvoiced, and the spread between the
 voices is what matters: the lowest one is the highest number and it tears
 first. `doctor` reports a **bank-wide mean over sampled clips**, one number,
-which for `asuntoautoBank` is 42 per cent voiced. Read the doctor line for
+which for that bank is 42 per cent voiced. Read the doctor line for
 whether a bank is breathy at all, and measure per clip when deciding which
 voice is the problem.
 
@@ -833,7 +832,7 @@ word is a different sound, not a shorter one.
 
 A speaking voice needs more than a sung one to be heard, but a hot word bus
 trips the ceiling in `mapping.mix` and drags the whole mix down: at -11.0 LUFS
-this bank's renders came back quieter overall than at -14.0. `asuntoautoBank`
+this bank's renders came back quieter overall than at -14.0. That bank
 settled at **-13.0**. Copying another bank's number without measuring is a
 documented way to make every render sound wrong.
 
@@ -857,7 +856,7 @@ twice the damage, worst on the lowest voice.
 | female phrase | 57% | 3.1 | 3.6 | **2.3** |
 | male phrase | 72% | 1.8 | 3.3 | **1.0** |
 
-**7. Where `asuntoautoBank` landed**, as a worked example:
+**7. Where that bank landed**, as a worked example:
 
 ```jsonc
 {
@@ -1008,7 +1007,7 @@ sounding**:
 
 | source | voice against the band under it |
 |---|---|
-| the source videos that built `words_hq4` | **+1.5 dB** |
+| the source videos of one curated bank | **+1.5 dB** |
 | a buried vocal that produced nothing usable | **−3.1 dB** |
 
 ```powershell
@@ -1078,7 +1077,7 @@ anything else makes it a different singer.
 
 ### The bank's own level
 
-`words_hq4` declares no `bank.json`, so it uses `config.WORD_BUS_LUFS`,
+A bank that declares no `bank.json` uses `config.WORD_BUS_LUFS`,
 **−14.0**. Copying `−11.0` from a spoken bank without measuring made every
 render sound wrong in a way that was not simply loudness: the hotter word bus
 tripped the −1 dB ceiling in `mapping.mix`, which scales the whole mix down,
@@ -1101,7 +1100,7 @@ losing a name, label or syllable boundary.
 
 ```powershell
 .\.venv\Scripts\python.exe -m song_generator.separate_hq --for-bank "sources\*.mp4"
-.\.venv\Scripts\python.exe -m song_generator.recut_bank --out words_hq2
+.\.venv\Scripts\python.exe -m song_generator.recut_bank
 ```
 
 `--for-bank` narrows the files you pass to the ones the current bank was cut

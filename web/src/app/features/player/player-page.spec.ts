@@ -17,9 +17,9 @@ function track(song: string, bank: string, level: string): TrackReply {
 }
 
 const TRACKS: TrackReply[] = [
-  track('eveningSong', 'nbank', 'conservative'),
-  track('eveningSong', 'nbank', 'wild'),
-  track('tuulimylly', 'ppbank', 'conservative'),
+  track('eveningSong', 'other', 'conservative'),
+  track('eveningSong', 'other', 'wild'),
+  track('tuulimylly', 'example', 'conservative'),
 ];
 
 class FakeLibrary implements Library {
@@ -151,7 +151,7 @@ describe('the player', () => {
     // The library holds a conservative and a wild reading of nearly
     // everything, so shuffling all of it would play each song twice in a row.
     const fixture = await render(library);
-    fixture.componentInstance.bank.set('nbank');
+    fixture.componentInstance.bank.set('other');
     fixture.componentInstance.level.set('wild');
 
     expect(fixture.componentInstance.matching().map((t) => t.name)).toEqual([
@@ -161,7 +161,7 @@ describe('the player', () => {
     fixture.componentInstance.shuffle();
     await fixture.whenStable();
 
-    expect(library.asked).toEqual(['eveningSong/nbank/eveningSong.wild.mp3']);
+    expect(library.asked).toEqual(['eveningSong/other/eveningSong.wild.mp3']);
   });
 
   it('shuffle plays on to the next when one finishes', async () => {
@@ -209,7 +209,7 @@ describe('the player', () => {
     // A selection the queue does not contain. findIndex returns -1, and
     // queue[at + 1] would be queue[0].
     fixture.componentInstance.selected.set(
-      track('somewhere else', 'nbank', 'wild'),
+      track('somewhere else', 'other', 'wild'),
     );
 
     fixture.componentInstance.next();
@@ -255,9 +255,9 @@ describe('the player', () => {
     // where a Finnish reader would never look for it. Half these songs are
     // Finnish, so the locale is named rather than left to the browser.
     const finnish = new FakeLibrary([
-      track('äänimaisema', 'nbank', 'wild'),
-      track('kaarnalaiva', 'nbank', 'wild'),
-      track('tuulimylly', 'nbank', 'wild'),
+      track('äänimaisema', 'other', 'wild'),
+      track('kaarnalaiva', 'other', 'wild'),
+      track('tuulimylly', 'other', 'wild'),
     ]);
     const fixture = await render(finnish);
 
@@ -373,7 +373,7 @@ describe('the player', () => {
     fixture.componentInstance.play(TRACKS[0]!);
     await fixture.whenStable();
 
-    expect(library.asked).toEqual(['eveningSong/nbank/eveningSong.conservative.mp3']);
+    expect(library.asked).toEqual(['eveningSong/other/eveningSong.conservative.mp3']);
     expect(fixture.componentInstance.source()).toBe('blob:fake/1');
   });
 

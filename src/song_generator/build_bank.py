@@ -401,7 +401,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--raw", action="store_true",
                    help="ingest EVERY clip regardless of name, using its measured "
                         "syllable count. Identity is discarded, so the words stop "
-                        "being words; useful only as a chaos experiment.")
+                        "being words; useful only as an experiment.")
     p.add_argument("--raw-max-syllables", type=int, default=6,
                    help="with --raw, skip clips longer than this many syllables")
     return p

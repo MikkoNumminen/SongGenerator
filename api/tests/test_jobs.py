@@ -20,7 +20,7 @@ from app.stages import Stage
 
 REQUEST = JobRequest(
     source_url="https://example.invalid/watch?v=abc",
-    bank="ppbank",
+    bank="example",
     requested_by="someone@example.invalid",
 )
 
@@ -72,7 +72,7 @@ def test_only_the_flags_that_were_asked_for_are_passed():
 
 
 def test_the_settings_that_were_asked_for_do_reach_the_command():
-    request = JobRequest(source_url="u", bank="muslimbank", requested_by="a",
+    request = JobRequest(source_url="u", bank="third", requested_by="a",
                          level="wild", mimicry=0.45, engine="world")
     cmd = render_command("python", request, Path("input/song.mp4"))
 
@@ -90,7 +90,7 @@ def test_a_run_walks_the_stages_and_ends_done(tmp_path):
     script = (
         "import time\n"
         "for line in ['  separator roformer', '  stems 1s -> w',"
-        " '  bank ppbank (x, standardised)', '  play conservative, seed 1',"
+        " '  bank example (x, standardised)', '  play conservative, seed 1',"
         " '  wrote 7 versions to out']:\n"
         "    print(line, flush=True); time.sleep(0.02)\n"
     )
@@ -112,7 +112,7 @@ def test_a_finished_run_remembers_where_it_wrote(tmp_path):
     been and the box that lists a run's takes had nothing to show.
     """
     runner, _ = _runner()
-    made = tmp_path / "output" / "a_song" / "ppbank"
+    made = tmp_path / "output" / "a_song" / "example"
     made.mkdir(parents=True)
     runner.start(REQUEST, tmp_path / "song.mp4", tmp_path, dict(os.environ),
                  command=_stub(f"print(r'  wrote 2 versions to {made}')"))
@@ -128,7 +128,7 @@ def test_the_folder_is_found_when_only_one_rendering_was_written(tmp_path):
     """`--play wild` writes one file, and the pipeline then names the file
     rather than the folder it went in."""
     runner, _ = _runner()
-    made = tmp_path / "output" / "a_song" / "ppbank"
+    made = tmp_path / "output" / "a_song" / "example"
     made.mkdir(parents=True)
     one = made / "a_song.wild.mp3"
     runner.start(REQUEST, tmp_path / "song.mp4", tmp_path, dict(os.environ),
@@ -144,14 +144,14 @@ def test_a_folder_printed_relative_is_read_against_the_run_directory(tmp_path):
     nothing resolved it. The edge answers from its own directory, which is not
     required to be the one the run was started in."""
     runner, _ = _runner()
-    (tmp_path / "output" / "a_song" / "ppbank").mkdir(parents=True)
+    (tmp_path / "output" / "a_song" / "example").mkdir(parents=True)
     runner.start(REQUEST, tmp_path / "song.mp4", tmp_path, dict(os.environ),
-                 command=_stub("print(r'  wrote 2 versions to output\\\\a_song\\\\ppbank')"))
+                 command=_stub("print(r'  wrote 2 versions to output\\\\a_song\\\\example')"))
 
     assert _wait_until(lambda: not runner.busy)
     assert runner.current is not None
     assert Path(runner.current.output_dir or "") == \
-        (tmp_path / "output" / "a_song" / "ppbank").resolve()
+        (tmp_path / "output" / "a_song" / "example").resolve()
 
 
 def test_a_folder_that_cannot_be_resolved_does_not_wedge_the_runner(tmp_path):
@@ -181,7 +181,7 @@ def test_the_folder_is_worked_out_once_however_much_follows_it(
     and the pipeline prints its summary table after the line that names the
     folder. Repeating the work per line stops draining the pipe the run is
     still writing to."""
-    made = tmp_path / "output" / "a_song" / "ppbank"
+    made = tmp_path / "output" / "a_song" / "example"
     made.mkdir(parents=True)
 
     resolved: list[str] = []
@@ -400,7 +400,7 @@ def test_the_site_renders_one_rung_rather_than_the_whole_sweep():
     fourteen near-identical rows in a library that already holds hundreds."""
     from app.main import FULL_MIMICRY, SubmitBody
 
-    asked = SubmitBody(source_url="https://example.invalid/x", bank="ppbank")
+    asked = SubmitBody(source_url="https://example.invalid/x", bank="example")
 
     assert asked.mimicry == FULL_MIMICRY == 1.0
 
@@ -412,7 +412,7 @@ def test_the_rung_still_reaches_the_command_line():
     cmd = render_command("python", JobRequest(
         requested_by="owner@example.invalid",
         source_url="https://example.invalid/x",
-        bank="ppbank", mimicry=1.0), Path("song.mp4"))
+        bank="example", mimicry=1.0), Path("song.mp4"))
 
     assert "--mimicry" in cmd
     assert cmd[cmd.index("--mimicry") + 1] == "1"

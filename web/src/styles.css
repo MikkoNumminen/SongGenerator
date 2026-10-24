@@ -622,7 +622,7 @@ input:focus {
 }
 
 /* Bank names are identifiers somebody chose, so they are shown as written:
-   capitalising turns ppbank into Ppbank and nbank into Nbank. */
+   capitalising turns example into Example and other into Other. */
 .segmented--verbatim .seg span {
   text-transform: none;
 }

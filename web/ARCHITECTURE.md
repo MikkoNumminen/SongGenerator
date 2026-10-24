@@ -44,7 +44,7 @@ running Python.
 
 The banks live in a gitignored local override, so their names are not knowable
 at build time and differ per machine. The UI asks the catalog and renders what
-it gets. A `'curated' | 'muslimbank'` union type anywhere would be wrong on a
+it gets. A `'example' | 'other'` union type anywhere would be wrong on a
 fresh clone and would have to be edited every time a bank is added.
 
 ## Feature boundaries

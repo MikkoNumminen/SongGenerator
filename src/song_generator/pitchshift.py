@@ -99,7 +99,8 @@ def fold_unit(semitones: Sequence[float], cap: float | None = None) -> list[floa
 
     Measured on one song against the curated bank: of 156 words with more than
     one pitched syllable, folding enlarged the interval inside 32 of them (21%)
-    by a median of 5.5 semitones. The worst was a `perse` whose own melody
+    by a median of 5.5 semitones. The worst was a two-syllable word whose own
+    melody
     moved 0.7 semitones and which was rendered with its halves 11.3 apart.
 
     Deciding the octave once for the word keeps every interval inside it

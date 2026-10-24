@@ -27,10 +27,10 @@ CACHED_RUN = """\
   melody + timing extraction
     tempo             90.7 BPM, 264 beats
     notes found       931 in 18 phrases
-  bank      ppbank (words_hq4.std, standardised)
+  bank      example (words_example.std, standardised)
   play      conservative, seed 984547
   words     work\\song\\arrangements\\984547-conservative.arr
-  wrote 14 versions to D:\\output\\song\\ppbank
+  wrote 14 versions to D:\\output\\song\\example
 """.splitlines()
 
 # A first run of a song, where the separator does the work and reports it.
@@ -43,9 +43,9 @@ FRESH_RUN = """\
 100%|##########| 40/40 [00:23<00:00,  1.67it/s]
   stems     31.7s -> work\\band_-_other
     verdict           MODE A -- vocals present
-  bank      muslimbank (words_muslim.std, standardised)
+  bank      third (words_third.std, standardised)
   play      conservative, seed 157290
-  wrote 7 versions to D:\\output\\other\\muslimbank
+  wrote 7 versions to D:\\output\\other\\third
 """.splitlines()
 
 REFUSED_RUN = """\
@@ -125,7 +125,7 @@ def test_the_bank_warning_line_is_not_mistaken_for_the_bank_stage():
     """The pipeline also prints `  BANK      holds no clip saying: ...`, which
     differs from the stage line only in case."""
     progress = Progress(Stage.ANALYSING)
-    after = progress.advance("  BANK      holds no clip saying: paviaani")
+    after = progress.advance("  BANK      holds no clip saying: calculator")
     assert after.stage is Stage.ANALYSING
 
 

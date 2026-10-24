@@ -103,12 +103,12 @@ never see. Resolve it on a real vocal.
 
 - **The elderly female voice's bank does not sound like her.**
 
-  Three banks were made for her while rendering a rap posse cut with
-  `--voices`, and the owner heard all three as wrong: voice conversion of the
-  sung ppbank clips, one text-to-speech call per short phrase, and single
-  words cut out of carrier sentences by that sibling project's word-bank
-  script. The third is clean (every word verified by transcript, whole, never
-  stretched) and is still not her. The song was set aside rather than fixed.
+  Three banks were made for her while rendering a rap posse cut with `--voices`,
+  and the owner heard all three as wrong: voice conversion of the sung clips
+  from the default bank, one text-to-speech call per short phrase, and single
+  words cut out of carrier sentences by that sibling project's word-bank script.
+  The third is clean (every word verified by transcript, whole, never stretched)
+  and is still not her. The song was set aside rather than fixed.
 
   The owner's recollection is that this voice was a different, younger-sounding
   voice from the same engine, lowered in pitch to sound like a very old
@@ -150,7 +150,7 @@ never see. Resolve it on a real vocal.
   Shuffling the running order varies the take while leaving every clip exactly
   as recorded. That much works.
 
-  What it does not do is know whose voice it is holding. `asuntoautoBank` now
+  What it does not do is know whose voice it is holding. One spoken bank now
   carries three singers, and conservative keeps them in blocks only because
   reciting in bank order happens to group them: the female phrases were built
   first, then the male, then the reader. Shuffling throws that away, so wild
@@ -201,13 +201,14 @@ never see. Resolve it on a real vocal.
   Not scheduled. Written down because the reasoning is the useful part: the
   cost is generating data that does not exist yet, not drawing it.
 
-- **Make vocals with the sibling audiobook project.**
+- **Make vocals with the sibling audiobook project.** Partly done since this
+  was written; see the end of this item.
 
-  A bank needs clean, isolated, pitch-trackable words, and every source cut so
-  far has been a recording of somebody singing over a band. The worst of them
-  failed outright: see the traps under "Add words to the bank" in
-  [WORKFLOWS.md](WORKFLOWS.md), all of which come from separating a voice out
-  of a mix rather than starting with one.
+  A bank needs clean, isolated, pitch-trackable words, and every source cut at
+  the time had been a recording of somebody singing over a band. The worst of
+  them failed outright: see the traps under "Add words to the bank" in
+  [WORKFLOWS.md](WORKFLOWS.md), all of which come from separating a voice out of
+  a mix rather than starting with one.
 
   That project already makes speech, on this machine, with no band under it.
   A voice generated rather than extracted has no bleed to gate away, no
@@ -216,7 +217,14 @@ never see. Resolve it on a real vocal.
   banks are actually liked for: a real person's delivery.
 
   Worth a small experiment rather than a plan. One generated word set, cut
-  into a bank, rendered next to `words_hq4` on the same song.
+  into a bank, rendered next to the default bank on the same song.
+
+  Since then a spoken bank has been built from generated speech and tuned (see
+  "Tune a bank of generated voices" in [WORKFLOWS.md](WORKFLOWS.md)), and voice
+  conversion has made copies of a sung bank in other voices. One generated
+  voice never sounded like its speaker; see the elderly voice's item above.
+  What is still open is the comparison this item proposed: a generated word
+  set sung next to the default bank on the same song, judged by ear.
 
 - **Done: the site has a name, and the edge is reachable from the tailnet.**
   Kept because the wrong answer was expensive and is easy to reach for again.
@@ -271,9 +279,9 @@ never see. Resolve it on a real vocal.
      of an octave away, and the unit breaks in the middle. Shifting the shout
      too is not the answer, that is what `SHOUT_KEEP_RAW` exists to prevent.
      Choosing the *word's* octave to sit beside the shout is. Measured over 304
-     units mixing a raw shout with sung words, median internal spread 7.5 to
-     6.9 semitones and units breaking more than half an octave 230 to 200.
-     Where it applies the win is large, `perse+eee` goes from 10.6 to 3.0.
+     units mixing a raw shout with sung words, median internal spread 7.5 to 6.9
+     semitones and units breaking more than half an octave 230 to 200. Where it
+     applies the win is large, one word+shout unit goes from 10.6 to 3.0.
 
      A shout also leaves a gap in time, not only in pitch. It keeps the length
      it was recorded at, so it does not hold its vowel across a rest the way a
@@ -282,12 +290,12 @@ never see. Resolve it on a real vocal.
      30 ms, both after `eee`. Whatever is decided about the octave should
      decide this at the same time: both come from the same exemption.
 
-  2. **Record a bare `paviaani`.** There is not one. All six takes in the
-     curated bank are `eee-paviaani`, so every placement of the climax word
-     carries the shout and its break. This removes the problem rather than
-     reducing it, and no code change reaches as far.
+  2. **Record the climax word bare.** There is no such take. All six takes in
+     the curated bank have the `eee` shout before it, so every placement of the
+     climax word carries the shout and its break. This removes the problem
+     rather than reducing it, and no code change reaches as far.
 
-  3. **The `paviaani` takes disagree.** `eee-paviaani_8` descends across its
+  3. **The climax word's takes disagree.** One of the six descends across its
      syllables where the other five ascend, so which take the arrangement picks
      changes the shape of the word. Worth deciding whether that is range or a
      take to set aside.
@@ -296,10 +304,10 @@ never see. Resolve it on a real vocal.
      singer's portamento and confirmed by ear, not by measurement. The
      surrounding constants in that block all carry numbers.
 
-  Worth knowing before re-measuring any of this: most remaining `eee+paviaani`
-  breaks are not octave artefacts. The word's own recorded melody spans about
-  9.6 semitones around the held shout, which is real and no octave choice
-  should flatten it.
+  Worth knowing before re-measuring any of this: most remaining breaks in the
+  shout and climax word are not octave artefacts. The word's own recorded melody
+  spans about 9.6 semitones around the held shout, which is real and no octave
+  choice should flatten it.
 
 - **Record word takes at higher pitches. Still the way to reach the last of
   it, but much less urgent than it was.**
@@ -355,7 +363,7 @@ never see. Resolve it on a real vocal.
   | song C | 62.2 | +8.6 | 0.75 | 0.86 |
   | song D | 63.4 | +9.9 | 0.68 | 0.96 |
   | song E | 58.7 | +5.1 | 0.87 | 0.99 |
-  | paskaperse | 53.5 | 0.0 | 0.95 | 1.00 |
+  | the bank's own source | 53.5 | 0.0 | 0.95 | 1.00 |
 
   Mean 0.78 then, 0.90 now. The bank sits at MIDI 53.6 with a 10-90 percentile
   span of 53.3 to 61.0, so it has almost no register of its own, and the songs
@@ -467,11 +475,12 @@ never see. Resolve it on a real vocal.
   Re-fetching at a decent resolution needs the link as much as the thirteen
   with no picture at all do.
 
-  `paskaperse.wav` is not in that table and not in the index. It is not a song
-  that was fetched from anywhere: it is the source the first word clips were
-  cut out of, so there is no address to find for it. That is a different answer
-  from one nobody has written down, and worth keeping distinct, because a gap
-  invites somebody to go looking for something that was never there.
+  The recording the default bank was cut from is not in that table and not in
+  the index. It is not a song that was fetched from anywhere: it is the source
+  the first word clips were cut out of, so there is no address to find for it.
+  That is a different answer from one nobody has written down, and worth keeping
+  distinct, because a gap invites somebody to go looking for something that was
+  never there.
 
   The index is `input/SOURCES.md`, one row per song, keyed on the slug the tool
   derives from the input filename. That slug names the `work/` directory
@@ -511,9 +520,9 @@ never see. Resolve it on a real vocal.
   What it does not fix is the backlog: those rows are a sitting-down-and-writing
   job for whoever has the links, and nothing can automate it.
 
-- **A live site: drop a song in, get a paskaperse back.** Nothing about the
-  pipeline needs a person once the bank exists, so the interesting question is
-  not whether it can be a web service but what it costs and what it hands a
+- **A live site: drop a song in, get it back sung by the bank.** Nothing about
+  the pipeline needs a person once the bank exists, so the interesting question
+  is not whether it can be a web service but what it costs and what it hands a
   stranger.
 
   What a request actually costs, measured on this machine today, an RTX 3080 Ti:

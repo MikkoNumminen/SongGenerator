@@ -196,8 +196,8 @@ rather than only recognising the ones the tool generated.
 
 `standardize.py` works in tiers. The recorded clips are the source of truth and
 are never written to; the pass reads them and produces new files in a sibling
-directory, `words_hq.std`, each traceable to the clip it came from by a hash of
-that clip's bytes. Every write goes through one function that refuses any
+directory, `words_<bank>.std`, each traceable to the clip it came from by a hash
+of that clip's bytes. Every write goes through one function that refuses any
 destination which is, contains, or sits inside a source directory, so
 overwriting a recording is structurally impossible rather than merely avoided.
 
@@ -221,8 +221,8 @@ undo that silently.
 | `words/words.json` | `build_bank` | Every unit: pitch, duration, syllable bounds | Yes |
 | `words/bank.json` | a human | The bank's declared strategy and overrides, per level | Yes |
 | `words/*.wav` | `build_bank` | The bank's audio | Yes |
-| `words_hq.std/*.wav` | `standardize` | Trimmed, levelled derivatives | Yes |
-| `words_hq.std/standardized.json` | `standardize` | Each derivative's source and hash | Yes |
+| `words_<bank>.std/*.wav` | `standardize` | Trimmed, levelled derivatives | Yes |
+| `words_<bank>.std/standardized.json` | `standardize` | Each derivative's source and hash | Yes |
 | `words/candidates/*.wav` **unprefixed** | **a human** | **Reviewed clips** | **No** |
 | `output/<song>/<bank>/*.mp3` | `cli` | The results, a folder per song and per bank | Yes |
 | `output/<song>/<bank>/previous/*.mp3` | `cli` | The take each rendering replaced, one generation back | **No** |

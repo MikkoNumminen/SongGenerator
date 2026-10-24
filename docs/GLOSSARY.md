@@ -41,9 +41,10 @@ Its length is measured in syllables, which is the same thing as how many slots
 it fills.
 
 **Bank**. The collection of units available to sing with. Built by
-`build_bank.py` from reviewed clips into `words/words.json`. Two are prebuilt:
-`ppbank` (reviewed clips, the default, named after the song they were cut
-from) and `chaos` (every candidate clip taken raw, names ignored).
+`build_bank.py` from reviewed clips into `words/words.json`. The banks
+themselves are recordings, so none is in the repository and none is named
+in it: each machine registers its own in `vocabulary_local.py`. A bank built
+with `--raw` takes every candidate clip with its name ignored.
 
 **Candidate**. A clip cut out of a source video but not yet identified. Lives
 in `words/candidates/` with a prefix until a human renames it.

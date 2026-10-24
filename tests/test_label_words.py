@@ -54,7 +54,7 @@ def test_accepts_real_variants(heard, expected):
     assert score >= MATCH_THRESHOLD, f"{heard!r} scored only {score:.2f}"
 
 
-@pytest.mark.parametrize("heard", ["ja", "on", "vittu", "kissa", "the", ""])
+@pytest.mark.parametrize("heard", ["ja", "on", "kahvi", "kissa", "the", ""])
 def test_rejects_unrelated_words(heard):
     _, score = best_target(normalise(heard))
     assert score < MATCH_THRESHOLD, (
