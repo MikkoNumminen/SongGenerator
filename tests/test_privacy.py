@@ -92,9 +92,15 @@ def _text(data: bytes) -> str | None:
         return data.decode("utf-16", errors="replace")
     if b"\0" in data:
         # UTF-16 without a byte order mark: ASCII text leaves every other byte
-        # zero.
-        if len(data) >= 4 and data[1::2].count(0) > len(data) // 4:
-            return data.decode("utf-16-le", errors="replace")
+        # zero, the odd ones in little-endian and the even ones in big-endian.
+        # An icon or an image can have that many zeros too, so it counts as
+        # text only if nearly all of it decodes to something printable.
+        for zeros, codec in ((data[1::2], "utf-16-le"), (data[0::2], "utf-16-be")):
+            if len(data) >= 4 and zeros.count(0) > len(data) // 4:
+                text = data.decode(codec, errors="replace")
+                readable = sum(ch.isprintable() or ch in "\r\n\t" for ch in text)
+                if readable >= 0.95 * len(text):
+                    return text
         return None
     return data.decode("utf-8", errors="replace")
 
@@ -103,9 +109,20 @@ def test_text_is_read_in_the_encodings_windows_writes():
     real = "someone@" + "mail.fi"
     line = real + "\n"
     for encoded in (line.encode("utf-16"), line.encode("utf-16-le"),
-                    line.encode("cp1252"), line.encode("utf-8")):
+                    line.encode("utf-16-be"), line.encode("cp1252"),
+                    line.encode("utf-8")):
         assert real in _text(encoded)
     assert _text(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x10") is None
+    # An icon: zeros in every other byte, and none of it text.
+    assert _text(bytes([0, 0, 1, 0, 1, 0, 16, 16, 0, 0, 1, 0, 32, 0, 104, 4] * 4)) is None
+
+
+def test_the_term_list_is_not_missing_where_it_belongs():
+    # Off the owner's machine there is no .local and the check below skips.
+    # On it, a .local without the list is a lost list, and skipping quietly
+    # there would turn the one check that knows the names off unnoticed.
+    if TERMS.parent.is_dir():
+        assert TERMS.is_file(), f"{TERMS} is missing"
 
 
 def test_the_address_pattern_can_fail():
