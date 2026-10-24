@@ -97,7 +97,7 @@ def fold_unit(semitones: Sequence[float], cap: float | None = None) -> list[floa
     word sitting either side of the cap are moved an octave apart from each
     other. The word does not bend in the middle, it comes apart.
 
-    Measured on ellinoora against the curated bank: of 156 words with more than
+    Measured on one song against the curated bank: of 156 words with more than
     one pitched syllable, folding enlarged the interval inside 32 of them (21%)
     by a median of 5.5 semitones. The worst was a `perse` whose own melody
     moved 0.7 semitones and which was rendered with its halves 11.3 apart.

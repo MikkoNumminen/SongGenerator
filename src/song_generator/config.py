@@ -862,12 +862,12 @@ FORMANT_SCALE = 1.0
 # It is not a trade. At 12 both test songs sound better, judged by ear on whole
 # renders at mimicry 1.00, which is where a bad shift has nowhere to hide. What
 # the numbers called smoothing reads as the words being sung rather than
-# approximated, and it is swamped by what folding stops costing: on cardib_up
+# approximated, and it is swamped by what folding stops costing: on one song
 # the median shift goes from 2.1 to 7.6 semitones, so most of the song lands on
 # the note the singer actually hit, and its ceiling goes from 0.68 to 0.96.
 #
-# Ceilings at 12 against 7: cardib_up 0.96 from 0.68, musichyva 0.86 from 0.75,
-# rocketman 0.99 from 0.87, musickorea 0.60 from 0.51.
+# Ceilings at 12 against 7, four songs: 0.96 from 0.68, 0.86 from 0.75,
+# 0.99 from 0.87, 0.60 from 0.51.
 #
 # Beyond 12 is untested by ear. 15 measures worse again and buys little.
 SHIFT_CAP_SEMITONES = 12.0
@@ -887,7 +887,7 @@ UNVOICED_RESTORE_TOLERANCE = 0.02
 #
 # Off, each syllable was pinned to its slot and given that slot's length, so
 # wherever the melody left a rest between two notes the word was cut in half by
-# real silence. Measured on sanni against the curated bank: 55 of 150
+# real silence. Measured on one song against the curated bank: 55 of 150
 # multi-syllable words held silence inside them, median 130 ms and up to 310,
 # 10.7 seconds of it across the song. That is the word being spelled out a
 # syllable at a time, and no amount of pitch work covers it.

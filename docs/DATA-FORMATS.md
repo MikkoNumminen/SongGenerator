@@ -283,7 +283,7 @@ never overwritten, so an older arrangement stays reproducible.
 
 ```
 # SongGenerator arrangement
-#   song    rocketman_bluegrass
+#   song    some_song
 #   bank    words_hq3.std
 #   level   wild
 #   seed    543686
@@ -298,7 +298,7 @@ never overwritten, so an older arrangement stays reproducible.
 phrase 1
    0:02.57  x8  =2.37  pillu paska pornolehti   [pillu-paska-pornolehti_1.wav]
    0:04.94  x6  =1.96  perse pillu perse        [perse-pillu-perse_1.wav]
-   0:07.26  x1  =0.35  eee                      [eee_then__muumit__50.76.wav]
+   0:07.26  x1  =0.35  eee                      [eee_then__src3__50.76.wav]
 ```
 
 `phrase N` counts the phrases the mapper sings to, which are the detector's
@@ -497,7 +497,7 @@ Filenames carry meaning in `words/candidates/`, and the parsing is real code
 `parse_phrase` in `build_bank.py`, with the edge cases pinned by tests.
 
 ```
-TODO_2syl__kirby2__c07__1.42-1.98.wav
+TODO_2syl__src2__c07__1.42-1.98.wav
 └──┘ └──┘  └────┘  └─┘  └────────┘
  │    │      │      │        └─ seconds in the source
  │    │      │      └────────── candidate index

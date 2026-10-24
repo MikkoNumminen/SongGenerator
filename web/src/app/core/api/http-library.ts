@@ -31,8 +31,8 @@ export class HttpLibrary implements Library {
   }
 
   audio(song: string, bank: string, name: string): Observable<Blob> {
-    // Each segment encoded on its own. Song folders carry spaces, brackets and
-    // Finnish vowels, and one of them is called `music_sdp`; encoding the
+    // Each segment encoded on its own. Song folders carry spaces, brackets,
+    // underscores and Finnish vowels; encoding the
     // joined string would escape the separators along with them.
     const path = [song, bank, name].map(encodeURIComponent).join('/');
     return this.http.get(`${this.baseUrl}/library/${path}`, {

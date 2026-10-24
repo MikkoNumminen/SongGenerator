@@ -175,7 +175,7 @@ export class PlayerPage implements OnDestroy {
     return this.order() === 'name'
       // Finnish collation, named rather than left to the browser: half these
       // songs are Finnish and the alphabet puts ä and ö after z. The default
-      // rules sort Ähtäri under A, which is where a Finnish reader would
+      // rules sort a title starting with Ä under A, where a Finnish reader would
       // never look for it. Naming the locale also keeps the order the same
       // whatever language the browser happens to be set to.
       ? groups.sort((a, b) => a.title.localeCompare(b.title, 'fi'))

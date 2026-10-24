@@ -2,14 +2,14 @@
  * Turn a folder name on that desktop into something readable.
  *
  * The songs are named by whatever they were downloaded as, so the library is
- * a wall of `avantasia_-_ghostlights_official_track_lyrics`. That is the name
+ * a wall of `band_-_song_official_track_lyrics`. That is the name
  * the machine uses and it has to stay reachable, but it is not what a person
  * reads a list of thirty by.
  *
  * The cleaning is deliberately timid. It only removes words from the end,
  * because that is where the noise a video site adds lives, and a word that
- * looks like noise in the middle is usually part of the title: `music_sdp`
- * keeps its `music`, and `Dawn of a Million Souls Universe` keeps `Universe`
+ * looks like noise in the middle is usually part of the title: `music_box`
+ * keeps its `music`, and `Songs of a Quiet Universe` keeps `Universe`
  * because the stripping stops at the first word that is not noise.
  */
 
@@ -25,7 +25,7 @@ const SMALL = new Set([
 ]);
 
 export function prettySongTitle(slug: string): string {
-  // camelCase before anything else: `musicHyvaVenaj` is three words, and
+  // camelCase before anything else: `musicKesaYo` is three words, and
   // lowercasing first would lose the only evidence of where they split.
   const spaced = slug
     .replace(/([a-zäöå0-9])([A-ZÄÖÅ])/g, '$1 $2')

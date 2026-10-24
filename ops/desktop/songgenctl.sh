@@ -15,6 +15,9 @@ UNIT=homelab-songgenerator
 # gateway address does not help either: the edge listens on 127.0.0.1 only.
 HEALTH=http://127.0.0.1:8020/health
 
+# The public address lives with the rest of the machine's settings, not here.
+SITE=$(sed -n 's/^SONGGEN_SITE=//p' ~/.config/songgenerator.env 2>/dev/null)
+
 status() {
   printf '\n  unit    : %s\n' "$(systemctl --user is-active $UNIT 2>/dev/null)"
   printf '  edge    : '
@@ -23,7 +26,7 @@ status() {
   else
     printf 'not answering\n'
   fi
-  printf '  site    : https://mikkonumminen.dev/songgenerator\n\n'
+  printf '  site    : %s\n\n' "${SITE:-SONGGEN_SITE not set in ~/.config/songgenerator.env}"
 }
 
 while true; do
