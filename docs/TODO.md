@@ -101,9 +101,9 @@ never see. Resolve it on a real vocal.
 
 ## Open items
 
-- **`sykeBank` was built from candidates nobody has listened to.**
+- **One bank was built from candidates nobody has listened to.**
 
-  141 candidates were mined into `words_syke_src/` and built straight into a
+  141 candidates were mined into a `words_<song>_src/` directory and built straight into a
   bank of 137 units, unheard and unnamed, junk included. Four did not make it,
   and nobody has looked at which four or why. Deleting the bad ones and
   rebuilding is what turns it into a bank rather than a pile.
@@ -179,7 +179,7 @@ never see. Resolve it on a real vocal.
 
 - **Old and new render names sit side by side, and they are not duplicates.**
 
-  `output/bussilaulu_.../ttsfi/` holds four files: two `.mim1p00` from before
+  `output/<song>/ttsfi/` for one song holds four files: two `.mim1p00` from before
   the naming rule and two untagged from after. They are four different renders,
   a day apart, with four different audio checksums, and `previous/` holds a
   third generation again.
