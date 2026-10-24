@@ -43,10 +43,11 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   takes any value and `--ladder` asks for the whole sweep. Both are things a
   person types on purpose. Anything new that starts a render inherits this
   rule; it is not a preference, and it has been stated twice.
-- **Never publish anything identifying.** No person's name, no email address,
-  no domain or hostname of the deployment, and no title or artist of a song
-  rendered here, in any tracked file, commit message or pull request. This is
-  absolute. In examples and measurements a song is "one song" or "song A", a
+- **Never publish anything identifying.** No person's name, no voice or
+  persona name, no email address, no domain, hostname or resource id of the
+  deployment, and no title or artist of a song rendered here, nor any slug,
+  shorthand or source-video tag that stands for one, in any tracked file, ref
+  name, commit message or pull request. This is absolute. In examples and measurements a song is "one song" or "song A", a
   file is `song.mp4`, an address is on `example.com` or `.invalid`, and the
   deployment's addresses come from the repository secrets that
   `.github/workflows/deploy.yml` reads, or from `~/.config/songgenerator.env`.
@@ -64,9 +65,15 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   the main checkout when the worktree has none of its own. Terms are written in
   the syntax Python and grep share: plain words, `\b`, `[...]`, `(a|b)`.
 
+  On the owner's machine a `.local/` without the list fails the test rather
+  than skipping it.
+
   `.github/workflows/privacy.yml` runs the test on pull requests and on pushes
   to main. There the list is absent and only the `.env` and address checks
-  run, which is still the part a stranger's change could break.
+  run, which is still the part a stranger's change could break. The hook sees
+  only pushes from this machine, never a merge made on GitHub, so before
+  merging a pull request there, run `tests/test_privacy.py` locally on its
+  merge result.
 - **Never commit audio.** Not source material, not rendered output, not the
   word samples. All of it is excluded by `.gitignore` on extension, so it is
   refused wherever it lands. The repo is the tool, not the media.
