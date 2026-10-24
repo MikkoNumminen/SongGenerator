@@ -103,12 +103,12 @@ never see. Resolve it on a real vocal.
 
 - **The elderly female voice's bank does not sound like her.**
 
-  Three banks were made for her while rendering a rap posse cut with
-  `--voices`, and the owner heard all three as wrong: voice conversion of the
-  sung default bank's clips, one text-to-speech call per short phrase, and single
-  words cut out of carrier sentences by that sibling project's word-bank
-  script. The third is clean (every word verified by transcript, whole, never
-  stretched) and is still not her. The song was set aside rather than fixed.
+  Three banks were made for her while rendering a rap posse cut with `--voices`,
+  and the owner heard all three as wrong: voice conversion of the sung clips
+  from the default bank, one text-to-speech call per short phrase, and single
+  words cut out of carrier sentences by that sibling project's word-bank script.
+  The third is clean (every word verified by transcript, whole, never stretched)
+  and is still not her. The song was set aside rather than fixed.
 
   The owner's recollection is that this voice was a different, younger-sounding
   voice from the same engine, lowered in pitch to sound like a very old
@@ -201,13 +201,14 @@ never see. Resolve it on a real vocal.
   Not scheduled. Written down because the reasoning is the useful part: the
   cost is generating data that does not exist yet, not drawing it.
 
-- **Make vocals with the sibling audiobook project.**
+- **Make vocals with the sibling audiobook project.** Partly done since this
+  was written; see the end of this item.
 
-  A bank needs clean, isolated, pitch-trackable words, and every source cut so
-  far has been a recording of somebody singing over a band. The worst of them
-  failed outright: see the traps under "Add words to the bank" in
-  [WORKFLOWS.md](WORKFLOWS.md), all of which come from separating a voice out
-  of a mix rather than starting with one.
+  A bank needs clean, isolated, pitch-trackable words, and every source cut at
+  the time had been a recording of somebody singing over a band. The worst of
+  them failed outright: see the traps under "Add words to the bank" in
+  [WORKFLOWS.md](WORKFLOWS.md), all of which come from separating a voice out of
+  a mix rather than starting with one.
 
   That project already makes speech, on this machine, with no band under it.
   A voice generated rather than extracted has no bleed to gate away, no
@@ -217,6 +218,13 @@ never see. Resolve it on a real vocal.
 
   Worth a small experiment rather than a plan. One generated word set, cut
   into a bank, rendered next to the default bank on the same song.
+
+  Since then a spoken bank has been built from generated speech and tuned (see
+  "Tune a bank of generated voices" in [WORKFLOWS.md](WORKFLOWS.md)), and voice
+  conversion has made copies of a sung bank in other voices. One generated
+  voice never sounded like its speaker; see the elderly voice's item above.
+  What is still open is the comparison this item proposed: a generated word
+  set sung next to the default bank on the same song, judged by ear.
 
 - **Done: the site has a name, and the edge is reachable from the tailnet.**
   Kept because the wrong answer was expensive and is easy to reach for again.
