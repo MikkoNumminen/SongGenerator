@@ -484,7 +484,7 @@ listening. It is the one part that cannot be automated.
 .\.venv\Scripts\python.exe -m song_generator.flatten
 
 # 3. LISTEN. Delete junk. Rename keepers after what you hear.
-#       TODO_2syl__kirby__c07__1.42-1.98.wav   ->   bravo7.wav
+#       TODO_2syl__src1__c07__1.42-1.98.wav   ->   bravo7.wav
 
 # 4. Build
 .\.venv\Scripts\python.exe -m song_generator.build_bank
@@ -521,7 +521,7 @@ sounding**:
 
 | source | voice against the band under it |
 |---|---|
-| `pilluvittu*`, which built `words_hq4` | **+1.5 dB** |
+| the source videos that built `words_hq4` | **+1.5 dB** |
 | a buried vocal that produced nothing usable | **−3.1 dB** |
 
 ```powershell

@@ -45,7 +45,7 @@ TERMS = _terms_file()
 
 # RFC 2606 and RFC 6761: names that can never belong to anybody.
 RESERVED = re.compile(r"(^|\.)(example\.(com|net|org)|example|invalid|test|localhost)$")
-EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@((?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,})\b")
+EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@((?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,})(?![A-Za-z0-9])")
 
 # .env, .envrc, .env.local, .env-prod, settings.env. Not env.py or env.d.ts,
 # which are code.
@@ -53,7 +53,7 @@ ENV_FILE = re.compile(r"^\.env(rc)?$|^\.env[.-].+|.+\.env$")
 
 
 def _terms() -> list[re.Pattern]:
-    lines = TERMS.read_text(encoding="utf-8").splitlines()
+    lines = TERMS.read_text(encoding="utf-8-sig").splitlines()
     return [re.compile(line.strip(), re.IGNORECASE) for line in lines
             if line.strip() and not line.lstrip().startswith("#")]
 
@@ -73,13 +73,39 @@ def _lines():
             data = path.read_bytes()
         except OSError:
             continue  # gone from the working tree
-        if b"\0" in data:
+        text = _text(data)
+        if text is None:
             continue  # binary
-        # Replaced rather than skipped: a file in another encoding still says
-        # whatever it says in ASCII.
-        text = data.decode("utf-8", errors="replace")
         for number, line in enumerate(text.splitlines(), start=1):
             yield rel, number, line
+
+
+def _text(data: bytes) -> str | None:
+    """A file's text in whatever it was written in, or None for a binary.
+
+    UTF-16 is what Windows PowerShell writes by default, and it is full of NUL
+    bytes, so it is recognised before NUL is taken to mean binary. Anything
+    else is read as UTF-8 with the undecodable bytes replaced, since a file in
+    another 8-bit encoding still says whatever it says in ASCII.
+    """
+    if data.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return data.decode("utf-16", errors="replace")
+    if b"\0" in data:
+        # UTF-16 without a byte order mark: ASCII text leaves every other byte
+        # zero.
+        if len(data) >= 4 and data[1::2].count(0) > len(data) // 4:
+            return data.decode("utf-16-le", errors="replace")
+        return None
+    return data.decode("utf-8", errors="replace")
+
+
+def test_text_is_read_in_the_encodings_windows_writes():
+    real = "someone@" + "mail.fi"
+    line = real + "\n"
+    for encoded in (line.encode("utf-16"), line.encode("utf-16-le"),
+                    line.encode("cp1252"), line.encode("utf-8")):
+        assert real in _text(encoded)
+    assert _text(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x10") is None
 
 
 def test_the_address_pattern_can_fail():
@@ -89,6 +115,7 @@ def test_the_address_pattern_can_fail():
     assert EMAIL.search(real)
     assert not RESERVED.search(EMAIL.search(real).group(1))
     assert RESERVED.search(EMAIL.search("someone@example.com").group(1))
+    assert EMAIL.search(real + "_x"), "a word character after it must not hide it"
 
 
 def test_the_environment_pattern_tells_settings_from_code():
@@ -120,8 +147,6 @@ def test_no_real_environment_file_is_tracked():
 def test_every_email_address_is_an_example():
     found = []
     for path, number, line in _lines():
-        if path.name == "package-lock.json" and number:
-            continue  # npm@version pins and registry metadata, nobody's address
         for match in EMAIL.finditer(line):
             if not RESERVED.search(match.group(1).lower()):
                 found.append(f"{path}:{number}: {match.group(0)}")

@@ -48,19 +48,12 @@ variables:
 
   # Where the browser sends its requests.
   #
-  # The address is not published, so it is not here. Before turning this
-  # pipeline back on, set apiBaseUrl as a secret variable in the pipeline UI,
-  # and know the trap that comes with it: editing a variable in the UI does not
-  # start a build, and config.json is written during one, so the value changes
-  # and the site does not until the pipeline is run again.
-  #
-  # The name deliberately differs from the old API_BASE_URL. A variable set in
-  # the pipeline UI overrides one set here, so reusing the name would leave the
-  # stale UI value winning silently.
-  - name: apiBaseUrl
-    # Empty here on purpose; see above. Left empty, the site reports that
-    # nothing is answering.
-    value: ''
+  # The address is not published, so it is not in this block. Before turning
+  # this pipeline back on, set apiBaseUrl as a secret variable in the pipeline
+  # UI. It must not also be declared here: a variable in this file wins over
+  # one set in the UI. And know the trap that comes with a UI variable: editing
+  # it does not start a build, and config.json is written during one, so the
+  # value changes and the site does not until the pipeline is run again.
 
 steps:
   - task: NodeTool@0
@@ -99,9 +92,8 @@ steps:
   # so both are in the shipped files however they get there. The allowlist on
   # the edge is the protection.
   #
-  # The address comes from the variables block above; the client id is still a
-  # pipeline variable, since it belongs to the deployment rather than to this
-  # file.
+  # Both come from pipeline variables set in the UI, since both belong to the
+  # deployment rather than to this file.
   #
   # Absent, the site falls back to the local backend and honestly reports that
   # nothing is answering, which is a state it renders properly.

@@ -56,13 +56,16 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   outside the reserved example domains, on any machine. The terms that cannot be
   written into a published test live in `.local/private-terms.txt`
   (gitignored); the same test reads it where it exists, and the pre-push hook in
-  `.local/hooks/` checks outgoing commit messages and added lines against it.
-  Copy that hook to `.git/hooks/pre-push` in every clone. A worktree shares
-  the hook, and both the hook and the test read the list from the main
-  checkout when the worktree has none of its own.
+  `.local/hooks/` checks outgoing commit messages, file paths and added lines
+  against it, and refuses the push when it cannot. Both live only on the
+  owner's machine, so a fresh clone has neither: there, install the hook with
+  `cp .local/hooks/pre-push .git/hooks/pre-push` once `.local/` is restored. A
+  worktree shares the hook, and both the hook and the test read the list from
+  the main checkout when the worktree has none of its own. Terms are written in
+  the syntax Python and grep share: plain words, `\b`, `[...]`, `(a|b)`.
 
-  `.github/workflows/privacy.yml` runs the test on every push and pull
-  request. There the list is absent and only the `.env` and address checks
+  `.github/workflows/privacy.yml` runs the test on pull requests and on pushes
+  to main. There the list is absent and only the `.env` and address checks
   run, which is still the part a stranger's change could break.
 - **Never commit audio.** Not source material, not rendered output, not the
   word samples. All of it is excluded by `.gitignore` on extension, so it is

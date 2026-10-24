@@ -5,8 +5,8 @@
 Three states, kept visibly separate so they never blur together:
 
     bravo1.wav                              yours. Confirmed. Never touched.
-    AI_bravo__kirby2__c07__1.42-1.98.wav    a machine guess. Needs your ear.
-    TODO_4syl__muumit__c03__0.50-1.10.wav   no guess. Unknown.
+    AI_bravo__src2__c07__1.42-1.98.wav    a machine guess. Needs your ear.
+    TODO_4syl__src3__c03__0.50-1.10.wav   no guess. Unknown.
 
 Only a clip with no prefix counts. Neither AI_ nor TODO_ parses as a bank word,
 so an unverified guess is structurally incapable of reaching the bank however

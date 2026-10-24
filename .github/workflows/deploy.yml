@@ -89,7 +89,12 @@ jobs:
           for url in "$SITE_URL" "$API_BASE_URL"; do
             host=${url#*://}
             host=${host%%/*}
-            if [ -n "$host" ]; then echo "::add-mask::$host"; fi
+            host=${host##*@}
+            host=${host%%:*}
+            if [ -n "$host" ]; then
+              echo "::add-mask::$host"
+              echo "::add-mask::${host,,}"
+            fi
           done
 
       # A dispatch can name any branch, and this publishes to the live site.
