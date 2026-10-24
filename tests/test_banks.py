@@ -1221,3 +1221,51 @@ class TestTheCapReachesTheChoosing:
 
         assert loose != tight, "the declared cap changed nothing"
         assert "% would need octave folding" in tight
+
+
+class TestRenderDefaults:
+    """A bank can say how its voice is rendered best, so naming the bank
+    brings that with it; what the command line names always wins."""
+
+    def _bank(self, tmp_path, **defaults):
+        (tmp_path / "bank.json").write_text(json.dumps({"defaults": defaults}),
+                                            encoding="utf-8")
+        return tmp_path
+
+    def _args(self, bank_dir, *argv):
+        args = cli.build_parser().parse_args(
+            ["song.mp4", "--words-dir", str(bank_dir), *argv])
+        args.bank = args.bank or config.DEFAULT_BANK
+        return args
+
+    def test_a_bank_s_defaults_fill_what_the_command_line_left_out(self, tmp_path):
+        args = self._args(self._bank(tmp_path, swallow=2.6, engine="rubberband",
+                                     separator="roformer"))
+        taken = cli.apply_bank_defaults(args)
+        assert args.swallow == [(None, 2.6, 2.6)]
+        assert args.engine == "rubberband" and args.separator == "roformer"
+        assert len(taken) == 3
+
+    def test_the_command_line_wins(self, tmp_path):
+        args = self._args(self._bank(tmp_path, swallow=2.6, engine="rubberband",
+                                     separator="roformer"),
+                          "--swallow", "1.5", "--engine", "world",
+                          "--separator", "demucs")
+        assert cli.apply_bank_defaults(args) == []
+        assert args.swallow == [(None, 1.5, 1.5)]
+        assert (args.engine, args.separator) == ("world", "demucs")
+
+    def test_no_defaults_keeps_the_run_s_own(self, tmp_path):
+        args = self._args(self._bank(tmp_path))
+        assert cli.apply_bank_defaults(args) == []
+        assert args.swallow is None
+        assert args.engine == config.SHIFT_ENGINE
+        assert args.separator == config.SEPARATOR
+
+    @pytest.mark.parametrize("defaults", [
+        {"swallow": "2.6"}, {"swallow": 0}, {"engine": "melodyne"},
+        {"separator": "spleeter"}, {"tempo": 1.0},
+    ])
+    def test_a_default_that_cannot_work_is_refused(self, tmp_path, defaults):
+        with pytest.raises(ValueError, match="default"):
+            banks.render_defaults(self._bank(tmp_path, **defaults))

@@ -71,6 +71,17 @@ STRATEGIES = ("arranged", "sequence", "shuffled")
 
 SETTINGS_FILE = "bank.json"
 
+# What a bank may set for a render that does not name it on the command line,
+# and the values each may take; None is a positive number (--swallow's words).
+# A voice is rendered best a particular way, and that is a fact about the
+# recordings, so it belongs beside them: asked for by name, the bank should
+# come with it rather than rely on somebody remembering three flags.
+RENDER_DEFAULTS = {
+    "swallow": None,
+    "engine": ("world", "rubberband"),
+    "separator": ("demucs", "roformer"),
+}
+
 
 def settings_dir(bank_dir: Path) -> Path:
     """The directory whose bank.json speaks for these clips.
@@ -274,6 +285,30 @@ def _declared(bank_dir: Path) -> dict:
                 " nothing would say so."
             )
 
+    defaults = settings.get("defaults", {})
+    if not _an_object(defaults):
+        raise ValueError(f'"defaults" in {path} must be an object, got {defaults!r}.')
+    unknown = sorted(set(defaults) - set(RENDER_DEFAULTS))
+    if unknown:
+        raise ValueError(
+            f"unknown default {', '.join(repr(k) for k in unknown)} in {path}.\n"
+            f"    Expected one of: {', '.join(RENDER_DEFAULTS)}. A default"
+            " nothing reads would leave the run on its own value and say"
+            " nothing.")
+    for key, allowed in RENDER_DEFAULTS.items():
+        if key not in defaults:
+            continue
+        value = defaults[key]
+        if allowed is None:
+            if not _a_number(value) or not 0 < value < float("inf"):
+                raise ValueError(
+                    f"defaults.{key} in {path} must be a positive number of"
+                    f" words, got {value!r}. Write 2.6, not \"2.6\".")
+        elif value not in allowed:
+            raise ValueError(
+                f"defaults.{key} in {path} must be one of"
+                f" {', '.join(allowed)}, got {value!r}.")
+
     keep_whole = settings.get("never_split", False)
     if not _a_boolean(keep_whole):
         raise ValueError(
@@ -284,6 +319,16 @@ def _declared(bank_dir: Path) -> dict:
             " allow splitting kept every clip whole."
         )
     return settings
+
+
+def render_defaults(bank_dir: Path | None) -> dict:
+    """What this bank sets for a render that leaves it out. Empty when none.
+
+    A fresh dict, so a caller cannot end up sharing state with the settings.
+    """
+    if bank_dir is None:
+        return {}
+    return dict(_declared(bank_dir).get("defaults", {}))
 
 
 def strategy_for(bank_dir: Path, level: str) -> str:
