@@ -47,10 +47,11 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   persona name, no email address, no domain, hostname or resource id of the
   deployment, and no title or artist of a song rendered here, nor any slug,
   shorthand or source-video tag that stands for one, in any tracked file, ref
-  name, commit message or pull request. This is absolute. In examples and measurements a song is "one song" or "song A", a
-  file is `song.mp4`, an address is on `example.com` or `.invalid`, and the
-  deployment's addresses come from the repository secrets that
-  `.github/workflows/deploy.yml` reads, or from `~/.config/songgenerator.env`.
+  name, commit message or pull request. This is absolute. In examples and
+  measurements a song is "one song" or "song A", a file is `song.mp4`, an
+  address is on `example.com` or `.invalid`, and the deployment's addresses
+  come from the repository secrets that `.github/workflows/deploy.yml` reads,
+  or from `~/.config/songgenerator.env`.
   Real environment files stay untracked; only `*.env.example` is committed.
 
   `tests/test_privacy.py` fails on a tracked `.env` and on any email address
