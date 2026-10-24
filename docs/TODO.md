@@ -101,6 +101,113 @@ never see. Resolve it on a real vocal.
 
 ## Open items
 
+- **One bank was built from candidates nobody has listened to.**
+
+  141 candidates were mined into a `words_<song>_src/` directory and built
+  straight into a bank of 137 units, unheard and unnamed, junk included. Four
+  did not make it, and nobody has looked at which four or why. Deleting the bad
+  ones and rebuilding is what turns it into a bank rather than a pile.
+
+  It declares no `bank.json`, so it takes the same defaults as the default
+  bank: `arranged`, with clips that may be cut. That is how sung banks are
+  placed today, and it is cut from a sung song rather than from generated
+  speech. Whether it should instead get `sequence` and `never_split`, the way
+  the spoken bank tuned in "Tune a bank of generated voices" in
+  [WORKFLOWS.md](WORKFLOWS.md) does, is a listening decision for when it has
+  been heard, not something to copy by analogy.
+
+  That spoken bank's candidates have had no systematic listening pass either,
+  though its cuts are at least verified against the source.
+
+- **The run report names an engine it did not use.**
+
+  `mapping.py` prints `engine {config.SHIFT_ENGINE}` rather than the engine the
+  run actually used, so `--engine rubberband` reports "world". It misled an
+  entire A/B comparison until the two files were compared as audio.
+
+  Not a one-line fix, which is why it is written down rather than done in
+  passing: `report(plan, units)` has no access to the run's engine. That lives
+  in `args.engine`, no `Placement` carries it, so this needs the signature, the
+  one call site in `cli.py`, and any test that calls `report`.
+
+  The same report's `truncated` count fires on any reading speed above 1.0
+  whether or not anything was cut. That one is already documented where it
+  matters, in the diagnostic ladder in `docs/WORKFLOWS.md`, which tells the
+  reader to check `time fit` before believing it. Whoever fixes the counter
+  should delete that caveat in the same change.
+
+- **Settings that change the audio without changing the filename.**
+
+  `--engine`, `--mix-mode` and `--raw-clips` can each change the audio under
+  the same name, so a run with one of them overwrites the take before it with
+  one generation kept in `previous/`. `--mix-mode` changes nothing when every
+  placement is shifted anyway, and `--raw-clips`, which sings the recordings
+  instead of their standardised tier, changes nothing for a bank with no tier.
+  `variant_tag` already names `--mimicry`, `--no-shift`, `--mix`,
+  `--arrangement`, `--swallow` and `--keep-original`; these were left out.
+  `--seed` is a different question: a run without it draws a fresh seed and
+  already sounds different under the same name, so tagging only an explicit
+  seed would be a policy of its own.
+
+  Two neighbours look like the same problem and are not:
+
+  - `--separator` is ignored whenever the song already has stems, unless
+    `--force` is given: `separate.py` returns the cached stems with no backend
+    in the cache key, while the report and the JSON payload both name the
+    separator asked for. That defect is the cache key and the report. With
+    `--force` the new separator does change the audio, and the filename does
+    not say so, which is the problem above.
+  - `--bare-syllables` changes nothing about what gets sung, which this file
+    already records further down: `cli` loads the bank with
+    `singable_only=False` and `arrange.enrich` filters to word-like units
+    regardless. With the same seed and other inputs, naming it in the
+    filename would produce a differently named file with identical audio.
+
+  `--no-words` is its own case. It writes an untagged instrumental straight to
+  the output path, bypassing `versioned_name` and `keep_the_one_it_replaces`,
+  so it appears in the library as a row with no level in its name and keeps no
+  previous copy. With the default output it can only overwrite an earlier
+  instrumental of its own, since every worded render carries its level. An
+  `--output` that already names a level is the exception: `versioned_name`
+  does not add a level the name already ends in, so
+  `-o song.wild.mp3 --no-words` writes over the wild take that
+  `-o song.wild.mp3` made, with no backup.
+
+- **Noted: `pylibrb` is GPLv2 while `LICENSE` is MIT.**
+
+  Recorded because it is the kind of thing that looks like an oversight later.
+  `pylibrb` is a required dependency in `pyproject.toml` and bundles the Rubber
+  Band Library, which is GPL-or-commercial. It is free of charge, which is the
+  bar this repository sets.
+
+  This repository publishes its own source and does not ship `pylibrb` or the
+  library inside it: whoever installs the tool fetches them. Whether that is
+  enough has not been looked into further, and the question changes if the
+  tool is ever packaged with them for anyone else.
+
+  Separately, if Rubber Band ever becomes optional, it moves to
+  `[project.optional-dependencies]` beside `roformer`, and two things go with
+  it: `pitchshift.py` imports `pylibrb` bare, so a missing extra gives a raw
+  traceback where `separate.py` raises a named error, and `cli.py` offers
+  `--engine rubberband` in its choices unconditionally.
+
+- **Old and new render names sit side by side, and they are not duplicates.**
+
+  For one song, one bank's output folder holds four files: two `.mim1p00` from
+  before the naming rule and two untagged from after. They are four different
+  renders, a day apart, with four different audio checksums, and `previous/`
+  holds a third generation again.
+
+  So there is no safe sweep for `*.mim1p00.mp3` beside an untagged twin, and
+  the earlier version of this note suggested one. It would delete real takes.
+  It would also delete the top rung of any `--ladder` render, which the code
+  still writes as `mim1p00` on purpose so seven files can be told apart: disk
+  currently holds 139 of them, and the only reason the pattern has not
+  misfired is that nobody has run a ladder beside a plain render.
+
+  Whether the older takes are worth keeping is a listening question, one folder
+  at a time.
+
 - **The elderly female voice's bank does not sound like her.**
 
   Three banks were made for her while rendering a rap posse cut with `--voices`,
