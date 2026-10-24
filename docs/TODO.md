@@ -108,12 +108,13 @@ never see. Resolve it on a real vocal.
   did not make it, and nobody has looked at which four or why. Deleting the bad
   ones and rebuilding is what turns it into a bank rather than a pile.
 
-  It declares no `bank.json`, and that part is deliberate rather than missing:
-  it is cut from a sung song, not from generated speech, so it takes the same
-  defaults as the default bank. `arranged` with splittable clips is the right
-  placement for sung material. Do not give it `sequence` and `never_split` by
-  analogy with the spoken bank tuned in "Tune a bank of generated voices" in
-  [WORKFLOWS.md](WORKFLOWS.md), which is a different problem.
+  It declares no `bank.json`, so it takes the same defaults as the default
+  bank: `arranged`, with clips that may be cut. That is how sung banks are
+  placed today, and it is cut from a sung song rather than from generated
+  speech. Whether it should instead get `sequence` and `never_split`, the way
+  the spoken bank tuned in "Tune a bank of generated voices" in
+  [WORKFLOWS.md](WORKFLOWS.md) does, is a listening decision for when it has
+  been heard, not something to copy by analogy.
 
   That spoken bank's candidates have had no systematic listening pass either,
   though its cuts are at least verified against the source.
@@ -127,7 +128,7 @@ never see. Resolve it on a real vocal.
   Not a one-line fix, which is why it is written down rather than done in
   passing: `report(plan, units)` has no access to the run's engine. That lives
   in `args.engine`, no `Placement` carries it, so this needs the signature, the
-  one call site in `cli.py`, and any test that calls `report/2`.
+  one call site in `cli.py`, and any test that calls `report`.
 
   The same report's `truncated` count fires on any reading speed above 1.0
   whether or not anything was cut. That one is already documented where it
@@ -137,12 +138,16 @@ never see. Resolve it on a real vocal.
 
 - **Settings that change the audio without changing the filename.**
 
-  `--engine`, `--mix-mode`, `--seed` and `--raw-clips` each produce a
-  materially different render under the same name, so each overwrites the take
-  before it with one generation kept in `previous/`. `--raw-clips` sings the
-  recordings instead of their standardised tier. `variant_tag` already names
-  `--mimicry`, `--no-shift`, `--mix`, `--arrangement`, `--swallow` and
-  `--keep-original`; these were left out.
+  `--engine`, `--mix-mode` and `--raw-clips` can each change the audio under
+  the same name, so a run with one of them overwrites the take before it with
+  one generation kept in `previous/`. `--mix-mode` changes nothing when every
+  placement is shifted anyway, and `--raw-clips`, which sings the recordings
+  instead of their standardised tier, changes nothing for a bank with no tier.
+  `variant_tag` already names `--mimicry`, `--no-shift`, `--mix`,
+  `--arrangement`, `--swallow` and `--keep-original`; these were left out.
+  `--seed` is a different question: a run without it draws a fresh seed and
+  already sounds different under the same name, so tagging only an explicit
+  seed would be a policy of its own.
 
   Two neighbours look like the same problem and are not:
 
@@ -155,8 +160,8 @@ never see. Resolve it on a real vocal.
   - `--bare-syllables` changes nothing about what gets sung, which this file
     already records further down: `cli` loads the bank with
     `singable_only=False` and `arrange.enrich` filters to word-like units
-    regardless. Naming it in the filename would produce a differently named
-    file with identical audio.
+    regardless. With the same seed and other inputs, naming it in the
+    filename would produce a differently named file with identical audio.
 
   `--no-words` is its own case. It writes an untagged instrumental straight to
   the output path, bypassing `versioned_name` and `keep_the_one_it_replaces`,
@@ -164,9 +169,9 @@ never see. Resolve it on a real vocal.
   previous copy. With the default output it can only overwrite an earlier
   instrumental of its own, since every worded render carries its level. An
   `--output` that already names a level is the exception: `versioned_name`
-  does not add a level the name already ends in, so `-o song.wild.mp3
-  --no-words` writes over the wild take `-o song.wild.mp3` made, with no
-  backup.
+  does not add a level the name already ends in, so
+  `-o song.wild.mp3 --no-words` writes over the wild take that
+  `-o song.wild.mp3` made, with no backup.
 
 - **Noted: `pylibrb` is GPLv2 while `LICENSE` is MIT.**
 
@@ -178,11 +183,13 @@ never see. Resolve it on a real vocal.
   This repository publishes its own source and does not ship `pylibrb` or the
   library inside it: whoever installs the tool fetches them. Whether that is
   enough has not been looked into further, and the question changes if the
-  tool is ever packaged with them for anyone else. That would also need the
-  move to `[project.optional-dependencies]` beside `roformer`, and two things
-  that go with it: `pitchshift.py` imports `pylibrb` bare, so a missing extra
-  gives a raw traceback where `separate.py` raises a named error, and `cli.py`
-  offers `--engine rubberband` in its choices unconditionally.
+  tool is ever packaged with them for anyone else.
+
+  Separately, if Rubber Band ever becomes optional, it moves to
+  `[project.optional-dependencies]` beside `roformer`, and two things go with
+  it: `pitchshift.py` imports `pylibrb` bare, so a missing extra gives a raw
+  traceback where `separate.py` raises a named error, and `cli.py` offers
+  `--engine rubberband` in its choices unconditionally.
 
 - **Old and new render names sit side by side, and they are not duplicates.**
 
@@ -576,11 +583,11 @@ never see. Resolve it on a real vocal.
   with no picture at all do.
 
   The recording the default bank was cut from is not in that table and not in
-  the index. It is not a song
-  that was fetched from anywhere: it is the source the first word clips were
-  cut out of, so there is no address to find for it. That is a different answer
-  from one nobody has written down, and worth keeping distinct, because a gap
-  invites somebody to go looking for something that was never there.
+  the index. It is not a song that was fetched from anywhere: it is the source
+  the first word clips were cut out of, so there is no address to find for it.
+  That is a different answer from one nobody has written down, and worth keeping
+  distinct, because a gap invites somebody to go looking for something that was
+  never there.
 
   The index is `input/SOURCES.md`, one row per song, keyed on the slug the tool
   derives from the input filename. That slug names the `work/` directory
