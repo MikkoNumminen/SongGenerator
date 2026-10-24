@@ -106,7 +106,7 @@ describe('never guessing an address once deployed', () => {
     // being the site that triggers the prompt is worse than admitting the
     // deployment is unfinished. It could not have worked anyway: an HTTPS page
     // may not call HTTP.
-    expect(readRuntimeConfig({}, 'green-bay-0f4fe1d03.7.azurestaticapps.net').apiBaseUrl)
+    expect(readRuntimeConfig({}, 'your-site.azurestaticapps.net').apiBaseUrl)
       .toBe('');
     expect(readRuntimeConfig(undefined, 'example.invalid').apiBaseUrl).toBe('');
   });

@@ -699,13 +699,15 @@ with its trigger off so the two can be read side by side.
 [AZURE.md](AZURE.md) has why it moved. The short version is that it stopped
 producing runs and nothing in the repository could tell.
 
-**3. Give the repository two secrets.** GitHub, Settings, Secrets and
+**3. Give the repository four secrets.** GitHub, Settings, Secrets and
 variables, Actions:
 
 | Secret | Value |
 |---|---|
 | `AZURE_STATIC_WEB_APPS_API_TOKEN` | see below |
 | `GOOGLE_CLIENT_ID` | the OAuth client id, once there is one |
+| `SITE_URL` | the Static Web App's own `https://` address |
+| `API_BASE_URL` | the proxy in front of the edge, ending `/api/songgen` |
 
 The token is the one credential here, and it is enough on its own to publish to
 the site, so it is never committed:
@@ -714,6 +716,8 @@ the site, so it is never committed:
 az staticwebapp secrets list --name songgen-web --query "properties.apiKey" -o tsv
 gh secret set AZURE_STATIC_WEB_APPS_API_TOKEN
 gh secret set GOOGLE_CLIENT_ID
+gh secret set SITE_URL
+gh secret set API_BASE_URL
 ```
 
 `gh secret set` with no value prompts for one and does not echo it, which is
@@ -728,13 +732,21 @@ readable by any workflow in any fork's pull request, and the client id being
 public in the shipped files is not a reason to hand it to arbitrary workflow
 code as well.
 
-The backend address is not among these. It is `API_BASE_URL` in
-`.github/workflows/deploy.yml`, because the edge is reached through a proxy on
-a domain this repository names everywhere, and hiding a public hostname bought
-nothing. Committing it also removes a trap worth knowing about even now:
-**editing a value in a web UI does not start a build**, and `config.json` is
-written during one, so the value changed and the site did not. Editing the
-workflow triggers the deploy that applies it.
+The two addresses are secrets for a different reason. Neither is a
+credential, but this repository publishes nothing that identifies the
+deployment, and a run's log is public: a secret is masked there and a plain
+variable is printed in every step that uses it.
+
+That leaves a trap: **changing a secret does not start a build**, and
+`config.json` is written during one, so the value changes and the site does
+not. Run the workflow by hand after changing either:
+
+```powershell
+gh workflow run deploy.yml --ref main
+```
+
+Without `SITE_URL` the last step cannot ask the site what it serves and
+fails, which is the right outcome for a deploy nobody can check.
 
 Missing the client id is not a failure. Sign-in is unavailable and the site
 says so, which it renders honestly. Missing the address is not a failure
@@ -796,9 +808,8 @@ tailscale funnel 8000
 ```
 
 The address it prints is where the edge answers. The site does not call it
-directly: the site's domain proxies `/api/songgen/*` to it, and
-`API_BASE_URL` in `.github/workflows/deploy.yml` points at that proxy
-instead.
+directly: the site's domain proxies `/api/songgen/*` to it, and the
+`API_BASE_URL` repository secret points the site at that proxy instead.
 
 The proxy is not decoration. On any machine signed in to the tailnet, MagicDNS
 resolves a `*.ts.net` name to the node's own `100.x` address, so a browser sees

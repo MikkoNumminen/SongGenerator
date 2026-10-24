@@ -53,11 +53,17 @@ Tests need `PYTHONPATH` pointed at `src` unless the package is installed:
   stay untracked; only `*.env.example` is committed.
 
   `tests/test_privacy.py` fails on a tracked `.env` and on any email address
-  outside the reserved example domains, everywhere. The terms that cannot be
+  outside the reserved example domains, on any machine. The terms that cannot be
   written into a published test live in `.local/private-terms.txt`
   (gitignored); the same test reads it where it exists, and the pre-push hook in
   `.local/hooks/` checks outgoing commit messages and added lines against it.
-  Copy that hook to `.git/hooks/pre-push` in every clone; worktrees share it.
+  Copy that hook to `.git/hooks/pre-push` in every clone. A worktree shares
+  the hook, and both the hook and the test read the list from the main
+  checkout when the worktree has none of its own.
+
+  `.github/workflows/privacy.yml` runs the test on every push and pull
+  request. There the list is absent and only the `.env` and address checks
+  run, which is still the part a stranger's change could break.
 - **Never commit audio.** Not source material, not rendered output, not the
   word samples. All of it is excluded by `.gitignore` on extension, so it is
   refused wherever it lands. The repo is the tool, not the media.

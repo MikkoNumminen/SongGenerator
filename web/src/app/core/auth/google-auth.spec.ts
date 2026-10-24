@@ -29,7 +29,7 @@ function token(claims: object): string {
   return `header.${body}.sig`;
 }
 
-const CLIENT = '356639811299-example.apps.googleusercontent.com';
+const CLIENT = '000000000000-example.apps.googleusercontent.com';
 
 describe('GoogleAuth', () => {
   let fake: ReturnType<typeof fakeGoogle>;

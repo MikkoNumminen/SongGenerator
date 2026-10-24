@@ -62,7 +62,9 @@ variables:
   # the pipeline UI overrides one set here, so reusing the name would leave the
   # stale UI value winning silently.
   - name: apiBaseUrl
-    value: https://<site domain>/api/songgen
+    # Left empty: the real address is not published. Fill it in before turning
+    # this pipeline back on, or the site reports that nothing is answering.
+    value: ''
 
 steps:
   - task: NodeTool@0

@@ -109,7 +109,7 @@ as served.
 
 The site does not use that URL. The site's domain proxies `/api/songgen/*` to
 it, one rewrite per endpoint, and the site is pointed at the proxy through
-`API_BASE_URL` in `.github/workflows/deploy.yml`. So renaming the node or moving the port
+the `API_BASE_URL` repository secret. So renaming the node or moving the port
 means editing that proxy's rewrites, not the site's build.
 
 Routing through the proxy is what makes the site work on this machine at all;

@@ -70,9 +70,11 @@ jobs:
       # go on succeeding while the check at the end reported the site serving
       # something else forever.
       #
-      # Held in the repository variable SITE_URL rather than here, so the
-      # repository does not publish the address.
-      SITE_URL: ${{ vars.SITE_URL }}
+      # It is the repository secret SITE_URL, so that neither this file nor a
+      # run's log publishes it: a secret is masked as *** in the log, and a plain
+      # variable is printed. Changing it starts no build, so run this workflow
+      # by hand afterwards.
+      SITE_URL: ${{ secrets.SITE_URL }}
 
     steps:
       - uses: actions/checkout@v4
@@ -112,10 +114,9 @@ jobs:
       # requests, so both are in the shipped files however they get there. The
       # allowlist on the edge is the protection.
       #
-      # The address is committed, in `env` below, because the edge is reached
-      # through a proxy on a domain this repository names everywhere. The
-      # client id is a repository secret because it belongs to the deployment
-      # rather than to this file.
+      # Both are repository secrets, the address for the same reason as
+      # SITE_URL and the client id because it belongs to the deployment rather
+      # than to this file. Neither is printed: the file is written, not shown.
       #
       # Absent, the site falls back to reporting that nothing is answering,
       # which is a state it renders properly.
@@ -124,8 +125,7 @@ jobs:
       - name: Write the runtime config
         if: github.event_name != 'pull_request'
         env:
-          # The repository variable API_BASE_URL, for the same reason as SITE_URL.
-          API_BASE_URL: ${{ vars.API_BASE_URL }}
+          API_BASE_URL: ${{ secrets.API_BASE_URL }}
           GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
         run: |
           cat > dist/songgen-web/browser/config.json <<JSON
@@ -135,7 +135,6 @@ jobs:
           }
           JSON
           echo "wrote dist/songgen-web/browser/config.json"
-          cat dist/songgen-web/browser/config.json
 
       # Already built and tested above, so the action uploads rather than
       # building again with its own toolchain and its own idea of the config.

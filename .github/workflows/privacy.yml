@@ -1,0 +1,27 @@
+# Run the privacy test on every change, not only on a machine where somebody
+# remembered to run the suite.
+#
+# Only tests/test_privacy.py, and without the suite's conftest, which imports
+# the whole pipeline and with it torch. The test needs the standard library
+# and pytest. The private term list is not here, so that part skips; the
+# checks for a tracked .env and for a real email address run.
+
+name: privacy
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install pytest
+      - run: python -m pytest tests/test_privacy.py --noconftest -q -p no:cacheprovider -rs

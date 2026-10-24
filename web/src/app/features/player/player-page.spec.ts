@@ -228,8 +228,8 @@ describe('the player', () => {
       .toEqual(new Set(['eveningSong', 'tuulimylly']));
     // Named rather than taken by position, because the list is ordered now
     // and position is what the order tests are for.
-    const hyva = songs.find((s) => s.song === 'eveningSong')!;
-    expect(hyva.takes.length).toBe(2);
+    const evening = songs.find((s) => s.song === 'eveningSong')!;
+    expect(evening.takes.length).toBe(2);
   });
 
   it('puts the newest song first by default', async () => {
