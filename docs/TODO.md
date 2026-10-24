@@ -110,13 +110,13 @@ never see. Resolve it on a real vocal.
 
   It declares no `bank.json`, and that part is deliberate rather than missing:
   it is cut from a sung song, not from generated speech, so it takes the
-  defaults `words_hq4` takes, which is what `vocabulary_local.py` says beside
-  it. `arranged` with splittable clips is the right placement for sung
-  material. Do not give it `sequence` and `never_split` by analogy with
-  `asuntoautoBank`, which is a speech bank and a different problem.
+  defaults the default bank takes, which is what `vocabulary_local.py` says
+  beside it. `arranged` with splittable clips is the right placement for
+  sung material. Do not give it `sequence` and `never_split` by analogy with
+  the spoken bank, which is a different problem.
 
-  `words_asuntoauto_src/candidates/` has had no systematic listening pass
-  either, though its cuts are at least verified against the source.
+  The spoken bank's candidates have had no systematic listening pass either,
+  though its cuts are at least verified against the source.
 
 - **The run report names an engine it did not use.**
 
@@ -179,7 +179,7 @@ never see. Resolve it on a real vocal.
 
 - **Old and new render names sit side by side, and they are not duplicates.**
 
-  For one song, `output/<song>/ttsfi/` holds four files: two `.mim1p00` from
+  For one song, one bank's output folder holds four files: two `.mim1p00` from
   before the naming rule and two untagged from after. They are four different
   renders, a day apart, with four different audio checksums, and `previous/`
   holds a third generation again.
@@ -198,7 +198,7 @@ never see. Resolve it on a real vocal.
 
   Three banks were made for her while rendering a rap posse cut with
   `--voices`, and the owner heard all three as wrong: voice conversion of the
-  sung ppbank clips, one text-to-speech call per short phrase, and single
+  sung default bank's clips, one text-to-speech call per short phrase, and single
   words cut out of carrier sentences by that sibling project's word-bank
   script. The third is clean (every word verified by transcript, whole, never
   stretched) and is still not her. The song was set aside rather than fixed.
@@ -243,7 +243,7 @@ never see. Resolve it on a real vocal.
   Shuffling the running order varies the take while leaving every clip exactly
   as recorded. That much works.
 
-  What it does not do is know whose voice it is holding. `asuntoautoBank` now
+  What it does not do is know whose voice it is holding. One spoken bank now
   carries three singers, and conservative keeps them in blocks only because
   reciting in bank order happens to group them: the female phrases were built
   first, then the male, then the reader. Shuffling throws that away, so wild
@@ -309,7 +309,7 @@ never see. Resolve it on a real vocal.
   banks are actually liked for: a real person's delivery.
 
   Worth a small experiment rather than a plan. One generated word set, cut
-  into a bank, rendered next to `words_hq4` on the same song.
+  into a bank, rendered next to the default bank on the same song.
 
 - **Done: the site has a name, and the edge is reachable from the tailnet.**
   Kept because the wrong answer was expensive and is easy to reach for again.
