@@ -19,6 +19,7 @@ import pytest
 from factories import make_unit as _unit
 
 from song_generator import arrange, audio_io, banks, cli, config
+from song_generator import mapping as mapping_mod
 from song_generator.mapping import (
     Placement, Plan, Slot, build_segments, group_phrases, load_bank,
     mix as mix_buses, plan_sequence, render,
@@ -1221,3 +1222,225 @@ class TestTheCapReachesTheChoosing:
 
         assert loose != tight, "the declared cap changed nothing"
         assert "% would need octave folding" in tight
+
+
+class TestRenderDefaults:
+    """A bank can say how its voice is rendered best, so naming the bank
+    brings that with it; what the command line names always wins."""
+
+    def _bank(self, tmp_path, **defaults):
+        (tmp_path / "bank.json").write_text(json.dumps({"defaults": defaults}),
+                                            encoding="utf-8")
+        return tmp_path
+
+    def _args(self, bank_dir, *argv):
+        args = cli.build_parser().parse_args(
+            ["song.mp4", "--words-dir", str(bank_dir), *argv])
+        args.bank = args.bank or config.DEFAULT_BANK
+        return args
+
+    def test_a_bank_s_defaults_fill_what_the_command_line_left_out(self, tmp_path):
+        args = self._args(self._bank(tmp_path, swallow=2.6, engine="rubberband",
+                                     separator="roformer"))
+        taken = cli.apply_bank_defaults(args)
+        assert args.swallow == [(None, 2.6, 2.6)]
+        assert args.engine == "rubberband" and args.separator == "roformer"
+        assert len(taken) == 3
+
+    def test_the_command_line_wins(self, tmp_path):
+        args = self._args(self._bank(tmp_path, swallow=2.6, engine="rubberband",
+                                     separator="roformer"),
+                          "--swallow", "1.5", "--engine", "world",
+                          "--separator", "demucs")
+        assert cli.apply_bank_defaults(args) == []
+        assert args.swallow == [(None, 1.5, 1.5)]
+        assert (args.engine, args.separator) == ("world", "demucs")
+
+    def test_no_defaults_keeps_the_run_s_own(self, tmp_path):
+        args = self._args(self._bank(tmp_path))
+        assert cli.apply_bank_defaults(args) == []
+        assert args.swallow is None
+        assert args.engine == config.SHIFT_ENGINE
+        assert args.separator == config.SEPARATOR
+
+    @pytest.mark.parametrize("defaults", [
+        {"swallow": "2.6"}, {"swallow": 0}, {"engine": "melodyne"},
+        {"separator": "spleeter"}, {"tempo": 1.0},
+    ])
+    def test_a_default_that_cannot_work_is_refused(self, tmp_path, defaults):
+        with pytest.raises(ValueError, match="default"):
+            banks.render_defaults(self._bank(tmp_path, **defaults))
+
+
+class TestLegato:
+    """A word held into the next wherever the original did not rest."""
+
+    def _bank(self, tmp_path, **declared):
+        (tmp_path / "bank.json").write_text(json.dumps(declared), encoding="utf-8")
+        return tmp_path
+
+    def _placement(self, onset, slots, phrase=0):
+        unit = _unit(["tango"])
+        return Placement(unit=unit, onset_s=onset, slot_span_s=slots[-1].offset_s - onset,
+                         play_s=0.4, n_slots=len(slots), phrase=phrase, slots=slots)
+
+    def test_a_word_holds_into_the_next_when_the_singer_did_not_rest(self, tmp_path):
+        bank_dir = self._bank(tmp_path, legato=True)
+        a = self._placement(0.0, [Slot(0.0, 0.5, 60, 0), Slot(0.5, 1.0, 60, 0)])
+        b = self._placement(1.05, [Slot(1.05, 1.5, 60, 0)])
+        plan = types.SimpleNamespace(placements=[a, b])
+        arrange.join_legato(plan, bank_dir)
+        assert a.hold_to_s == pytest.approx(1.05)
+        assert b.hold_to_s is None
+
+    def test_a_real_rest_is_kept(self, tmp_path):
+        bank_dir = self._bank(tmp_path, legato=True)
+        a = self._placement(0.0, [Slot(0.0, 0.5, 60, 0)])
+        b = self._placement(1.0, [Slot(1.0, 1.5, 60, 0)])  # 0.5 s, over PHRASE_GAP_S
+        plan = types.SimpleNamespace(placements=[a, b])
+        arrange.join_legato(plan, bank_dir)
+        assert a.hold_to_s is None
+
+    def test_never_across_a_real_pause(self, tmp_path):
+        bank_dir = self._bank(tmp_path, legato=True)
+        a = self._placement(0.0, [Slot(0.0, 0.5, 60, 0)], phrase=0)
+        b = self._placement(1.5, [Slot(1.5, 2.0, 60, 1)], phrase=1)
+        plan = types.SimpleNamespace(placements=[a, b])
+        arrange.join_legato(plan, bank_dir)
+        assert a.hold_to_s is None
+
+    def test_off_unless_declared(self, tmp_path):
+        a = self._placement(0.0, [Slot(0.0, 0.5, 60, 0)])
+        b = self._placement(0.52, [Slot(0.52, 1.0, 60, 0)])
+        plan = types.SimpleNamespace(placements=[a, b])
+        arrange.join_legato(plan, self._bank(tmp_path))
+        assert a.hold_to_s is None
+
+    def test_the_held_syllable_reaches_the_next_word(self):
+        a = self._placement(0.0, [Slot(0.0, 0.2, 60, 0), Slot(0.2, 0.4, 60, 0)])
+        a.unit = _unit(["tango"])
+        a.hold_to_s = 0.9
+        segments, total = build_segments(a)
+        assert segments[-1].sustain_to_s == pytest.approx(0.9)
+        assert total == pytest.approx(0.9)
+
+    @pytest.mark.parametrize("declared", [
+        {"legato": "true"}, {"legato": True, "never_split": True}])
+    def test_a_declaration_that_cannot_work_is_refused(self, tmp_path, declared):
+        with pytest.raises(ValueError, match="legato"):
+            banks.legato(self._bank(tmp_path, **declared))
+
+
+class TestFoldByPhrase:
+    """One octave per phrase, so a line keeps its contour in the voice's
+    register instead of flipping octaves word by word."""
+
+    def _placement(self, unit, onset, midis, phrase=0):
+        slots = [Slot(onset + 0.3 * k, onset + 0.3 * (k + 1), m, phrase)
+                 for k, m in enumerate(midis)]
+        return Placement(unit=unit, onset_s=onset, slot_span_s=0.3 * len(midis),
+                         play_s=0.6, n_slots=len(midis), phrase=phrase, slots=slots)
+
+    def _unit_at(self, midi):
+        unit = _unit(["tango"])
+        unit.syllable_midi = [midi] * unit.syllables
+        unit.midi = midi
+        return unit
+
+    def test_a_whole_line_moves_by_one_octave(self):
+        """Wanted shifts around +12 move the whole line down an octave, and
+        every interval inside it stays as the melody asked."""
+        a = self._placement(self._unit_at(60.0), 0.0, [71.0, 73.0])
+        b = self._placement(self._unit_at(60.0), 0.6, [74.0, 72.0])
+        mapping_mod.fold_phrases([a, b])
+        build_segments(a)
+        build_segments(b)
+        assert a.shifts == pytest.approx([-1.0, 1.0])
+        assert b.shifts == pytest.approx([2.0, 0.0])
+
+    def test_a_note_an_octave_off_the_line_is_folded_back(self):
+        """The tracker reads a held note at half its frequency now and then."""
+        a = self._placement(self._unit_at(62.0), 0.0, [62.0, 50.0])
+        b = self._placement(self._unit_at(62.0), 0.6, [63.0, 61.0])
+        mapping_mod.fold_phrases([a, b])
+        build_segments(a)
+        assert a.shifts == pytest.approx([0.0, 0.0])
+
+    def test_phrases_are_decided_apart(self):
+        a = self._placement(self._unit_at(60.0), 0.0, [72.0, 72.0], phrase=0)
+        b = self._placement(self._unit_at(60.0), 5.0, [60.0, 61.0], phrase=1)
+        mapping_mod.fold_phrases([a, b])
+        assert a.octave_offset == -12.0 and b.octave_offset == 0.0
+
+    def test_off_unless_declared(self, tmp_path):
+        assert banks.fold_by_phrase(None) is False
+        (tmp_path / "bank.json").write_text(json.dumps({"fold_by_phrase": "yes"}),
+                                            encoding="utf-8")
+        with pytest.raises(ValueError, match="fold_by_phrase"):
+            banks.fold_by_phrase(tmp_path)
+
+
+class TestBorrowedVibrato:
+    """Long syllables take the original singer's own vibrato from the song."""
+
+    def test_the_curve_is_the_shake_without_the_melody(self):
+        hop = 0.01
+        t = np.arange(0, 3, hop)
+        hz = 440.0 * 2 ** ((5.0 * (t > 1.5) + 1.0 * np.sin(2 * np.pi * 5.6 * t)) / 12)
+        curve = mapping_mod.vibrato_curve(hz, [True] * len(t), hop)
+        middle = curve[20:130]
+        assert np.abs(middle).max() == pytest.approx(1.0, abs=0.25)
+        assert abs(middle.mean()) < 0.1
+
+    def test_unvoiced_frames_carry_no_shake_and_slips_are_clipped(self):
+        hop = 0.01
+        hz = np.full(300, 440.0)
+        hz[100] = 1760.0          # a tracking slip two octaves up
+        voiced = [True] * 300
+        voiced[200:250] = [False] * 50
+        curve = mapping_mod.vibrato_curve(hz, voiced, hop)
+        assert np.all(curve[200:250] == 0.0)
+        assert curve.max() <= config.VIBRATO_MAX_ST
+
+    def test_only_a_long_syllable_is_given_it(self):
+        unit = _unit(["tango"])
+        long_slots = [Slot(0.0, 0.5, 60, 0), Slot(0.5, 0.6, 60, 0)]
+        p = Placement(unit=unit, onset_s=0.0, slot_span_s=0.6, play_s=0.4,
+                      n_slots=2, phrase=0, slots=long_slots)
+        mapping_mod.attach_vibrato([p], np.ones(200), 0.01)
+        segments, _ = build_segments(p)
+        assert segments[0].vibrato is not None
+        assert segments[1].vibrato is None
+
+    @pytest.mark.parametrize("engine", ["world", "rubberband"])
+    def test_both_engines_render_it_at_the_asked_length(self, engine):
+        from song_generator.pitchshift import Segment, render_unit
+        unit = _unit(["tango", "bravo"])
+        mono = audio_io.to_mono(unit.audio)
+        d = unit.duration_s
+        shake = np.sin(2 * np.pi * 5.6 * np.arange(0, 4, 0.01))
+        y = render_unit(mono, config.SAMPLE_RATE,
+                        [Segment(0, d, 0, d * 2, 0.0, vibrato=shake)], d * 2, engine)
+        assert np.isfinite(y).all()
+        assert abs(len(y) - int(d * 2 * config.SAMPLE_RATE)) < config.SAMPLE_RATE * 0.05
+
+    def test_off_unless_declared(self, tmp_path):
+        assert banks.borrow_vibrato(None) is False
+        (tmp_path / "bank.json").write_text(json.dumps({"borrow_vibrato": 1}),
+                                            encoding="utf-8")
+        with pytest.raises(ValueError, match="borrow_vibrato"):
+            banks.borrow_vibrato(tmp_path)
+
+
+class TestLegatoAcrossACutLine:
+    def test_a_line_cut_at_the_phrase_length_cap_is_still_sung_through(self, tmp_path):
+        """group_phrases cuts a long line where the singer never paused; the
+        words either side must still be joined."""
+        (tmp_path / "bank.json").write_text(json.dumps({"legato": True}), encoding="utf-8")
+        unit = _unit(["tango"])
+        a = Placement(unit=unit, onset_s=0.0, slot_span_s=0.5, play_s=0.4, n_slots=1,
+                      phrase=0, slots=[Slot(0.0, 0.5, 60, 0)])
+        b = Placement(unit=unit, onset_s=0.6, slot_span_s=0.5, play_s=0.4, n_slots=1,
+                      phrase=1, slots=[Slot(0.6, 1.1, 60, 1)])
+        arrange.join_legato(types.SimpleNamespace(placements=[a, b]), tmp_path)
+        assert a.hold_to_s == pytest.approx(0.6)

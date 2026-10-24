@@ -19,6 +19,21 @@ already massaged toward a mapping decision.
 `PHRASE_GAP_S` between them. A sung line. Words never straddle a phrase
 boundary.
 
+**Swallow**. Folding several consecutive slots into one before planning, for
+`--swallow`, so one bank syllable sounds across several of the original's
+sung syllables instead of one, at a pace named in words of the original (`2.6`,
+or a range like `2-4`, whose mean is the only part used). Built for rap,
+where the analysis gives a slot to nearly every syllable and a bank syllable
+on each one comes out as far too many words, far too fast. The word count is
+converted to notes per bank syllable, and a phrase of N notes becomes
+`round(N / per_syllable)` slots kept as close to that mean as
+rounding allows, split evenly and then nudged up to `SWALLOW_SNAP_NOTES`
+notes toward the widest gap nearby, the nearest thing to a word boundary a run
+of sung syllables offers. A group never crosses a phrase, and takes its pitch
+from its longest slot, the one the rapper actually leant on. A voice of
+`--voices` may swallow at its own pace. `swallow_slots` in `mapping.py`; off
+by default. See `docs/WORKFLOWS.md`.
+
 **Unit**. One clip from the bank, and the thing actually placed on the melody.
 A unit may be one word (`bravo`), several words the singer ran together
 (`tango+delta+tango`), a shout (`aah`), or a word spelled from syllable clips.
@@ -130,6 +145,20 @@ where that movement should be.
 Slicing and spelling exist to reach sequences nobody recorded, not to replace
 what was recorded. In practice `spelled` should be near zero and appears only
 when nothing recorded will do.
+
+**Voice**. One bank, when several take turns singing a song under `--voices`.
+Not one voice per singer: the voices alternate at every change of turn instead,
+because with more singers than voices, mapping singers to voices can put two
+different singers next to each other in the same voice, and the change a
+listener is meant to hear would not happen.
+
+**Turn**. A stretch of the song sung by one original singer, measured from the
+vocal stem by `turns.py` and used only by `--voices`. Detected by clustering
+speaker embeddings of the sung parts of the stem, then folding any stretch
+shorter than `TURN_MIN_S` into its neighbours, since a stretch that short is a
+window straddling a handover rather than a singer. Cached as `turns.json`
+beside the stems; a boundary moved by hand in that file stays moved while the
+settings that produced it still match. See `docs/DATA-FORMATS.md`.
 
 **Chant**. The same thing said several times running, on purpose. Distinct
 from the monotony `repeat_penalty` exists to stop, which is one clip quietly

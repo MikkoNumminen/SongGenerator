@@ -325,6 +325,16 @@ class Arrangement:
     level: str
     seed: int
     lines: list[Line] = dataclasses.field(default_factory=list)
+    # Notes per bank syllable when the slots were swallowed (--swallow), None
+    # when they were not. The lines are laid over that grid, so replay needs
+    # the same one; cli refuses a replay on any other.
+    swallow: float | None = None
+    # The --swallow words that grid came from, so a refused replay can say
+    # what to pass rather than a notes figure --swallow does not take.
+    swallow_words: float | None = None
+    # The --keep-original ranges the take was made with, in seconds, or None.
+    # They decide which slots existed, so a replay brings them back with it.
+    keep: list[tuple[float, float]] | None = None
 
     def words_used(self) -> set[str]:
         return {w for line in self.lines for w in line.words}
@@ -392,6 +402,19 @@ def render_text(arr: Arrangement) -> str:
     out = [HEADER.format(song=arr.song, bank=arr.bank, level=arr.level, seed=arr.seed,
                          vocabulary=", ".join(sorted(config.WORD_SYLLABLES)),
                          required=", ".join(required_words()))]
+    if arr.swallow is not None:
+        # After the header rather than inside it, so a log made without
+        # --swallow reads exactly as every log before this line existed.
+        words = ("" if arr.swallow_words is None
+                 else f" from {arr.swallow_words:g} words")
+        # Written in full: rebuilt from a rounded figure, round(n / per)
+        # could land a phrase near a half on the other side and move a slot.
+        out.append(f"#   swallow {arr.swallow!r}{words}")
+    if arr.keep:
+        # To the microsecond, fixed-point: rounded to hundredths an edge could
+        # move past a slot's end and a replay cut a different set of slots,
+        # and repr turns a tiny value into 1e-05, which splits on its minus.
+        out.append("#   keep    " + ",".join(f"{s:.6f}-{e:.6f}" for s, e in arr.keep))
     phrase = None
     for line in arr.lines:
         if line.phrase != phrase:
@@ -429,7 +452,8 @@ def parse_text(text: str, bank_words: set[str] | None = None) -> Arrangement:
     known = set(config.WORD_SYLLABLES)
     if bank_words:
         known |= set(bank_words)
-    meta = {"song": "", "bank": "", "level": config.PLAY_DEFAULT_LEVEL, "seed": "0"}
+    meta = {"song": "", "bank": "", "level": config.PLAY_DEFAULT_LEVEL, "seed": "0",
+            "swallow": "", "keep": ""}
     # Where each header was read, so a refusal can name its line like every
     # other refusal in this parser does.
     meta_lines: dict[str, int] = {}
@@ -521,7 +545,33 @@ def parse_text(text: str, bank_words: set[str] | None = None) -> Arrangement:
             f"{meta['seed']!r}. Replay rebuilds its pool from this number, so "
             "guessing one would play a different arrangement than this file "
             "records.") from exc
-    return Arrangement(meta["song"], meta["bank"], meta["level"], seed, lines)
+    swallow = swallow_words = None
+    if meta["swallow"]:
+        try:
+            fields = meta["swallow"].split()
+            swallow = float(fields[0])
+            if len(fields) >= 3 and fields[1] == "from":
+                swallow_words = float(fields[2])
+        except (ValueError, IndexError) as exc:
+            raise ArrangementError(
+                f"line {meta_lines['swallow']}: cannot read the swallow "
+                f"{meta['swallow']!r}. It records the grid the lines were laid "
+                "over, and replay refuses any other.") from exc
+    keep = None
+    if meta["keep"]:
+        # Read by the parser --keep-original uses, so a hand-edited header is
+        # held to the same rules: in order, merged, forwards, finite.
+        from .keep import KeepError, parse_ranges
+
+        try:
+            keep = parse_ranges(meta["keep"])
+        except KeepError as exc:
+            raise ArrangementError(
+                f"line {meta_lines['keep']}: cannot read the kept ranges "
+                f"{meta['keep']!r} ({exc}). They decide which slots the lines"
+                " were laid over, so replay cannot guess them.") from exc
+    return Arrangement(meta["song"], meta["bank"], meta["level"], seed, lines,
+                       swallow, swallow_words, keep)
 
 
 def unit_for(words: list[str], pool: list[Unit], by_word: dict[str, list[Unit]],
@@ -563,7 +613,9 @@ def unit_for(words: list[str], pool: list[Unit], by_word: dict[str, list[Unit]],
 
 def build(slots, units: list[Unit], level: str, seed: int,
           song: str = "", bank: str = "",
-          bank_dir: Path | None = None) -> tuple[Plan, Arrangement, int]:
+          bank_dir: Path | None = None,
+          sings=None, wanted: set[str] | None = None,
+          pairing: bool = True) -> tuple[Plan, Arrangement, int]:
     """One arrangement, redrawn until it says every required word.
 
     Coverage is checked after the fact rather than forced during planning,
@@ -578,6 +630,22 @@ def build(slots, units: list[Unit], level: str, seed: int,
     there can pick the strategy per level and lean its parameters. None, or
     a directory with no bank.json, is the behaviour every bank had before
     banks could declare anything.
+
+    sings, when given, says which placements will actually be heard: a
+    callable taking a placement. --voices arranges every voice over the whole
+    song and keeps each one's placements inside its own turns, and
+    --keep-original drops any word that would sound inside a kept range, so
+    coverage judged on the whole plan was met at the first draw while the
+    words that met it were never heard. Judged on the placements that will
+    sing, the redraws and the relaxing of preferences below work on the
+    coverage that matters. The plan returned is still the whole one; the
+    caller drops what does not sing.
+
+    wanted and pairing narrow what counts as covered, for a voice whose
+    turns are one of several: the words the voices before it have already
+    said need not be said again, and neither does the pairing once one of
+    them has it. Asking every voice for every word in its own turns made a
+    voice with one short turn spend every draw and relax every preference.
     """
     from . import banks
     from .mapping import plan_sequence, plan_words
@@ -630,7 +698,7 @@ def build(slots, units: list[Unit], level: str, seed: int,
         # so a write into the module dict would leak this bank's taste into
         # every later song.
         params.update(banks.overrides_for(bank_dir, level))
-    wanted = set(required_words())
+    wanted = set(required_words()) if wanted is None else set(wanted)
     tries = max(1, int(config.PLAY_COVERAGE_TRIES))
 
     # A word no clip contains cannot be found by redrawing, and spending the
@@ -643,7 +711,7 @@ def build(slots, units: list[Unit], level: str, seed: int,
     # The pairing counts as coverage, not as an aesthetic preference. It is the
     # one thing the bank is built around, and a song without it anywhere reads
     # as a song missing its payoff rather than as a song that varied.
-    possible = any(u.is_shout_pairing for u in units)
+    possible = pairing and any(u.is_shout_pairing for u in units)
 
     def scored(arrangement) -> tuple[int, int]:
         return (len(wanted & arrangement.words_used()),
@@ -688,17 +756,23 @@ def build(slots, units: list[Unit], level: str, seed: int,
                 placement.split = False
                 placement.target_s = placement.play_s
         arrangement = describe(plan, song, bank, level, this_seed)
+        judged = arrangement if sings is None else describe(
+            Plan(placements=[p for p in plan.placements if sings(p)]),
+            song, bank, level, this_seed)
 
-        covered = wanted <= arrangement.words_used()
-        paired = arrangement.has_pairing() or not possible
+        covered = wanted <= judged.words_used()
+        paired = judged.has_pairing() or not possible
         if covered and paired:
+            shape_voice(plan, bank_dir)
             return _stamp_cap(plan, bank_dir, cap), arrangement, attempt + 1
-        if best is None or scored(arrangement) > scored(best[1]):
-            best = (plan, arrangement, attempt + 1)
+        if best is None or scored(judged) > best[0]:
+            best = (scored(judged), plan, arrangement, attempt + 1)
 
     # tries is clamped to at least one, so the loop ran and recorded a best.
     assert best is not None
-    return best
+    _, plan, arrangement, draws = best
+    shape_voice(plan, bank_dir)
+    return _stamp_cap(plan, bank_dir, cap), arrangement, draws
 
 
 def unreachable_words(units: list[Unit]) -> list[str]:
@@ -710,6 +784,38 @@ def unreachable_words(units: list[Unit]) -> list[str]:
     """
     sayable = {w for u in units for w in u.words}
     return sorted(set(required_words()) - sayable)
+
+
+def shape_voice(plan, bank_dir) -> None:
+    """What the bank declares about how its voice sings a line, applied to a
+    finished plan: the octave chosen per phrase, then the legato holds."""
+    from . import banks
+    from .mapping import fold_phrases
+
+    if bank_dir is not None and banks.fold_by_phrase(bank_dir):
+        fold_phrases(plan.placements)
+    join_legato(plan, bank_dir)
+
+
+def join_legato(plan, bank_dir) -> None:
+    """Hold each word into the next wherever the original did not rest.
+
+    Wherever the gap between the last note under one placement and the first
+    under the next is no longer than LEGATO_REST_S, whatever phrase numbers
+    they carry: group_phrases also cuts a long line at PHRASE_MAX_S where the
+    singer never paused, and a gap left there broke a line she sang through.
+    The held syllable ends where the next word starts, so nothing overlaps.
+    """
+    from . import banks
+
+    if bank_dir is None or not banks.legato(bank_dir):
+        return
+    for a, b in zip(plan.placements, plan.placements[1:]):
+        if not (a.slots and b.slots):
+            continue
+        rest = b.slots[0].onset_s - a.slots[-1].offset_s
+        if rest <= config.LEGATO_REST_S and b.onset_s > a.onset_s:
+            a.hold_to_s = b.onset_s - a.onset_s
 
 
 def _stamp_cap(plan, bank_dir, cap=None):
@@ -912,6 +1018,7 @@ def realise(arrangement: Arrangement, slots, units: list[Unit],
         for placement in plan.placements:
             if placement.target_s is None:
                 placement.target_s = placement.play_s
+    shape_voice(plan, bank_dir)
     return _stamp_cap(plan, bank_dir)
 
 

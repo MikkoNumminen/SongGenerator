@@ -112,6 +112,11 @@ class Slot:
     midi: float
     phrase: int
     rms_db: float = -30.0
+    # True when no planner may join this slot to the one before it, however
+    # small the gap. --keep-original sets it on the first slot after a kept
+    # range; group_phrases would otherwise rebuild one phrase across a range
+    # narrower than PHRASE_GAP_S and a word could be planned straight over it.
+    hard_break: bool = False
 
     @property
     def dur_s(self) -> float:
@@ -148,6 +153,19 @@ class Placement:
     # the clip came from: a spoken voice tears at a distance a sung one
     # survives, and a batch renders several banks in one process.
     shift_cap: float | None = None
+    # Seconds after onset that the last syllable holds until, when the bank
+    # sings legato and the original did not rest before the next word. None
+    # is the ordinary ending: the last syllable stops on its own note.
+    hold_to_s: float | None = None
+    # Set by fold_phrases for a bank declaring fold_by_phrase: the octave the
+    # whole phrase moves by, and the line its syllables are measured against.
+    # None is the ordinary per-word folding.
+    octave_offset: float | None = None
+    phrase_line: float | None = None
+    # The original singer's vibrato around this placement, set by
+    # attach_vibrato for a bank declaring borrow_vibrato: (hop_s, semitones
+    # from onset_s on). build_segments hands each long syllable its stretch.
+    vibrato: tuple | None = None
 
     def raw_distance(self) -> float:
         """Furthest any of this unit's syllables would have to move, unfolded."""
@@ -393,6 +411,58 @@ def clean_slots(notes: list[dict]) -> tuple[list[Slot], int, int]:
     return final, merged, split
 
 
+def swallow_slots(slots: list[Slot], per_syllable: float) -> list[Slot]:
+    """Fold the original's notes so each slot holds per_syllable of them.
+
+    Rap gives a note to every syllable, and a bank syllable on every one of
+    them comes out as a machine gun of words at rap speed. Swallowing hands
+    each bank syllable several of the original's syllables instead: it sounds
+    for as long as they did, takes its onset from the first and its pitch from
+    the longest of them, which is the one the rapper leant on. The word still
+    lands where the rapper's words did; there are just fewer of it.
+
+    The mean is kept exactly, because it is the pace: a phrase of N notes
+    becomes round(N / per_syllable) slots, split as evenly as the notes allow.
+    Asking for a quarter fewer notes per syllable then gives a quarter more
+    syllables, which a range of whole numbers could not promise once rounded.
+    Each boundary then moves up to SWALLOW_SNAP_NOTES notes to the widest gap
+    within reach, the nearest thing to a word boundary a stream of syllables
+    offers. Groups never cross a phrase.
+    """
+    if per_syllable < 1.0:
+        raise ValueError(f"swallow needs at least one note per syllable,"
+                         f" got {per_syllable}")
+    reach = config.SWALLOW_SNAP_NOTES
+    out: list[Slot] = []
+    i = 0
+    while i < len(slots):
+        j = i
+        while j + 1 < len(slots) and slots[j + 1].phrase == slots[i].phrase:
+            j += 1
+        phrase = slots[i:j + 1]
+        n = len(phrase)
+        groups = max(1, round(n / per_syllable))
+        edges = [0]
+        for k in range(1, groups):
+            ideal = round(k * n / groups)
+            # Room for at least one note on each side of every boundary.
+            lo = max(edges[-1] + 1, ideal - reach)
+            hi = min(n - (groups - k), ideal + reach)
+            edges.append(max(range(lo, hi + 1),
+                             key=lambda e: (phrase[e].onset_s
+                                            - phrase[e - 1].offset_s,
+                                            -abs(e - ideal))))
+        edges.append(n)
+        for a, b in zip(edges, edges[1:]):
+            g = phrase[a:b]
+            longest = max(g, key=lambda s: s.dur_s)
+            out.append(Slot(g[0].onset_s, g[-1].offset_s, longest.midi,
+                            g[0].phrase, max(s.rms_db for s in g),
+                            hard_break=g[0].hard_break))
+        i = j + 1
+    return out
+
+
 def _split_long(group: list[Slot]) -> list[list[Slot]]:
     """Break a phrase that runs longer than a phrase should, at its widest gap.
 
@@ -436,7 +506,8 @@ def group_phrases(slots: list[Slot]) -> list[list[Slot]]:
     """
     groups: list[list[Slot]] = []
     for slot in slots:
-        if groups and slot.onset_s - groups[-1][-1].offset_s <= config.PHRASE_GAP_S:
+        if (groups and not slot.hard_break
+                and slot.onset_s - groups[-1][-1].offset_s <= config.PHRASE_GAP_S):
             groups[-1].append(slot)
         else:
             groups.append([slot])
@@ -1259,6 +1330,85 @@ def decide_shifts(plan: Plan, mix: float | None = None, mode: str | None = None,
         p.do_shift = i < n_shift
 
 
+def _phrase_shift(p: Placement, raw: float) -> float:
+    """One syllable's shift under the phrase's octave, its outliers folded back."""
+    shift = raw + p.octave_offset
+    if p.phrase_line is not None:
+        while shift - p.phrase_line > config.PHRASE_OCTAVE_OUTLIER:
+            shift -= 12.0
+        while p.phrase_line - shift > config.PHRASE_OCTAVE_OUTLIER:
+            shift += 12.0
+    return shift
+
+
+def vibrato_curve(f0_hz, voiced, hop_s: float) -> np.ndarray:
+    """The original singer's vibrato: her pitch minus its own moving average.
+
+    In semitones, zero where she was unvoiced, clipped to VIBRATO_MAX_ST. The
+    moving average is taken over her voiced frames with the gaps bridged, so a
+    breath does not drag the line down and leave a false shake either side.
+    """
+    hz = np.asarray(f0_hz, dtype=float)
+    on = np.asarray(voiced, dtype=bool) & (hz > 0)
+    if not on.any():
+        return np.zeros_like(hz)
+    midi = np.zeros_like(hz)
+    midi[on] = 69.0 + 12.0 * np.log2(hz[on] / 440.0)
+    idx = np.arange(hz.size)
+    bridged = np.interp(idx, idx[on], midi[on])
+    width = max(1, int(round(config.VIBRATO_SMOOTH_S / hop_s)))
+    line = np.convolve(bridged, np.ones(width) / width, mode="same")
+    shake = np.where(on, bridged - line, 0.0)
+    return np.clip(shake, -config.VIBRATO_MAX_ST, config.VIBRATO_MAX_ST)
+
+
+def attach_vibrato(placements: list[Placement], curve: np.ndarray,
+                   hop_s: float) -> None:
+    """Give each placement the stretch of the singer's vibrato it sings over."""
+    for p in placements:
+        a = max(0, int(p.onset_s / hop_s))
+        span = max(p.slot_span_s, p.hold_to_s or 0.0, p.unit.duration_s * 4)
+        b = min(curve.size, a + int(span / hop_s) + 2)
+        p.vibrato = (hop_s, curve[a:b])
+
+
+def _borrowed(p: Placement, out_start: float, out_dur: float,
+              hold_to: float | None, raw: bool) -> dict:
+    """The Segment fields carrying a long syllable's borrowed vibrato."""
+    if p.vibrato is None or raw:
+        return {}
+    sounding = max(out_dur, (hold_to - out_start) if hold_to else 0.0)
+    if sounding < config.VIBRATO_MIN_S:
+        return {}
+    hop, curve = p.vibrato
+    a = int(out_start / hop)
+    return {"vibrato": curve[a:a + int(sounding / hop) + 2], "vibrato_hop_s": hop}
+
+
+def fold_phrases(placements: list[Placement]) -> None:
+    """One octave decision per phrase, for a bank declaring fold_by_phrase.
+
+    The octave is the one bringing the median of the phrase's wanted shifts
+    nearest zero, so the line as a whole lands in the voice's own register,
+    and every interval inside it stays the one the melody asked for.
+    """
+    by_phrase: dict[int, list[Placement]] = {}
+    for p in placements:
+        by_phrase.setdefault(p.phrase, []).append(p)
+    for group in by_phrase.values():
+        wanted = [slot.midi - src
+                  for p in group for i, slot in enumerate(p.slots)
+                  if (src := p.unit.source_midi(i)) is not None
+                  and not (config.SHOUT_KEEP_RAW and p.unit.is_shout_syllable(i))]
+        if not wanted:
+            continue
+        middle = float(np.median(wanted))
+        offset = -12.0 * round(middle / 12.0)
+        for p in group:
+            p.octave_offset = offset
+            p.phrase_line = middle + offset
+
+
 def build_segments(p: Placement) -> tuple[list, float]:
     """Where each piece of this unit lands, how long it sounds, how far it moves.
 
@@ -1293,6 +1443,9 @@ def build_segments(p: Placement) -> tuple[list, float]:
         first = p.slots[0] if p.slots else None
         shift = (0.0 if (source is None or first is None)
                  else fold_shift(first.midi - source, p.shift_cap))
+        if (p.octave_offset is not None and source is not None
+                and first is not None):
+            shift = _phrase_shift(p, first.midi - source)
         p.shifts = [shift]
         natural = p.unit.duration_s or 1e-3
         target = p.target_s if p.target_s is not None else natural
@@ -1330,8 +1483,10 @@ def build_segments(p: Placement) -> tuple[list, float]:
         # One octave for the whole word rather than one per syllable, so the
         # intervals inside it are the ones the melody asked for. A shout keeps
         # its own pitch, so it neither votes on the octave nor takes it.
-        folded = iter(fold_unit([w for *_, raw, w in pieces if not raw],
-                                p.shift_cap))
+        wanted = [w for *_, raw, w in pieces if not raw]
+        folded = iter([_phrase_shift(p, w) for w in wanted]
+                      if p.octave_offset is not None
+                      else fold_unit(wanted, p.shift_cap))
 
         for i, (src_a, src_b, slot, raw, _) in enumerate(pieces):
             shift = 0.0 if raw else next(folded)
@@ -1349,6 +1504,10 @@ def build_segments(p: Placement) -> tuple[list, float]:
             hold_to = None
             if config.WORDS_SING_THROUGH and not raw and i + 1 < len(pieces):
                 hold_to = pieces[i + 1][2].onset_s - origin
+            elif (not raw and i + 1 == len(pieces) and p.hold_to_s is not None
+                    and p.hold_to_s > slot.offset_s - origin):
+                # Legato: the word's last vowel runs on into the next word.
+                hold_to = p.hold_to_s
 
             segments.append(Segment(
                 src_start_s=src_a,
@@ -1358,9 +1517,12 @@ def build_segments(p: Placement) -> tuple[list, float]:
                 semitones=shift,
                 glide=not raw,
                 sustain_to_s=hold_to,
+                **_borrowed(p, slot.onset_s - origin, out_dur, hold_to, raw),
             ))
 
         total = (p.slots[-1].offset_s - origin) if p.slots else p.unit.duration_s
+        if p.hold_to_s is not None and segments:
+            total = max(total, p.hold_to_s)
         p.shifts = shifts
         return segments, max(total, 1e-3)
 
@@ -1408,6 +1570,23 @@ def build_segments(p: Placement) -> tuple[list, float]:
 
     p.shifts = shifts
     return segments, max(cursor, 1e-3)
+
+
+def sounding_s(p: Placement) -> float:
+    """How long a placement actually sounds, whichever way it renders.
+
+    Not out_dur_s and not slot_span_s, which are what was asked for: see
+    "What a segment is asked to do is not what it sounds" in AGENTS.md. The
+    shifted render lasts as long as build_segments says; the unshifted one
+    plays the clip up to play_s. The longer of the two, so anything asking
+    whether this placement reaches a later moment errs towards yes.
+    """
+    segments, total = build_segments(p)
+    if not segments:
+        # No syllable had a pitch to move to, and a shifted render then plays
+        # the clip whole.
+        return p.unit.duration_s
+    return max(total, min(p.play_s, p.unit.duration_s))
 
 
 def precompute_shifted(plan: Plan, sr: int = config.SAMPLE_RATE,
@@ -1510,25 +1689,41 @@ def render(plan: Plan, n_samples: int, sr: int = config.SAMPLE_RATE,
 
 
 def _normalise(audio: np.ndarray, target_lufs: float, sr: int) -> np.ndarray:
+    return (audio * _gain_to(audio, target_lufs, sr)).astype(np.float32)
+
+
+def _gain_to(audio: np.ndarray, target_lufs: float, sr: int) -> float:
+    """The linear gain that brings audio to target_lufs, 1.0 when silent."""
     from .detect import integrated_lufs
 
     loudness = integrated_lufs(audio, sr)
-    if not np.isfinite(loudness):
-        return audio
-    return (audio * (10 ** ((target_lufs - loudness) / 20))).astype(np.float32)
+    return 1.0 if not np.isfinite(loudness) else 10 ** ((target_lufs - loudness) / 20)
 
 
 def mix(word_bus: np.ndarray, instrumental: np.ndarray,
         sr: int = config.SAMPLE_RATE,
-        word_bus_lufs: float | None = None) -> np.ndarray:
+        word_bus_lufs: float | None = None,
+        level_from: np.ndarray | None = None) -> np.ndarray:
     """Words over the bed. word_bus_lufs lets a bank sit at its own level.
 
     None keeps config.WORD_BUS_LUFS, which is what every bank did before one
     of them needed to be louder, so passing nothing changes nothing.
+
+    level_from is the audio whose loudness sets the bed's gain, when the bed
+    holds more than the band. --keep-original puts stretches of the original
+    vocal into the bed, and levelling that bed as a whole turned the band down
+    everywhere by an amount that grew with the seconds kept, so the words sat
+    louder over the verses than in a plain render. Measured on the band
+    alone, the band sits where it always does and the kept vocal sits against
+    it as it did in the original.
     """
     target = config.WORD_BUS_LUFS if word_bus_lufs is None else word_bus_lufs
     words = _normalise(word_bus, target, sr)
-    bed = _normalise(instrumental, config.INSTRUMENTAL_LUFS, sr)
+    if level_from is None:
+        bed = _normalise(instrumental, config.INSTRUMENTAL_LUFS, sr)
+    else:
+        gain = _gain_to(level_from, config.INSTRUMENTAL_LUFS, sr)
+        bed = (instrumental * gain).astype(np.float32)
 
     n = min(words.shape[1], bed.shape[1])
     out = words[:, :n] + bed[:, :n]

@@ -32,7 +32,11 @@ class TestDefaults:
         assert parse("--raw-clips").raw_clips is True
 
     def test_the_default_bank_exists_in_the_bank_table(self):
-        assert parse().bank in config.BANKS
+        """--bank has no parser default, so naming it beside --voices can be
+        refused; an unnamed bank resolves to DEFAULT_BANK."""
+        assert parse().bank is None
+        assert config.DEFAULT_BANK in config.BANKS
+        assert cli.singing_names(parse()) == [config.DEFAULT_BANK]
 
 
 class TestChoicesAreRealValues:

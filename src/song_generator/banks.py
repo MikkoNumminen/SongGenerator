@@ -71,6 +71,17 @@ STRATEGIES = ("arranged", "sequence", "shuffled")
 
 SETTINGS_FILE = "bank.json"
 
+# What a bank may set for a render that does not name it on the command line,
+# and the values each may take; None is a positive number (--swallow's words).
+# A voice is rendered best a particular way, and that is a fact about the
+# recordings, so it belongs beside them: asked for by name, the bank should
+# come with it rather than rely on somebody remembering three flags.
+RENDER_DEFAULTS = {
+    "swallow": None,
+    "engine": ("world", "rubberband"),
+    "separator": ("demucs", "roformer"),
+}
+
 
 def settings_dir(bank_dir: Path) -> Path:
     """The directory whose bank.json speaks for these clips.
@@ -274,6 +285,49 @@ def _declared(bank_dir: Path) -> dict:
                 " nothing would say so."
             )
 
+    defaults = settings.get("defaults", {})
+    if not _an_object(defaults):
+        raise ValueError(f'"defaults" in {path} must be an object, got {defaults!r}.')
+    unknown = sorted(set(defaults) - set(RENDER_DEFAULTS))
+    if unknown:
+        raise ValueError(
+            f"unknown default {', '.join(repr(k) for k in unknown)} in {path}.\n"
+            f"    Expected one of: {', '.join(RENDER_DEFAULTS)}. A default"
+            " nothing reads would leave the run on its own value and say"
+            " nothing.")
+    for key, allowed in RENDER_DEFAULTS.items():
+        if key not in defaults:
+            continue
+        value = defaults[key]
+        if allowed is None:
+            if not _a_number(value) or not 0 < value < float("inf"):
+                raise ValueError(
+                    f"defaults.{key} in {path} must be a positive number of"
+                    f" words, got {value!r}. Write 2.6, not \"2.6\".")
+        elif value not in allowed:
+            raise ValueError(
+                f"defaults.{key} in {path} must be one of"
+                f" {', '.join(allowed)}, got {value!r}.")
+
+    shake = settings.get("borrow_vibrato", False)
+    if not _a_boolean(shake):
+        raise ValueError(
+            f"borrow_vibrato in {path} must be true or false, got {shake!r}.")
+
+    by_phrase = settings.get("fold_by_phrase", False)
+    if not _a_boolean(by_phrase):
+        raise ValueError(
+            f"fold_by_phrase in {path} must be true or false, got {by_phrase!r}.")
+
+    legato = settings.get("legato", False)
+    if not _a_boolean(legato):
+        raise ValueError(f"legato in {path} must be true or false, got {legato!r}.")
+    if legato and settings.get("never_split", False):
+        raise ValueError(
+            f"legato in {path} cannot be combined with never_split.\n"
+            "    legato holds a word's last syllable into the next word, and a"
+            " never_split clip has no syllables to hold; it is fitted whole.")
+
     keep_whole = settings.get("never_split", False)
     if not _a_boolean(keep_whole):
         raise ValueError(
@@ -284,6 +338,16 @@ def _declared(bank_dir: Path) -> dict:
             " allow splitting kept every clip whole."
         )
     return settings
+
+
+def render_defaults(bank_dir: Path | None) -> dict:
+    """What this bank sets for a render that leaves it out. Empty when none.
+
+    A fresh dict, so a caller cannot end up sharing state with the settings.
+    """
+    if bank_dir is None:
+        return {}
+    return dict(_declared(bank_dir).get("defaults", {}))
 
 
 def strategy_for(bank_dir: Path, level: str) -> str:
@@ -336,6 +400,31 @@ def shift_cap(bank_dir: Path | None) -> float:
         return config.SHIFT_CAP_SEMITONES
     declared = _declared(bank_dir).get("shift_cap_semitones")
     return config.SHIFT_CAP_SEMITONES if declared is None else float(declared)
+
+
+def borrow_vibrato(bank_dir: Path | None) -> bool:
+    """True when long syllables take the original singer's own vibrato."""
+    if bank_dir is None:
+        return False
+    return bool(_declared(bank_dir).get("borrow_vibrato", False))
+
+
+def fold_by_phrase(bank_dir: Path | None) -> bool:
+    """True when the octave is chosen once per phrase rather than per word."""
+    if bank_dir is None:
+        return False
+    return bool(_declared(bank_dir).get("fold_by_phrase", False))
+
+
+def legato(bank_dir: Path | None) -> bool:
+    """True when each word holds into the next wherever the singer did not
+    rest. A sung bank with clips shorter than the original's long notes
+    otherwise leaves a gap after every word, heard as many small words over
+    a line the singer sang as one.
+    """
+    if bank_dir is None:
+        return False
+    return bool(_declared(bank_dir).get("legato", False))
 
 
 def never_split(bank_dir: Path | None) -> bool:

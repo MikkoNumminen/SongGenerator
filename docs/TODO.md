@@ -101,6 +101,28 @@ never see. Resolve it on a real vocal.
 
 ## Open items
 
+- **The elderly female voice's bank does not sound like her.**
+
+  Three banks were made for her while rendering a rap posse cut with
+  `--voices`, and the owner heard all three as wrong: voice conversion of the
+  sung ppbank clips, one text-to-speech call per short phrase, and single
+  words cut out of carrier sentences by that sibling project's word-bank
+  script. The third is clean (every word verified by transcript, whole, never
+  stretched) and is still not her. The song was set aside rather than fixed.
+
+  The owner's recollection is that this voice was a different, younger-sounding
+  voice from the same engine, lowered in pitch to sound like a very old
+  woman. Nothing in the sibling project's current generation code lowers it:
+  no pitch or formant shift in its audiobook-generation script or the engine
+  bridge. So if the lowering happened, it is in how a reference clip was
+  made, in a step outside that code, or in a version of it no longer checked
+  out. That is where to look first. Compare her words here against an
+  audiobook rendered by that same project in her voice, by ear and by median
+  pitch, before building a fourth bank.
+
+  The how and the dead ends are in [WORKFLOWS.md](WORKFLOWS.md), "Make a
+  voice-converted copy of a bank".
+
 - **The planner predicts folding by a different rule than the renderer uses.**
 
   `pitch_cost` in `mapping.py` measures a candidate against the MEAN shift
