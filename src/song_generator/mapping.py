@@ -1385,17 +1385,43 @@ def _borrowed(p: Placement, out_start: float, out_dur: float,
     return {"vibrato": curve[a:a + int(sounding / hop) + 2], "vibrato_hop_s": hop}
 
 
+def register_runs(phrase: list[Placement]) -> list[list[Placement]]:
+    """A phrase cut wherever the melody leaps into another register.
+
+    The cut falls between two words whose median notes are REGISTER_JUMP or
+    more apart, which is a second singer taking over an octave away, or the
+    tracker reading a whole stretch at half its frequency. Either way the two
+    sides want an octave each: one decision for both put half the line an
+    octave from the voice's register. A median, so one misread note at the
+    end of a word does not cut the line; PHRASE_OCTAVE_OUTLIER folds that one.
+    """
+    runs: list[list[Placement]] = []
+    last = None
+    for p in sorted(phrase, key=lambda p: p.onset_s):
+        here = float(np.median([s.midi for s in p.slots])) if p.slots else None
+        if (not runs or (last is not None and here is not None
+                         and abs(here - last) >= config.REGISTER_JUMP)):
+            runs.append([])
+        runs[-1].append(p)
+        if here is not None:
+            last = here
+    return runs
+
+
 def fold_phrases(placements: list[Placement]) -> None:
     """One octave decision per phrase, for a bank declaring fold_by_phrase.
 
     The octave is the one bringing the median of the phrase's wanted shifts
     nearest zero, so the line as a whole lands in the voice's own register,
-    and every interval inside it stays the one the melody asked for.
+    and every interval inside it stays the one the melody asked for. A phrase
+    that leaps into another register is decided one run at a time, see
+    register_runs.
     """
     by_phrase: dict[int, list[Placement]] = {}
     for p in placements:
         by_phrase.setdefault(p.phrase, []).append(p)
-    for group in by_phrase.values():
+    for group in (run for phrase in by_phrase.values()
+                  for run in register_runs(phrase)):
         wanted = [slot.midi - src
                   for p in group for i, slot in enumerate(p.slots)
                   if (src := p.unit.source_midi(i)) is not None
@@ -1739,7 +1765,12 @@ def mix(word_bus: np.ndarray, instrumental: np.ndarray,
 # Report
 # ---------------------------------------------------------------------------
 
-def report(plan: Plan, units: list[Unit]) -> str:
+def report(plan: Plan, units: list[Unit], engine: str | None = None) -> str:
+    """The word placement part of the run report.
+
+    engine is the one the run shifted with, which a bank's own defaults or the
+    command line may have chosen; None is config.SHIFT_ENGINE.
+    """
     lines = ["  word placement"]
     add = lines.append
 
@@ -1804,6 +1835,6 @@ def report(plan: Plan, units: list[Unit]) -> str:
         folded = int((np.abs(raw) > cap).sum())
         add(f"    octave-folded     {folded} of {len(raw)} syllables "
             f"({folded / len(raw) * 100:.0f}%) were too far to shift directly")
-        add(f"    engine            {config.SHIFT_ENGINE}, "
+        add(f"    engine            {engine or config.SHIFT_ENGINE}, "
             f"formants held at {config.FORMANT_SCALE:.2f}")
     return "\n".join(lines)

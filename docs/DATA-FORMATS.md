@@ -161,7 +161,10 @@ word, a melody near the shift cap flipped one word up and the next an octave
 down, a leap mid-line heard as the range jumping about. A single note further
 than `PHRASE_OCTAVE_OUTLIER` from the phrase's line is folded back an octave,
 since the pitch tracker reads a held note at half its frequency now and then.
-The shift cap does not apply to a bank declaring it.
+A phrase whose melody leaps `REGISTER_JUMP` or more between two words, a
+second singer an octave away or a whole stretch read at half its frequency, is
+decided as two runs with an octave each, so neither half sits an octave from
+the voice. The shift cap does not apply to a bank declaring it.
 
 `legato` holds each word's last syllable on into the next word wherever the
 original singer did not rest between them: a gap no longer than

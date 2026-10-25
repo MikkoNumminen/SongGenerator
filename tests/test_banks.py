@@ -1366,6 +1366,28 @@ class TestFoldByPhrase:
         build_segments(a)
         assert a.shifts == pytest.approx([0.0, 0.0])
 
+    def test_a_leap_into_another_register_is_decided_apart(self):
+        """Half a phrase an octave under the rest gets its own octave, rather
+        than the whole phrase one decision that leaves half of it far off."""
+        unit = self._unit_at(63.0)
+        high = [self._placement(unit, 0.6 * k, [67.0, 69.0]) for k in range(3)]
+        low = [self._placement(unit, 2.0 + 0.6 * k, [55.0, 57.0]) for k in range(3)]
+        mapping_mod.fold_phrases(high + low)
+        assert {p.octave_offset for p in high} == {0.0}
+        assert {p.octave_offset for p in low} == {12.0}
+        for p in high + low:
+            build_segments(p)
+            assert all(abs(s) <= 6.0 for s in p.shifts)
+
+    def test_a_smaller_leap_keeps_one_decision(self):
+        unit = self._unit_at(63.0)
+        a = self._placement(unit, 0.0, [60.0, 61.0])
+        b = self._placement(unit, 0.6, [60.5 + config.REGISTER_JUMP - 0.5])
+        assert len(mapping_mod.register_runs([a, b])) == 1
+        assert len(mapping_mod.register_runs(
+            [self._placement(unit, 0.0, [60.0]),
+             self._placement(unit, 0.6, [60.0 + config.REGISTER_JUMP])])) == 2
+
     def test_phrases_are_decided_apart(self):
         a = self._placement(self._unit_at(60.0), 0.0, [72.0, 72.0], phrase=0)
         b = self._placement(self._unit_at(60.0), 5.0, [60.0, 61.0], phrase=1)
