@@ -55,6 +55,16 @@ EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@((?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,})(?![A-Z
 ENV_FILE = re.compile(r"^\.env(rc)?$|^\.env[.-].+|.+\.env$")
 
 
+# A hyphen inside a word, so a word written out in syllables is read joined
+# up as well: the vocabulary once reached a docstring that way.
+SYLLABLE_BREAK = re.compile(r"(?<=[^\s-])-(?=[^\s-])")
+
+
+def _names(term: re.Pattern, line: str) -> bool:
+    """Whether a line names the term, as written or in syllables."""
+    return bool(term.search(line) or term.search(SYLLABLE_BREAK.sub("", line)))
+
+
 def _terms() -> list[re.Pattern]:
     lines = TERMS.read_text(encoding="utf-8-sig").splitlines()
     return [re.compile(line.strip(), re.IGNORECASE) for line in lines
@@ -139,6 +149,15 @@ def test_the_address_pattern_can_fail():
     assert EMAIL.search(real + "_x"), "a word character after it must not hide it"
 
 
+def test_a_word_in_syllables_is_read_joined_up():
+    assert SYLLABLE_BREAK.sub("", "HEI KA-LA-KUK-KO, a-b-c") == "HEI KALAKUKKO, abc"
+    assert SYLLABLE_BREAK.sub("", "a - b and --flag") == "a - b and --flag"
+    term = re.compile(r"\bkalakukko\b", re.IGNORECASE)
+    assert _names(term, "HEI KA-LA-KUK-KO")
+    assert _names(term, "a kalakukko")
+    assert not _names(term, "kala - kukko")
+
+
 def test_the_environment_pattern_tells_settings_from_code():
     for name in (".env", ".envrc", ".env.local", ".env-prod", "settings.env"):
         assert ENV_FILE.search(name), name
@@ -153,7 +172,7 @@ def test_no_tracked_file_names_anything_private():
     assert terms, f"{TERMS} holds no terms"
     found = [f"{path}:{number}: {term.pattern}"
              for path, number, line in _lines()
-             for term in terms if term.search(line)]
+             for term in terms if _names(term, line)]
     assert not found, "private terms in tracked files:\n" + "\n".join(found)
 
 

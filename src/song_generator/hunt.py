@@ -1,4 +1,4 @@
-"""Hunt for a shout-then-word pattern, e.g. HEEEI PA-VI-AA-NI.
+"""Hunt for a shout-then-word pattern, e.g. HEEEI CAL-CU-LA-TOR.
 
     python -m song_generator.hunt
     python -m song_generator.hunt --syllables 4 --top 60
@@ -6,7 +6,7 @@
 Classifying eight hundred clips one at a time is slow and, on sung shouting,
 not very accurate. Searching for one specific shape is neither.
 
-"HEEEI PA-VI-AA-NI" has an envelope you can see without understanding a word of
+"HEEEI CAL-CU-LA-TOR" has an envelope you can see without understanding a word of
 it: one long held nucleus, then four short ones in quick succession. That is a
 template, and templates can be matched on the envelope alone -- no model, no
 GPU, a few milliseconds per clip. Only the shortlist is then transcribed, which
@@ -117,7 +117,7 @@ def looks_like_target(heard: str, word: str) -> bool:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
         prog="song_generator.hunt",
-        description="Find shout-then-word clips, e.g. HEEEI PA-VI-AA-NI.",
+        description="Find shout-then-word clips, e.g. HEEEI CAL-CU-LA-TOR.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     p.add_argument("--folder", type=Path, default=Path("words/candidates"))

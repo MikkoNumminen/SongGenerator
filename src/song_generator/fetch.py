@@ -407,6 +407,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    # A title is whatever its uploader typed, emoji included, and a console on
+    # a legacy code page cannot print one: the file was fetched and recorded,
+    # and the run still died printing its name.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
 
     try:
         result = fetch(args.url, out_dir=args.out)
