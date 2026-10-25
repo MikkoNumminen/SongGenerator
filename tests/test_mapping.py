@@ -263,6 +263,16 @@ def test_report_on_an_empty_plan():
     assert "nothing placed" in report(Plan(), [])
 
 
+@pytest.mark.parametrize("engine", ["rubberband", "world"])
+def test_report_names_the_engine_the_run_used(bank, engine):
+    """A bank's defaults pick the engine, so the config default is not it.
+    Printing that one misled a whole A/B comparison."""
+    plan = plan_words(_slots(8), bank)
+    for p in plan.placements:
+        p.do_shift, p.shifts = True, [1.0]
+    assert f"engine            {engine}," in report(plan, bank, engine=engine)
+
+
 def test_a_long_run_is_split_into_phrase_sized_pieces():
     """Continuous delivery has no gaps, so a cap has to find the ends.
 
