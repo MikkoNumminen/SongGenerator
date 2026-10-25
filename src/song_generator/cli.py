@@ -1146,7 +1146,7 @@ def main(argv: list[str] | None = None) -> int:
                             sum(1 for p in word_plan.placements if p.do_shift)))
 
         if not args.json:
-            print(mapping_report(word_plan, units))
+            print(mapping_report(word_plan, units, engine=args.engine))
             print()
 
     if not args.json:

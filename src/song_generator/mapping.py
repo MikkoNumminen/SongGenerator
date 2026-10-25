@@ -1385,17 +1385,64 @@ def _borrowed(p: Placement, out_start: float, out_dur: float,
     return {"vibrato": curve[a:a + int(sounding / hop) + 2], "vibrato_hop_s": hop}
 
 
+def register_runs(phrase: list[Placement]) -> list[list[Placement]]:
+    """A phrase cut wherever the melody moves into another register.
+
+    The cut falls between two words whose median notes are REGISTER_JUMP or
+    more apart, about an octave: a second singer taking over, or the tracker
+    reading a whole stretch at half its frequency. Either way the two sides
+    want an octave each: one decision for both put half the line an octave
+    from the voice's register.
+
+    A register lasts. A run of one word, or one shorter than REGISTER_MIN_S,
+    is a word or two misread, or a real leap the melody makes and comes back
+    from, and cutting it out would fold it against a line of its own, so the
+    cuts around it are not made and PHRASE_OCTAVE_OUTLIER folds it against the
+    line around it.
+    What is lost is a real leap of an octave that the melody then stays at:
+    the run after it is sung in the voice's register like the one before.
+    """
+    ordered = sorted(phrase, key=lambda p: p.onset_s)
+    level: list[float | None] = []
+    last = None
+    for p in ordered:
+        if p.slots:
+            last = float(np.median([s.midi for s in p.slots]))
+        level.append(last)
+    cuts = [i for i in range(1, len(ordered))
+            if level[i - 1] is not None and level[i] is not None
+            and abs(level[i] - level[i - 1]) >= config.REGISTER_JUMP]
+
+    def lasts(a: int, b: int) -> bool:
+        # The latest end, not the last word's: words may overlap.
+        end = max(p.onset_s + p.slot_span_s for p in ordered[a:b])
+        return b - a >= 2 and end - ordered[a].onset_s >= config.REGISTER_MIN_S
+
+    while cuts:
+        bounds = [0, *cuts, len(ordered)]
+        short = next((k for k in range(len(bounds) - 1)
+                      if not lasts(bounds[k], bounds[k + 1])), None)
+        if short is None:
+            break
+        cuts = [c for c in cuts if c not in (bounds[short], bounds[short + 1])]
+    bounds = [0, *cuts, len(ordered)]
+    return [ordered[a:b] for a, b in zip(bounds, bounds[1:]) if b > a]
+
+
 def fold_phrases(placements: list[Placement]) -> None:
     """One octave decision per phrase, for a bank declaring fold_by_phrase.
 
     The octave is the one bringing the median of the phrase's wanted shifts
     nearest zero, so the line as a whole lands in the voice's own register,
-    and every interval inside it stays the one the melody asked for.
+    and every interval inside it stays the one the melody asked for. A phrase
+    that moves into another register is decided one run at a time, and the
+    intervals are kept inside each run, see register_runs.
     """
     by_phrase: dict[int, list[Placement]] = {}
     for p in placements:
         by_phrase.setdefault(p.phrase, []).append(p)
-    for group in by_phrase.values():
+    for group in (run for phrase in by_phrase.values()
+                  for run in register_runs(phrase)):
         wanted = [slot.midi - src
                   for p in group for i, slot in enumerate(p.slots)
                   if (src := p.unit.source_midi(i)) is not None
@@ -1739,7 +1786,12 @@ def mix(word_bus: np.ndarray, instrumental: np.ndarray,
 # Report
 # ---------------------------------------------------------------------------
 
-def report(plan: Plan, units: list[Unit]) -> str:
+def report(plan: Plan, units: list[Unit], engine: str | None = None) -> str:
+    """The word placement part of the run report.
+
+    engine is the one the run shifted with, which a bank's own defaults or the
+    command line may have chosen; None is config.SHIFT_ENGINE.
+    """
     lines = ["  word placement"]
     add = lines.append
 
@@ -1804,6 +1856,6 @@ def report(plan: Plan, units: list[Unit]) -> str:
         folded = int((np.abs(raw) > cap).sum())
         add(f"    octave-folded     {folded} of {len(raw)} syllables "
             f"({folded / len(raw) * 100:.0f}%) were too far to shift directly")
-        add(f"    engine            {config.SHIFT_ENGINE}, "
+        add(f"    engine            {engine or config.SHIFT_ENGINE}, "
             f"formants held at {config.FORMANT_SCALE:.2f}")
     return "\n".join(lines)
