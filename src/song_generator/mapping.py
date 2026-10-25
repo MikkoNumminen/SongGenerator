@@ -1394,10 +1394,11 @@ def register_runs(phrase: list[Placement]) -> list[list[Placement]]:
     want an octave each: one decision for both put half the line an octave
     from the voice's register.
 
-    A register lasts. A run shorter than REGISTER_MIN_S is a word or two
-    misread, or a real leap the melody makes and comes back from, and cutting
-    it out would fold it against a line of its own, so the cuts around it are
-    not made and PHRASE_OCTAVE_OUTLIER folds it against the line around it.
+    A register lasts. A run of one word, or one shorter than REGISTER_MIN_S,
+    is a word or two misread, or a real leap the melody makes and comes back
+    from, and cutting it out would fold it against a line of its own, so the
+    cuts around it are not made and PHRASE_OCTAVE_OUTLIER folds it against the
+    line around it.
     What is lost is a real leap of an octave that the melody then stays at:
     the run after it is sung in the voice's register like the one before.
     """
@@ -1412,13 +1413,15 @@ def register_runs(phrase: list[Placement]) -> list[list[Placement]]:
             if level[i - 1] is not None and level[i] is not None
             and abs(level[i] - level[i - 1]) >= config.REGISTER_JUMP]
 
-    def span(a: int, b: int) -> float:
-        return ordered[b - 1].onset_s + ordered[b - 1].slot_span_s - ordered[a].onset_s
+    def lasts(a: int, b: int) -> bool:
+        # The latest end, not the last word's: words may overlap.
+        end = max(p.onset_s + p.slot_span_s for p in ordered[a:b])
+        return b - a >= 2 and end - ordered[a].onset_s >= config.REGISTER_MIN_S
 
     while cuts:
         bounds = [0, *cuts, len(ordered)]
         short = next((k for k in range(len(bounds) - 1)
-                      if span(bounds[k], bounds[k + 1]) < config.REGISTER_MIN_S), None)
+                      if not lasts(bounds[k], bounds[k + 1])), None)
         if short is None:
             break
         cuts = [c for c in cuts if c not in (bounds[short], bounds[short + 1])]

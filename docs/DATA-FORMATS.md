@@ -162,7 +162,7 @@ down, a leap mid-line heard as the range jumping about. A single note further
 than `PHRASE_OCTAVE_OUTLIER` from the phrase's line is folded back an octave,
 since the pitch tracker reads a held note at half its frequency now and then.
 A phrase whose melody leaps `REGISTER_JUMP` (about an octave) between two
-words and stays there for at least `REGISTER_MIN_S`, a second singer an octave
+words and stays there for two words and `REGISTER_MIN_S`, a second singer an octave
 away or a whole stretch read at half its frequency, is decided in runs with an
 octave each, so no part of it sits an octave from the voice. The cost is a real
 octave leap that the melody then holds: the run after it is sung in the voice's

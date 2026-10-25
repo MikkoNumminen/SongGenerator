@@ -1428,6 +1428,37 @@ class TestFoldByPhrase:
                    + [self._placement(unit, 2.4 + 0.3 * k, [67.0]) for k in range(6)])
         assert len(mapping_mod.register_runs(misread)) == 1
 
+    def test_a_held_major_seventh_is_not_reversed(self):
+        unit = self._unit_at(60.0)
+        line = ([self._placement(unit, 0.6 * k, [60.0]) for k in range(4)]
+                + [self._placement(unit, 2.4 + 0.6 * k, [71.0]) for k in range(4)])
+        assert len(mapping_mod.register_runs(line)) == 1
+
+    def test_one_long_misread_word_does_not_cut_the_line(self):
+        unit = self._unit_at(60.0)
+        long = self._placement(unit, 2.4, [78.0] * 6)
+        line = ([self._placement(unit, 0.6 * k, [66.0]) for k in range(4)] + [long]
+                + [self._placement(unit, 4.2 + 0.6 * k, [66.0]) for k in range(4)])
+        assert long.slot_span_s >= config.REGISTER_MIN_S
+        assert len(mapping_mod.register_runs(line)) == 1
+
+    def test_one_short_note_misread_between_two_long_runs(self):
+        unit = self._unit_at(60.0)
+        line = ([self._placement(unit, 0.6 * k, [66.0]) for k in range(4)]
+                + [self._placement(unit, 2.4, [54.0])]
+                + [self._placement(unit, 3.0 + 0.6 * k, [66.0]) for k in range(4)])
+        assert len(mapping_mod.register_runs(line)) == 1
+
+    def test_a_run_lasts_until_its_longest_word_ends(self):
+        """A long held word with a short one inside it: the run is as long
+        as the held word, not as the short word that starts last."""
+        unit = self._unit_at(60.0)
+        held = self._placement(unit, 0.0, [60.0] * 7)
+        inside = self._placement(unit, 0.5, [60.0])
+        high = [self._placement(unit, 2.1 + 0.6 * k, [72.0]) for k in range(4)]
+        assert held.slot_span_s >= config.REGISTER_MIN_S
+        assert len(mapping_mod.register_runs([held, inside] + high)) == 2
+
     def test_one_misread_word_does_not_cut_the_line(self):
         """A two-syllable word with one syllable read an octave up has a median
         ten semitones off. Cut out on its own, it would be folded against a line
