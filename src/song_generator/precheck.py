@@ -15,10 +15,10 @@ confident it looked.
 Two things make the guessing better than transcribing whole sources:
 
   Syllable count constrains the answer. A two-nucleus clip can only be bravo,
-  tango or delta; a four-nucleus one only kilometer or calculator -- the two
-  being the same length, that is the one pair the recogniser actually has to
-  tell apart. The measurement comes from the envelope, so it is
-  independent of anything the model thinks.
+  tango or delta; a four-nucleus one only kilometer or calculator. The
+  recogniser only has to choose among words of the clip's own length, and the
+  count comes from the envelope, so it is independent of anything the model
+  thinks.
 
   Clips are transcribed in batches. Whisper pads every input to thirty seconds
   whatever its length, so a half-second clip costs as much as a full window.
