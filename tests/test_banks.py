@@ -1385,8 +1385,30 @@ class TestFoldByPhrase:
         b = self._placement(unit, 0.6, [60.5 + config.REGISTER_JUMP - 0.5])
         assert len(mapping_mod.register_runs([a, b])) == 1
         assert len(mapping_mod.register_runs(
-            [self._placement(unit, 0.0, [60.0]),
-             self._placement(unit, 0.6, [60.0 + config.REGISTER_JUMP])])) == 2
+            [self._placement(unit, 0.6 * k, [60.0]) for k in range(2)]
+            + [self._placement(unit, 1.2 + 0.6 * k, [60.0 + config.REGISTER_JUMP])
+               for k in range(2)])) == 2
+
+    def test_one_misread_word_does_not_cut_the_line(self):
+        """A two-syllable word with one syllable read an octave up has a median
+        ten semitones off. Cut out on its own, it would be folded against a line
+        of its own and land at the wrong note; inside the line it folds right."""
+        unit = self._unit_at(60.0)
+        before = [self._placement(unit, 0.6 * k, [60.0, 60.0]) for k in range(2)]
+        odd = self._placement(unit, 1.2, [60.0, 80.0])
+        after = [self._placement(unit, 1.8 + 0.6 * k, [60.0, 60.0]) for k in range(2)]
+        assert len(mapping_mod.register_runs(before + [odd] + after)) == 1
+        mapping_mod.fold_phrases(before + [odd] + after)
+        build_segments(odd)
+        assert odd.shifts == pytest.approx([0.0, 8.0])
+
+    def test_one_word_at_either_end_does_not_cut_the_line(self):
+        unit = self._unit_at(60.0)
+        line = [self._placement(unit, 0.6 * k, [60.0]) for k in range(1, 4)]
+        assert len(mapping_mod.register_runs(
+            [self._placement(unit, 0.0, [72.0])] + line)) == 1
+        assert len(mapping_mod.register_runs(
+            line + [self._placement(unit, 3.0, [72.0])])) == 1
 
     def test_phrases_are_decided_apart(self):
         a = self._placement(self._unit_at(60.0), 0.0, [72.0, 72.0], phrase=0)

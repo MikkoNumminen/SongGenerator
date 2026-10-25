@@ -1392,19 +1392,31 @@ def register_runs(phrase: list[Placement]) -> list[list[Placement]]:
     more apart, which is a second singer taking over an octave away, or the
     tracker reading a whole stretch at half its frequency. Either way the two
     sides want an octave each: one decision for both put half the line an
-    octave from the voice's register. A median, so one misread note at the
-    end of a word does not cut the line; PHRASE_OCTAVE_OUTLIER folds that one.
+    octave from the voice's register.
+
+    A register lasts longer than one word. A single word alone between two
+    cuts, or alone at either end of the phrase, is a word misread rather than
+    a change of register, and cutting it out would give it its own line to
+    fold against, so the cuts around it are not made: PHRASE_OCTAVE_OUTLIER
+    folds it against the line around it instead.
     """
-    runs: list[list[Placement]] = []
+    ordered = sorted(phrase, key=lambda p: p.onset_s)
+    level: list[float | None] = []
     last = None
-    for p in sorted(phrase, key=lambda p: p.onset_s):
-        here = float(np.median([s.midi for s in p.slots])) if p.slots else None
-        if (not runs or (last is not None and here is not None
-                         and abs(here - last) >= config.REGISTER_JUMP)):
+    for p in ordered:
+        if p.slots:
+            last = float(np.median([s.midi for s in p.slots]))
+        level.append(last)
+    cuts = {i for i in range(1, len(ordered))
+            if level[i - 1] is not None and level[i] is not None
+            and abs(level[i] - level[i - 1]) >= config.REGISTER_JUMP}
+    lone = {i for i in cuts if i + 1 in cuts} | {i + 1 for i in cuts if i + 1 in cuts}
+    lone |= {i for i in cuts if i in (1, len(ordered) - 1)}
+    runs: list[list[Placement]] = []
+    for i, p in enumerate(ordered):
+        if not runs or (i in cuts and i not in lone):
             runs.append([])
         runs[-1].append(p)
-        if here is not None:
-            last = here
     return runs
 
 

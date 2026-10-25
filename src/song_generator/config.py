@@ -1077,10 +1077,10 @@ PHRASE_OCTAVE_OUTLIER = 9.0
 # A phrase whose melody leaps this far between two words is folded as two runs,
 # each with its own octave. In one children's song the melody sat an octave
 # lower for whole stretches of a phrase, and a single decision put half of each
-# such phrase an octave from the voice's register. Against a bank spanning MIDI
-# 59 to 68, 72 % of its notes landed inside the range that way and 77 % with
-# the runs decided apart; the share of notes shifted over 7 semitones fell from
-# 7 % to 3 %. The ballad the bank was converted from kept the same share.
+# such phrase an octave from the voice's register. Estimated from its notes
+# against a bank spanning MIDI 59 to 68, 72 % landed inside the range that way
+# and 77 % with the runs decided apart, and the share shifted over 7 semitones
+# fell from 7 % to 3 %. The ballad the bank was converted from kept its share.
 REGISTER_JUMP = 10.0
 
 # A bank declaring "borrow_vibrato" gives each long syllable the original
