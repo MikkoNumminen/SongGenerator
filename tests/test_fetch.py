@@ -9,6 +9,7 @@ GUI would consume instead of parsing stdout.
 
 import dataclasses
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -167,6 +168,18 @@ def test_json_emits_the_documented_fields(offline, tmp_path, capsys):
     assert payload["already_present"] is False
     assert payload["conflicting_url"] is None
     assert Path(payload["path"]).is_file()
+
+
+def test_a_title_the_console_cannot_spell_does_not_end_the_run(
+        offline, tmp_path, monkeypatch):
+    import io
+    offline["info"]["title"] = "Laulu 🍄 metsässä"
+    console = io.TextIOWrapper(io.BytesIO(), encoding="cp1252")
+    monkeypatch.setattr(sys, "stdout", console)
+
+    assert fetch.main([URL, "--out", str(tmp_path)]) == 0
+    console.flush()
+    assert "Laulu ? mets" in console.buffer.getvalue().decode("cp1252")
 
 
 def test_cli_reports_already_present_and_still_exits_zero(offline, tmp_path, capsys):
