@@ -1131,6 +1131,27 @@ class TestCommandLine:
         assert len(logs) == 1
         assert cli.main(argv + ["--arrangement", str(logs[0])]) == 0
 
+    def test_the_report_names_the_engine_the_bank_chose(
+            self, tmp_path, monkeypatch):
+        """The report printed config.SHIFT_ENGINE, so a bank whose defaults
+        chose Rubber Band was reported as WORLD."""
+        self._stub_pipeline(monkeypatch)
+        assert config.SHIFT_ENGINE != "rubberband"
+        argv = self._song_and_bank(tmp_path, {
+            "levels": {"conservative": {"strategy": "sequence"}},
+            "never_split": True,
+            "defaults": {"engine": "rubberband"},
+        }) + ["--no-shift", "--play", "conservative", "--seed", "7"]
+        monkeypatch.setattr(cli, "load_bank", lambda *a, **k: _raw_spoken(3))
+        monkeypatch.setattr(cli, "resolve_bank",
+                            lambda d, prefer_standardised=True: (d, False))
+        named = []
+        monkeypatch.setattr(cli, "mapping_report",
+                            lambda plan, units, engine=None: named.append(engine) or "")
+
+        assert cli.main(argv) == 0
+        assert named == ["rubberband"]
+
 
 # ---------------------------------------------------------------------------
 # Output separated by bank
@@ -1385,9 +1406,27 @@ class TestFoldByPhrase:
         b = self._placement(unit, 0.6, [60.5 + config.REGISTER_JUMP - 0.5])
         assert len(mapping_mod.register_runs([a, b])) == 1
         assert len(mapping_mod.register_runs(
-            [self._placement(unit, 0.6 * k, [60.0]) for k in range(2)]
-            + [self._placement(unit, 1.2 + 0.6 * k, [60.0 + config.REGISTER_JUMP])
-               for k in range(2)])) == 2
+            [self._placement(unit, 0.6 * k, [60.0]) for k in range(4)]
+            + [self._placement(unit, 2.4 + 0.6 * k, [60.0 + config.REGISTER_JUMP])
+               for k in range(4)])) == 2
+
+    def test_a_leap_the_melody_comes_back_from_keeps_its_line(self):
+        """A rising seventh held for two words, or two words misread an
+        octave down, is folded against the line rather than cut out of it."""
+        unit = self._unit_at(60.0)
+        line = [self._placement(unit, 0.0, [60.0, 60.0]),
+                self._placement(unit, 0.6, [60.0, 60.0]),
+                self._placement(unit, 1.2, [70.0, 70.0]),
+                self._placement(unit, 1.8, [70.0, 72.0])]
+        assert len(mapping_mod.register_runs(line)) == 1
+        mapping_mod.fold_phrases(line)
+        build_segments(line[2])
+        assert line[2].shifts == pytest.approx([10.0, 10.0])
+        misread = ([self._placement(unit, 0.3 * k, [66.0]) for k in range(6)]
+                   + [self._placement(unit, 1.8, [54.0]),
+                      self._placement(unit, 2.1, [54.0])]
+                   + [self._placement(unit, 2.4 + 0.3 * k, [67.0]) for k in range(6)])
+        assert len(mapping_mod.register_runs(misread)) == 1
 
     def test_one_misread_word_does_not_cut_the_line(self):
         """A two-syllable word with one syllable read an octave up has a median
