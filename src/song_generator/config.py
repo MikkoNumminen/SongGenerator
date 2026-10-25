@@ -1074,6 +1074,20 @@ VOICES_LOG_DIR = "voices"
 # the singer never sang.
 PHRASE_OCTAVE_OUTLIER = 9.0
 
+# A phrase whose melody leaps this far between two words is folded as separate
+# runs, each with its own octave. In one children's song the melody sat an octave
+# lower for whole stretches of a phrase, and a single decision put half of each
+# such phrase an octave from the voice's register. Estimated from its notes
+# against a bank spanning MIDI 59 to 68, 72 % landed inside the range that way
+# and 77 % with the runs decided apart, and the share shifted over 7 semitones
+# fell from 7 % to 3 %. The ballad the bank was converted from kept its share.
+# Over a major seventh, so a held seventh is sung as one, not reversed.
+REGISTER_JUMP = 11.5
+# And a register lasts: a run of one word or shorter than this is a misread
+# word or a leap the melody comes back from, and is folded against the line
+# around it instead.
+REGISTER_MIN_S = 1.5
+
 # A bank declaring "borrow_vibrato" gives each long syllable the original
 # singer's own vibrato from the same moment of the song. A converted clip's
 # vibrato is not hers, and stretched to a long note it slows with the clip:

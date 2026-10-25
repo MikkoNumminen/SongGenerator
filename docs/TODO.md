@@ -119,19 +119,8 @@ never see. Resolve it on a real vocal.
   That spoken bank's candidates have had no systematic listening pass either,
   though its cuts are at least verified against the source.
 
-- **The run report names an engine it did not use.**
-
-  `mapping.py` prints `engine {config.SHIFT_ENGINE}` rather than the engine the
-  run actually used, so `--engine rubberband` reports "world". It misled an
-  entire A/B comparison until the two files were compared as audio.
-
-  Not a one-line fix, which is why it is written down rather than done in
-  passing: `report(plan, units)` has no access to the run's engine. That lives
-  in `args.engine`, no `Placement` carries it, so this needs the signature, the
-  one call site in `cli.py`, and any test that calls `report`.
-
-  The same report's `truncated` count fires on any reading speed above 1.0
-  whether or not anything was cut. That one is already documented where it
+- **The run report's `truncated` count fires on any reading speed above 1.0**,
+  whether or not anything was cut. It is already documented where it
   matters, in the diagnostic ladder in `docs/WORKFLOWS.md`, which tells the
   reader to check `time fit` before believing it. Whoever fixes the counter
   should delete that caveat in the same change.
